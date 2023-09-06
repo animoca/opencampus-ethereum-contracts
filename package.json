@@ -1,5 +1,5 @@
 {
-  "name": "@animoca/template-ethereum-contracts",
+  "name": "@animoca/opencampus-ethereum-contracts",
   "version": "0.0.1",
   "description": "OpenCampus contracts",
   "author": "Animoca Brands",
@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "@animoca/ethereum-contract-helpers": "^0.0.6",
-    "@animoca/ethereum-contracts": "=3.0.0-rc.2",
+    "@animoca/ethereum-contracts": "=3.0.0-rc.3",
     "@nomicfoundation/hardhat-chai-matchers": "^1.0.6",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.8",
     "@nomiclabs/hardhat-ethers": "^2.2.3",
