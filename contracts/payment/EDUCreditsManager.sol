@@ -33,7 +33,7 @@ contract EDUCreditsManager is PayoutWallet, ERC20Receiver, AccessControl, TokenR
         uint256 unclaimed; // unclaimed EDU credits from the genesis mint
         uint256 bonus; // bonus EDU credits from the genesis mint
         uint256 deposited; // deposited EDU credits from the user
-        bool diamondHand; // whether the user is a diamond hand, ie. didn't claim any from the genesis mint
+        bool diamondHand; // whether the user is a diamond hand, ie. didn't claim any EDU from the genesis mint
     }
 
     bytes32 public constant SPENDER_ROLE = "spender";
