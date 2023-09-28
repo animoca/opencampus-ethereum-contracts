@@ -48,7 +48,10 @@ contract EDUCreditsManager is PayoutWallet, ERC20Receiver, AccessControl, TokenR
 
     uint256 public currentPhase = INIT_PHASE;
 
-    mapping(address => UserCredits) public userCredits;
+    mapping(address => uint256) public unclaimed;
+    mapping(address => uint256) public bonus;
+    mapping(address => uint256) public deposited;
+    mapping(address => bool) public diamondHand;
 
     /// @notice The total credits is the sum of all unclaimed, bonus and deposited credits.
     /// @notice The total credits does not decrease when credits are spent or withdrawn.
@@ -159,15 +162,15 @@ contract EDUCreditsManager is PayoutWallet, ERC20Receiver, AccessControl, TokenR
         for (uint256 i; i != length; ++i) {
             address user = users[i];
             if (user == address(0)) revert ZeroAddressUser();
-            uint256 unclaimed = unclaimedCredits[i];
-            if (unclaimed == 0) revert ZeroValueUnclaimedCredits(user);
-            UserCredits storage credits = userCredits[user];
-            if (credits.unclaimed != 0) revert UserCreditsAlreadySet(user);
-            uint256 bonus = bonusCredits[i];
-            credits.unclaimed = unclaimed;
-            credits.bonus = bonus;
-            credits.diamondHand = diamondHands[i];
-            totalCredits += unclaimed + bonus;
+            uint256 unclaimedToSet = unclaimedCredits[i];
+            if (unclaimedToSet == 0) revert ZeroValueUnclaimedCredits(user);
+            uint256 currentUnclaimed = unclaimed[user];
+            if (currentUnclaimed != 0) revert UserCreditsAlreadySet(user);
+            uint256 bonusToSet = bonusCredits[i];
+            unclaimed[user] = unclaimedToSet;
+            bonus[user] = bonusToSet;
+            diamondHand[user] = diamondHands[i];
+            totalCredits += unclaimedToSet + bonusToSet;
         }
         emit InitialCreditsSet(users, unclaimedCredits, bonusCredits, diamondHands);
     }
@@ -177,8 +180,7 @@ contract EDUCreditsManager is PayoutWallet, ERC20Receiver, AccessControl, TokenR
     /// @dev Reverts with {OnlyDuringPhase} if the current phase is not the deposit phase.
     function onERC20Received(address, address from, uint256 value, bytes calldata) external returns (bytes4 magicValue) {
         if (currentPhase != DEPOSIT_PHASE) revert OnlyDuringPhase(DEPOSIT_PHASE, currentPhase);
-        UserCredits storage credits = userCredits[from];
-        credits.deposited += value;
+        deposited[from] += value;
         totalDeposited += value;
         totalCredits += value;
         return ERC20Storage.ERC20_RECEIVED;
@@ -198,43 +200,38 @@ contract EDUCreditsManager is PayoutWallet, ERC20Receiver, AccessControl, TokenR
         if (amount == 0) revert ZeroSpendAmount(spender, user);
         if (currentPhase != SALE_PHASE) revert OnlyDuringPhase(SALE_PHASE, currentPhase);
         AccessControlStorage.layout().enforceHasRole(SPENDER_ROLE, spender);
-        UserCredits storage credits = userCredits[user];
 
-        uint256 bonusSpent;
-        uint256 bonus = credits.bonus;
-        if (bonus != 0) {
-            if (bonus >= amount) {
-                credits.bonus -= amount;
+        uint256 currentBonus = bonus[user];
+        if (currentBonus != 0) {
+            if (currentBonus >= amount) {
+                bonus[user] = currentBonus - amount;
                 emit CreditsSpent(spender, user, amount, 0, 0);
                 return;
             } else {
-                credits.bonus = 0;
-                amount -= bonus;
-                bonusSpent = bonus;
+                bonus[user] = 0;
+                amount -= currentBonus;
             }
         }
 
-        uint256 unclaimedSpent;
-        uint256 unclaimed = credits.unclaimed;
-        if (unclaimed != 0) {
-            if (unclaimed >= amount) {
-                credits.unclaimed -= amount;
-                emit CreditsSpent(spender, user, bonusSpent, amount, 0);
+        uint256 currentUnclaimed = unclaimed[user];
+        if (currentUnclaimed != 0) {
+            if (currentUnclaimed >= amount) {
+                unclaimed[user] = currentUnclaimed - amount;
+                emit CreditsSpent(spender, user, currentBonus, amount, 0);
                 return;
             } else {
-                credits.unclaimed = 0;
-                amount -= unclaimed;
-                unclaimedSpent = unclaimed;
+                unclaimed[user] = 0;
+                amount -= currentUnclaimed;
             }
         }
 
-        uint256 deposited = credits.deposited;
-        if (deposited < amount) revert InsufficientCredits(spender, user, amount);
+        uint256 currentDeposited = deposited[user];
+        if (currentDeposited < amount) revert InsufficientCredits(spender, user, amount);
 
-        credits.deposited -= amount;
+        deposited[user] = currentDeposited - amount;
         totalDeposited -= amount;
         EDU_TOKEN.transfer(PayoutWalletStorage.layout().payoutWallet(), amount);
-        emit CreditsSpent(spender, user, bonusSpent, unclaimedSpent, amount);
+        emit CreditsSpent(spender, user, currentBonus, currentUnclaimed, amount);
     }
 
     /// @notice Withdraws all the remaining unclaimed and deposited EDU credits.
@@ -242,18 +239,17 @@ contract EDUCreditsManager is PayoutWallet, ERC20Receiver, AccessControl, TokenR
     function withdraw() external {
         if (currentPhase != WITHDRAW_PHASE) revert OnlyDuringPhase(WITHDRAW_PHASE, currentPhase);
         address user = _msgSender();
-        UserCredits storage credits = userCredits[_msgSender()];
-        uint256 unclaimed = credits.unclaimed;
-        if (unclaimed != 0) {
-            credits.unclaimed = 0;
-            EDU_TOKEN.transferFrom(UNCLAIMED_EDU_HOLDER, user, unclaimed);
+        uint256 currentUnclaimed = unclaimed[user];
+        if (currentUnclaimed != 0) {
+            unclaimed[user] = 0;
+            EDU_TOKEN.transferFrom(UNCLAIMED_EDU_HOLDER, user, currentUnclaimed);
         }
 
-        uint256 deposited = credits.deposited;
-        if (deposited != 0) {
-            credits.deposited = 0;
-            totalDeposited -= deposited;
-            EDU_TOKEN.transfer(user, deposited);
+        uint256 currentDeposited = deposited[user];
+        if (currentDeposited != 0) {
+            deposited[user] = 0;
+            totalDeposited -= currentDeposited;
+            EDU_TOKEN.transfer(user, currentDeposited);
         }
     }
 
@@ -272,6 +268,10 @@ contract EDUCreditsManager is PayoutWallet, ERC20Receiver, AccessControl, TokenR
             revert UnrecoverableEDU(recoverableEDUAmount, eduAmount);
         }
         super.recoverERC20s(accounts, tokens, amounts);
+    }
+
+    function userCredits(address account) external view returns (UserCredits memory credits) {
+        credits = UserCredits(unclaimed[account], bonus[account], deposited[account], diamondHand[account]);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
