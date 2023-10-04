@@ -12,7 +12,8 @@ import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contract
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 
 /// @title PublisherNFTSale
-/// @notice todo
+/// @notice Sale contract to be deployed on BSC for the OpenCampus Publisher NFT season 2.
+/// @notice On a succesful mint, the contract will send a LayerZero message to a minter contract on Polygon where the minting will take place.
 contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
 
@@ -41,17 +42,55 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
     address public lzDstAddress;
     uint256 public mintCount;
 
+    /// @notice Emitted when a mint is initiated.
+    /// @param sender The sender of the mint.
+    /// @param nbTokens The number of tokens to mint.
+    /// @param discountThreshold The discount threshold that was reached at the moment of the mint.
     event MintInitiated(address sender, uint256 nbTokens, uint256 discountThreshold);
 
+    /// @notice Thrown at construction if the timestamps are not in increasing order.
     error InvalidTimestamps();
+
+    /// @notice Thrown at construction if the discount thresholds are not in increasing order.
     error InvalidDiscountThresholds();
+
+    /// @notice Thrown at construction if the discount percentages are not in increasing order.
     error InvalidDiscountPercentages();
+
+    /// @notice Thrown when trying to set the LZ destination address but it is already set.
+    error LzDstAddressAlreadySet();
+
+    /// @notice Thrown when trying to mint but the sale has not started yet.
     error SaleNotStarted();
+
+    /// @notice Thrown when trying to mint during phase 1 but the sender is not a diamond hand.
     error NotADiamondHand();
+
+    /// @notice Thrown when trying to mint during phase 2 but the sender is not a diamond hand nor a genesis NFT owner.
     error NotADiamondHandNorAGenesisNFTOwner();
+
+    /// @notice Thrown when trying to mint but the sale has ended.
     error SaleEnded();
+
+    /// @notice Thrown when trying to mint but the LZ destination address is not set.
+    error LzDstAddressNotSet();
+
+    /// @notice Thrown when trying to mint but the mint supply limit has been reached.
     error InsufficientMintSupply();
 
+    /// @dev Reverts with `InvalidTimestamps` if the timestamps are not in increasing order.
+    /// @dev Reverts with `InvalidDiscountThresholds` if the discount thresholds are not in increasing order.
+    /// @dev Reverts with `InvalidDiscountPercentages` if the discount percentages are not in increasing order.
+    /// @param genesisToken The address of the Genesis Token contract.
+    /// @param eduCreditsManager The address of the EDUCreditsManager contract.
+    /// @param lzEndpoint The address of the LayerZeroEndpoint contract.
+    /// @param lzDstChainId The destination chain identifier for LayerZeroEndpoint.
+    /// @param mintPrice The price of a mint.
+    /// @param mintSupplyLimit The maximum number of tokens that can be minted.
+    /// @param timestamps The timestamps of the sale phases.
+    /// @param discountThresholds The discount thresholds of the sale phases.
+    /// @param discountPercentages The discount percentages of the sale phases.
+    /// @param forwarderRegistry The address of the ForwarderRegistry contract.
     constructor(
         IERC1155 genesisToken,
         EDUCreditsManager eduCreditsManager,
@@ -85,12 +124,21 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         DISCOUNT_PERCENTAGE_3 = discountPercentages[2];
     }
 
+    receive() external payable {}
+
+    /// @notice Sets the LZ destination address.
+    /// @dev Reverts with `NotContractOwner` if the sender is not the contract owner.
+    /// @dev Reverts with `LzDstAddressAlreadySet` if the LZ destination address is already set.
+    /// @param lzDstAddress_ The LZ destination address.
     function setLzDstAddress(address lzDstAddress_) external {
         ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        if (lzDstAddress != address(0)) revert LzDstAddressAlreadySet();
         lzDstAddress = lzDstAddress_;
-        // todo refuse to set again if already set
     }
 
+    /// @notice Withdraws the contract's balance.
+    /// @dev Reverts with `NotContractOwner` if the sender is not the contract owner.
+    /// @param to The address to receive the withdrawn balance.
     function withdraw(address to) external {
         ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
         uint256 balance = address(this).balance;
@@ -99,35 +147,58 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         }
     }
 
+    /// @notice Mints tokens.
+    /// @dev Reverts with `SaleNotStarted` if the sale has not started yet.
+    /// @dev Reverts with `NotADiamondHand` if the sender is not a diamond hand and the sale is in phase 1.
+    /// @dev Reverts with `NotADiamondHandNorAGenesisNFTOwner` if the sender is not a diamond hand nor a genesis NFT owner and the sale is in phase 2.
+    /// @dev Reverts with `SaleEnded` if the sale has ended.
+    /// @dev Reverts with `LzDstAddressNotSet` if the LZ destination address is not set.
+    /// @dev Reverts with `InsufficientMintSupply` if the mint supply limit has been reached.
+    /// @dev Emits a `MintInitiated` event.
+    /// @param nbTokens The number of tokens to mint.
     function mint(uint256 nbTokens) external {
         address sender = _msgSender();
-        if (block.timestamp > SALE_END_TIMESTAMP) {
-            revert SaleEnded();
-        } else if (block.timestamp >= PHASE3_START_TIMESTAMP) {
-            // no restrictions, open sale
-        } else if (block.timestamp >= PHASE2_START_TIMESTAMP) {
+        uint256 salePhase = currentSalePhase();
+        if (salePhase == 0) {
+            revert SaleNotStarted();
+        } else if (salePhase == 1) {
+            if (!EDU_CREDITS_MANAGER.diamondHand(sender)) revert NotADiamondHand();
+        } else if (salePhase == 2) {
             if (!EDU_CREDITS_MANAGER.diamondHand(sender) && GENESIS_TOKEN.balanceOf(sender, 0) == 0 && GENESIS_TOKEN.balanceOf(sender, 1) == 0)
                 revert NotADiamondHandNorAGenesisNFTOwner();
-        } else if (block.timestamp >= PHASE1_START_TIMESTAMP) {
-            if (!EDU_CREDITS_MANAGER.diamondHand(sender)) revert NotADiamondHand();
+        } else if (salePhase == 3) {
+            // no restrictions, open sale
         } else {
-            revert SaleNotStarted();
+            revert SaleEnded();
         }
+        if (lzDstAddress == address(0)) revert LzDstAddressNotSet();
         uint256 currentMintCount = mintCount;
         uint256 newMintCount = currentMintCount + nbTokens;
         if (newMintCount > MINT_SUPPLY_LIMIT) revert InsufficientMintSupply();
         mintCount = newMintCount;
-        (uint256 price, uint256 discountThreshold) = getMintPrice();
+        (uint256 price, uint256 discountThreshold) = currentMintPrice();
         EDU_CREDITS_MANAGER.spend(sender, price * nbTokens);
 
         bytes memory payload = abi.encode(sender, nbTokens);
-        (uint256 fees, ) = LZ_ENDPOINT.estimateFees(LZ_DST_CHAINID, lzDstAddress, payload, false, "");
+        uint256 gasUsage = 50000 + 30000 * nbTokens; // todo confirm
+        bytes memory adapterParams = abi.encodePacked(uint16(1), gasUsage);
+        (uint256 fees, ) = LZ_ENDPOINT.estimateFees(LZ_DST_CHAINID, lzDstAddress, payload, false, adapterParams);
         // solhint-disable-next-line check-send-result
-        LZ_ENDPOINT.send{value: fees}(LZ_DST_CHAINID, abi.encodePacked(lzDstAddress, address(this)), payload, payable(address(this)), address(0), "");
+        LZ_ENDPOINT.send{value: fees}(
+            LZ_DST_CHAINID,
+            abi.encodePacked(lzDstAddress, address(this)),
+            payload,
+            payable(address(this)),
+            address(0),
+            adapterParams
+        );
         emit MintInitiated(sender, nbTokens, discountThreshold);
     }
 
-    function getMintPrice() public view returns (uint256 price, uint256 discountThreshold) {
+    /// @notice Returns the current mint price and discount threshold.
+    /// @return price The current mint price.
+    /// @return discountThreshold The current discount threshold.
+    function currentMintPrice() public view returns (uint256 price, uint256 discountThreshold) {
         price = MINT_PRICE;
         uint256 currentCreditsInPool = EDU_CREDITS_MANAGER.totalCredits();
         if (currentCreditsInPool >= DISCOUNT_THRESHOLD_3) {
@@ -142,6 +213,8 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         }
     }
 
+    /// @notice Returns the current sale phase.
+    /// @return The current sale phase.
     function currentSalePhase() public view returns (uint256) {
         if (block.timestamp > SALE_END_TIMESTAMP) {
             return 4;
@@ -156,15 +229,19 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         }
     }
 
+    /// @notice Returns whether the specified account can mint.
+    /// @param account The account to check.
+    /// @return Whether the specified account can mint.
     function canMint(address account) public view returns (bool) {
-        if (block.timestamp > SALE_END_TIMESTAMP) {
+        uint256 salePhase = currentSalePhase();
+        if (salePhase == 0) {
             return false;
-        } else if (block.timestamp >= PHASE3_START_TIMESTAMP) {
-            return true;
-        } else if (block.timestamp >= PHASE2_START_TIMESTAMP) {
-            return EDU_CREDITS_MANAGER.diamondHand(account) || GENESIS_TOKEN.balanceOf(account, 0) != 0 || GENESIS_TOKEN.balanceOf(account, 1) != 0;
-        } else if (block.timestamp >= PHASE1_START_TIMESTAMP) {
+        } else if (salePhase == 1) {
             return EDU_CREDITS_MANAGER.diamondHand(account);
+        } else if (salePhase == 2) {
+            return EDU_CREDITS_MANAGER.diamondHand(account) || GENESIS_TOKEN.balanceOf(account, 0) != 0 || GENESIS_TOKEN.balanceOf(account, 1) != 0;
+        } else if (salePhase == 3) {
+            return true;
         } else {
             return false;
         }

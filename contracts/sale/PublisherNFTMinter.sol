@@ -6,7 +6,7 @@ import {ILayerZeroEndpoint} from "@layerzerolabs/solidity-examples/contracts/int
 import {ILayerZeroReceiver} from "@layerzerolabs/solidity-examples/contracts/interfaces/ILayerZeroReceiver.sol";
 
 /// @title PublisherNFTMinter
-/// @notice todo
+/// @notice This contract is used to mint season 2 Publisher NFTs on the Polygon.
 contract PublisherNFTMinter is ILayerZeroReceiver {
     IERC721Mintable public immutable PUBLISHER_NFT;
     ILayerZeroEndpoint public immutable LZ_ENDPOINT;
@@ -16,9 +16,19 @@ contract PublisherNFTMinter is ILayerZeroReceiver {
 
     uint256 public mintCount;
 
+    /// @dev Thrown when the caller of lzReceive is not the LayerZero endpoint.
+    /// @param sender The caller of the lzReceive function
     error UnauthorizedSender(address sender);
+
+    /// @dev Thrown when the source chain identifier is incorrect.
+    /// @param srcChainId The incorrect source chain identifier.
     error IncorrectSrcChainId(uint16 srcChainId);
+
+    /// @dev Thrown when the source address is incorrect.
+    /// @param srcAddress The incorrect source address.
     error IncorrectSrcAddress(address srcAddress);
+
+    /// @dev Thrown when the mint supply limit is reached.
     error InsufficientMintSupply();
 
     constructor(IERC721Mintable publisherNFT, ILayerZeroEndpoint lzEndpoint, uint16 lzSrcChainId, address lzSrcAddress, uint256 mintSupplyLimit) {
@@ -29,19 +39,23 @@ contract PublisherNFTMinter is ILayerZeroReceiver {
         MINT_SUPPLY_LIMIT = mintSupplyLimit;
     }
 
-    /// @notice LayerZero endpoint will invoke this function to deliver the message on the destination
-    /// @param srcChainId - the source endpoint identifier
-    /// @param srcAddress - the source sending contract address from the source chain
-    // / @param nonce - the ordered message nonce
-    /// @param payload - the signed payload is the UA bytes has encoded to be sent
-    function lzReceive(uint16 srcChainId, bytes memory srcAddress, uint64, bytes calldata payload) external {
+    /// @notice LayerZero endpoint will invoke this function to deliver minting requests from the PublisherNFTSale contract.
+    /// @dev Reverts with `UnauthorizedSender` if the sender is not the LayerZero endpoint.
+    /// Reverts with `IncorrectSrcChainId` if the source chain identifier is incorrect.
+    /// Reverts with `IncorrectSrcAddress` if the source address is incorrect.
+    /// Reverts with `InsufficientMintSupply` if the mint supply limit is reached.
+    /// @param srcChainId The source endpoint identifier
+    /// @param destination The concatenation of the source contract address and this contract address.
+    // / @param nonce The ordered message nonce
+    /// @param payload The payload which contains the token owner and the number of tokens to mint.
+    function lzReceive(uint16 srcChainId, bytes memory destination, uint64, bytes calldata payload) external {
         if (msg.sender != address(LZ_ENDPOINT)) revert UnauthorizedSender(msg.sender);
         if (srcChainId != LZ_SRC_CHAINID) revert IncorrectSrcChainId(srcChainId);
-        address fromAddress;
+        address srcAddress;
         assembly {
-            fromAddress := mload(add(srcAddress, 20))
+            srcAddress := mload(add(destination, 20))
         }
-        if (fromAddress != LZ_SRC_ADDRESS) revert IncorrectSrcAddress(fromAddress);
+        if (srcAddress != LZ_SRC_ADDRESS) revert IncorrectSrcAddress(srcAddress);
         (address tokenOwner, uint256 nbTokens) = abi.decode(payload, (address, uint256));
 
         uint256 currentMintCount = mintCount;

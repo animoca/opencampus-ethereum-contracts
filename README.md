@@ -1,9 +1,9 @@
-# Animoca Ethereum Contracts - template
+# Open Campus Ethereum Contracts
 
-[![NPM Package](https://img.shields.io/npm/v/@animoca/template-ethereum-contracts.svg)](https://www.npmjs.org/package/@animoca/template-ethereum-contracts)
-[![Coverage Status](https://codecov.io/gh/animoca/template-ethereum-contracts/graph/badge.svg)](https://codecov.io/gh/animoca/template-ethereum-contracts)
+[![NPM Package](https://img.shields.io/npm/v/@animoca/opencampus-ethereum-contracts.svg)](https://www.npmjs.org/package/@animoca/opencampus-ethereum-contracts)
+[![Coverage Status](https://codecov.io/gh/animoca/opencampus-ethereum-contracts/graph/badge.svg)](https://codecov.io/gh/animoca/opencampus-ethereum-contracts)
 
-Solidity contracts project template.
+Solidity contracts for the Open Campus project.
 
 ## Audits
 
