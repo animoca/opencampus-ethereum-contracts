@@ -102,7 +102,7 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         uint256[] memory discountThresholds,
         uint256[] memory discountPercentages,
         IForwarderRegistry forwarderRegistry
-    ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
+    ) payable ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
         GENESIS_TOKEN = genesisToken;
         EDU_CREDITS_MANAGER = eduCreditsManager;
         LZ_ENDPOINT = lzEndpoint;
