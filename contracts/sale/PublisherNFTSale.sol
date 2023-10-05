@@ -25,6 +25,7 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
 
     uint256 public immutable MINT_PRICE;
     uint256 public immutable MINT_SUPPLY_LIMIT;
+    uint256 public immutable MINT_LIMIT_PER_ADDRESS;
 
     uint256 public immutable PHASE1_START_TIMESTAMP;
     uint256 public immutable PHASE2_START_TIMESTAMP;
@@ -41,6 +42,7 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
 
     address public lzDstAddress;
     uint256 public mintCount;
+    mapping(address => uint256) public mintCountPerAddress;
 
     /// @notice Emitted when a mint is initiated.
     /// @param sender The sender of the mint.
@@ -59,6 +61,15 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
 
     /// @notice Thrown when trying to set the LZ destination address but it is already set.
     error LzDstAddressAlreadySet();
+
+    /// @notice Thrown when trying to mint zero tokens.
+    error MintingZeroTokens();
+
+    /// @notice Thrown when trying to mint more than the limit of tokens per address.
+    error MintingTooManyTokens();
+
+    /// @notice Thrown when trying to mint but the sender mint limit is overflowing.
+    error AddressMintingLimitReached();
 
     /// @notice Thrown when trying to mint but the sale has not started yet.
     error SaleNotStarted();
@@ -98,6 +109,7 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         uint16 lzDstChainId,
         uint256 mintPrice,
         uint256 mintSupplyLimit,
+        uint256 mintLimitPerAddress,
         uint256[] memory timestamps,
         uint256[] memory discountThresholds,
         uint256[] memory discountPercentages,
@@ -109,6 +121,7 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         LZ_DST_CHAINID = lzDstChainId;
         MINT_PRICE = mintPrice;
         MINT_SUPPLY_LIMIT = mintSupplyLimit;
+        MINT_LIMIT_PER_ADDRESS = mintLimitPerAddress;
         if (timestamps[1] <= timestamps[0] || timestamps[2] <= timestamps[1] || timestamps[3] <= timestamps[2]) revert InvalidTimestamps();
         PHASE1_START_TIMESTAMP = timestamps[0];
         PHASE2_START_TIMESTAMP = timestamps[1];
@@ -148,15 +161,20 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
     }
 
     /// @notice Mints tokens.
+    /// @dev Reverts with `MintingZeroTokens` if the number of tokens to mint is zero.
+    /// @dev Reverts with `MintingTooManyTokens` if the number of tokens to mint is greater than 2.
     /// @dev Reverts with `SaleNotStarted` if the sale has not started yet.
     /// @dev Reverts with `NotADiamondHand` if the sender is not a diamond hand and the sale is in phase 1.
     /// @dev Reverts with `NotADiamondHandNorAGenesisNFTOwner` if the sender is not a diamond hand nor a genesis NFT owner and the sale is in phase 2.
     /// @dev Reverts with `SaleEnded` if the sale has ended.
     /// @dev Reverts with `LzDstAddressNotSet` if the LZ destination address is not set.
+    /// @dev Reverts with `AddressMintingLimitReached` if the sender mint limit is overflowing.
     /// @dev Reverts with `InsufficientMintSupply` if the mint supply limit has been reached.
     /// @dev Emits a `MintInitiated` event.
     /// @param nbTokens The number of tokens to mint.
     function mint(uint256 nbTokens) external {
+        if (nbTokens == 0) revert MintingZeroTokens();
+        if (nbTokens > 2) revert MintingTooManyTokens();
         address sender = _msgSender();
         uint256 salePhase = currentSalePhase();
         if (salePhase == 0) {
@@ -176,11 +194,15 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         uint256 newMintCount = currentMintCount + nbTokens;
         if (newMintCount > MINT_SUPPLY_LIMIT) revert InsufficientMintSupply();
         mintCount = newMintCount;
+        uint256 currentAddressMintCount = mintCountPerAddress[sender];
+        uint256 newAdressMintCount = currentAddressMintCount + nbTokens;
+        if (newAdressMintCount > 2) revert AddressMintingLimitReached();
+        mintCountPerAddress[sender] = newAdressMintCount;
         (uint256 price, uint256 discountThreshold) = currentMintPrice();
         EDU_CREDITS_MANAGER.spend(sender, price * nbTokens);
 
         bytes memory payload = abi.encode(sender, nbTokens);
-        uint256 gasUsage = 50000 + 30000 * nbTokens; // todo confirm
+        uint256 gasUsage = 50000 + 30000 * nbTokens;
         bytes memory adapterParams = abi.encodePacked(uint16(1), gasUsage);
         (uint256 fees, ) = LZ_ENDPOINT.estimateFees(LZ_DST_CHAINID, lzDstAddress, payload, false, adapterParams);
         // solhint-disable-next-line check-send-result

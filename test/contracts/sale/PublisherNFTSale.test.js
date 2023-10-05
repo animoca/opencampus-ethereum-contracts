@@ -24,7 +24,7 @@ describe('PublisherNFTSale', function () {
     await loadFixture(fixture, this);
   });
 
-  describe('constructor(address,address,address,uint16,uint256,uint256,uint256[],uint256[],uint256[])', function () {
+  describe('constructor(address,address,address,uint16,uint256,uint256,uint256,uint256[],uint256[],uint256[])', function () {
     it('reverts if the timestamps are not increasing', async function () {
       await expect(
         deployContract(
@@ -35,6 +35,7 @@ describe('PublisherNFTSale', function () {
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
+          2, // mintLimitPerAddress
           [1, 0, 0, 0], // timestamps
           [1000, 2000, 3000], // discountThresholds
           [5, 10, 15], // discountPercentages
@@ -50,6 +51,7 @@ describe('PublisherNFTSale', function () {
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
+          2, // mintLimitPerAddress
           [0, 1, 0, 1], // timestamps
           [1000, 2000, 3000], // discountThresholds
           [5, 10, 15], // discountPercentages
@@ -65,6 +67,7 @@ describe('PublisherNFTSale', function () {
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
+          2, // mintLimitPerAddress
           [0, 1, 2, 1], // timestamps
           [1000, 2000, 3000], // discountThresholds
           [5, 10, 15], // discountPercentages
@@ -82,6 +85,7 @@ describe('PublisherNFTSale', function () {
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
+          2, // mintLimitPerAddress
           [0, 1, 2, 3], // timestamps
           [1000, 0, 1999], // discountThresholds
           [5, 10, 15], // discountPercentages
@@ -97,6 +101,7 @@ describe('PublisherNFTSale', function () {
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
+          2, // mintLimitPerAddress
           [0, 1, 2, 3], // timestamps
           [1000, 2000, 1999], // discountThresholds
           [5, 10, 15], // discountPercentages
@@ -114,6 +119,7 @@ describe('PublisherNFTSale', function () {
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
+          2, // mintLimitPerAddress
           [0, 1, 2, 3], // timestamps
           [1000, 2000, 3000], // discountThresholds
           [5, 0, 5], // discountPercentages
@@ -129,6 +135,7 @@ describe('PublisherNFTSale', function () {
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
+          2, // mintLimitPerAddress
           [0, 1, 2, 3], // timestamps
           [1000, 2000, 3000], // discountThresholds
           [5, 10, 5], // discountPercentages
@@ -158,7 +165,7 @@ describe('PublisherNFTSale', function () {
     });
 
     it('sets the mint supply limit', async function () {
-      expect(await this.sale.MINT_SUPPLY_LIMIT()).to.equal(2);
+      expect(await this.sale.MINT_SUPPLY_LIMIT()).to.equal(3);
     });
   });
 
@@ -181,6 +188,25 @@ describe('PublisherNFTSale', function () {
   });
 
   describe('mint(uint256)', function () {
+    it('reverts when trying to mint 0 tokens', async function () {
+      await this.sale.setLzDstAddress(other.address);
+      await time.increase(10000);
+      await expect(this.sale.connect(user).mint(0)).to.be.revertedWithCustomError(this.sale, 'MintingZeroTokens');
+    });
+
+    it('reverts when trying to mint more than the limit of tokens per address', async function () {
+      await this.sale.setLzDstAddress(other.address);
+      await time.increase(10000);
+      await expect(this.sale.connect(user).mint(3)).to.be.revertedWithCustomError(this.sale, 'MintingTooManyTokens');
+    });
+
+    it('reverts when the sender account reaches its mint limit', async function () {
+      await this.sale.setLzDstAddress(other.address);
+      await time.increase(10000);
+      await this.sale.connect(user).mint(1);
+      await expect(this.sale.connect(user).mint(2)).to.be.revertedWithCustomError(this.sale, 'AddressMintingLimitReached');
+    });
+
     it('reverts if the sale has not started', async function () {
       await this.sale.setLzDstAddress(other.address);
       await expect(this.sale.connect(user).mint(1)).to.be.revertedWithCustomError(this.sale, 'SaleNotStarted');
@@ -214,6 +240,7 @@ describe('PublisherNFTSale', function () {
       await this.sale.setLzDstAddress(other.address);
       await this.sale.connect(user).mint(1);
       await this.sale.connect(genesisNft0Holder).mint(1);
+      await this.sale.connect(genesisNft1Holder).mint(1);
       await expect(this.sale.connect(user).mint(1)).to.be.revertedWithCustomError(this.sale, 'InsufficientMintSupply');
     });
 

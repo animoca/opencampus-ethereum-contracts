@@ -27,7 +27,7 @@ async function setupPublisherNFTSale(deployer, user, payoutWallet, other, genesi
 
   await this.creditsManager.setInitialCredits(
     [user.address, genesisNft0Holder.address, genesisNft1Holder.address],
-    [100, 100, 100],
+    [300, 100, 100],
     [0, 0, 0],
     [true, false, false]
   );
@@ -56,7 +56,8 @@ async function setupPublisherNFTSale(deployer, user, payoutWallet, other, genesi
     this.lzEndpoint.address,
     1, // lzDstChainId
     100, // mintPrice
-    2, // mintSupplyLimit
+    3, // mintSupplyLimit
+    2, // mintLimitPerAddress
     [phase1Start, phase2Start, phase3Start, saleEnd], // timestamps
     // [10000, 20000, 30000, 40000], // timestamps
     [1000, 2000, 3000], // discountThresholds
