@@ -194,10 +194,10 @@ describe('PublisherNFTSale', function () {
       await expect(this.sale.connect(user).mint(0)).to.be.revertedWithCustomError(this.sale, 'MintingZeroTokens');
     });
 
-    it('reverts when trying to mint more than the limit of tokens per address', async function () {
+    it('reverts when trying to mint more than the limit of tokens per tx', async function () {
       await this.sale.setLzDstAddress(other.address);
       await time.increase(10000);
-      await expect(this.sale.connect(user).mint(3)).to.be.revertedWithCustomError(this.sale, 'MintingTooManyTokens');
+      await expect(this.sale.connect(user).mint(11)).to.be.revertedWithCustomError(this.sale, 'MintingTooManyTokens');
     });
 
     it('reverts when the sender account reaches its mint limit', async function () {
@@ -274,7 +274,7 @@ describe('PublisherNFTSale', function () {
               ethers.utils.defaultAbiCoder.encode(['address', 'uint256'], [accounts[buyerIndex].address, 1]),
               this.sale.address,
               ethers.constants.AddressZero,
-              ethers.utils.solidityPack(['uint16', 'uint256'], [1, 50000 + 30000])
+              ethers.utils.solidityPack(['uint16', 'uint256'], [1, 125000 + 30000])
             );
         });
 

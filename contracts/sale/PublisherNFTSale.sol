@@ -17,6 +17,8 @@ import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/me
 contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
 
+    uint256 public constant MINT_LIMIT_PER_TX = 10;
+
     IERC1155 public immutable GENESIS_TOKEN;
     EDUCreditsManager public immutable EDU_CREDITS_MANAGER;
 
@@ -162,7 +164,7 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
 
     /// @notice Mints tokens.
     /// @dev Reverts with `MintingZeroTokens` if the number of tokens to mint is zero.
-    /// @dev Reverts with `MintingTooManyTokens` if the number of tokens to mint is greater than 2.
+    /// @dev Reverts with `MintingTooManyTokens` if the number of tokens to mint is greater then the mint limit per tx.
     /// @dev Reverts with `SaleNotStarted` if the sale has not started yet.
     /// @dev Reverts with `NotADiamondHand` if the sender is not a diamond hand and the sale is in phase 1.
     /// @dev Reverts with `NotADiamondHandNorAGenesisNFTOwner` if the sender is not a diamond hand nor a genesis NFT owner and the sale is in phase 2.
@@ -174,8 +176,10 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
     /// @param nbTokens The number of tokens to mint.
     function mint(uint256 nbTokens) external {
         if (nbTokens == 0) revert MintingZeroTokens();
-        if (nbTokens > 2) revert MintingTooManyTokens();
+        if (nbTokens > MINT_LIMIT_PER_TX) revert MintingTooManyTokens();
+
         address sender = _msgSender();
+
         uint256 salePhase = currentSalePhase();
         if (salePhase == 0) {
             revert SaleNotStarted();
@@ -189,26 +193,30 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         } else {
             revert SaleEnded();
         }
-        if (lzDstAddress == address(0)) revert LzDstAddressNotSet();
+        address dstAddress = lzDstAddress;
+        if (dstAddress == address(0)) revert LzDstAddressNotSet();
+
         uint256 currentMintCount = mintCount;
         uint256 newMintCount = currentMintCount + nbTokens;
         if (newMintCount > MINT_SUPPLY_LIMIT) revert InsufficientMintSupply();
         mintCount = newMintCount;
+
         uint256 currentAddressMintCount = mintCountPerAddress[sender];
         uint256 newAdressMintCount = currentAddressMintCount + nbTokens;
-        if (newAdressMintCount > 2) revert AddressMintingLimitReached();
+        if (newAdressMintCount > MINT_LIMIT_PER_ADDRESS) revert AddressMintingLimitReached();
         mintCountPerAddress[sender] = newAdressMintCount;
+
         (uint256 price, uint256 discountThreshold) = currentMintPrice();
         EDU_CREDITS_MANAGER.spend(sender, price * nbTokens);
 
         bytes memory payload = abi.encode(sender, nbTokens);
-        uint256 gasUsage = 50000 + 30000 * nbTokens;
+        uint256 gasUsage = 125000 + 30000 * nbTokens;
         bytes memory adapterParams = abi.encodePacked(uint16(1), gasUsage);
-        (uint256 fees, ) = LZ_ENDPOINT.estimateFees(LZ_DST_CHAINID, lzDstAddress, payload, false, adapterParams);
+        (uint256 fees, ) = LZ_ENDPOINT.estimateFees(LZ_DST_CHAINID, dstAddress, payload, false, adapterParams);
         // solhint-disable-next-line check-send-result
         LZ_ENDPOINT.send{value: fees}(
             LZ_DST_CHAINID,
-            abi.encodePacked(lzDstAddress, address(this)),
+            abi.encodePacked(dstAddress, address(this)),
             payload,
             payable(address(this)),
             address(0),

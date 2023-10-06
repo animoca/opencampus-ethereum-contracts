@@ -45,15 +45,15 @@ contract PublisherNFTMinter is ILayerZeroReceiver {
     /// Reverts with `IncorrectSrcAddress` if the source address is incorrect.
     /// Reverts with `InsufficientMintSupply` if the mint supply limit is reached.
     /// @param srcChainId The source endpoint identifier
-    /// @param destination The concatenation of the source contract address and this contract address.
+    /// @param dstPath The concatenation of the source contract address and this contract address.
     // / @param nonce The ordered message nonce
     /// @param payload The payload which contains the token owner and the number of tokens to mint.
-    function lzReceive(uint16 srcChainId, bytes memory destination, uint64, bytes calldata payload) external {
+    function lzReceive(uint16 srcChainId, bytes memory dstPath, uint64, bytes calldata payload) external {
         if (msg.sender != address(LZ_ENDPOINT)) revert UnauthorizedSender(msg.sender);
         if (srcChainId != LZ_SRC_CHAINID) revert IncorrectSrcChainId(srcChainId);
         address srcAddress;
         assembly {
-            srcAddress := mload(add(destination, 20))
+            srcAddress := mload(add(dstPath, 20))
         }
         if (srcAddress != LZ_SRC_ADDRESS) revert IncorrectSrcAddress(srcAddress);
         (address tokenOwner, uint256 nbTokens) = abi.decode(payload, (address, uint256));
