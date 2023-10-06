@@ -15,6 +15,9 @@ contract LzEndpointMock {
         bytes adapterParams
     );
 
+    event ForceResume(uint16 srcChainId, bytes srcAddress);
+    event PayloadRetry(uint16 srcChainId, bytes srcAddress, bytes payload);
+
     /// @notice send a LayerZero message to the specified address at a LayerZero endpoint.
     /// @param dstChainId - the destination chain identifier
     /// @param destination_ - the address on destination chain (in bytes). address length/format may vary by chains
@@ -42,6 +45,14 @@ contract LzEndpointMock {
     function callLzReceive(uint16 srcChainId, address srcAddress, address dstAddress, bytes memory payload) external {
         bytes memory destination = abi.encodePacked(srcAddress, dstAddress); // Note: the encoding is reversed compared to what was received via send
         ILayerZeroReceiver(dstAddress).lzReceive(srcChainId, destination, 0, payload);
+    }
+
+    function forceResumeReceive(uint16 srcChainId, bytes calldata srcAddress) external {
+        emit ForceResume(srcChainId, srcAddress);
+    }
+
+    function retryPayload(uint16 srcChainId, bytes calldata srcAddress, bytes calldata payload) external {
+        emit PayloadRetry(srcChainId, srcAddress, payload);
     }
 
     function estimateFees(uint16, address, bytes calldata, bool, bytes calldata) external pure returns (uint256, uint256) {

@@ -186,7 +186,7 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         } else if (salePhase == 1) {
             if (!EDU_CREDITS_MANAGER.diamondHand(sender)) revert NotADiamondHand();
         } else if (salePhase == 2) {
-            if (!EDU_CREDITS_MANAGER.diamondHand(sender) && GENESIS_TOKEN.balanceOf(sender, 0) == 0 && GENESIS_TOKEN.balanceOf(sender, 1) == 0)
+            if (!EDU_CREDITS_MANAGER.diamondHand(sender) && GENESIS_TOKEN.balanceOf(sender, 1) == 0 && GENESIS_TOKEN.balanceOf(sender, 2) == 0)
                 revert NotADiamondHandNorAGenesisNFTOwner();
         } else if (salePhase == 3) {
             // no restrictions, open sale
@@ -269,7 +269,7 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         } else if (salePhase == 1) {
             return EDU_CREDITS_MANAGER.diamondHand(account);
         } else if (salePhase == 2) {
-            return EDU_CREDITS_MANAGER.diamondHand(account) || GENESIS_TOKEN.balanceOf(account, 0) != 0 || GENESIS_TOKEN.balanceOf(account, 1) != 0;
+            return EDU_CREDITS_MANAGER.diamondHand(account) || GENESIS_TOKEN.balanceOf(account, 1) != 0 || GENESIS_TOKEN.balanceOf(account, 2) != 0;
         } else if (salePhase == 3) {
             return true;
         } else {

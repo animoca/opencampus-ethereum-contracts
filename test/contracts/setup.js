@@ -22,11 +22,11 @@ async function setupEDUCreditsManager(deployer, user, payoutWallet) {
   await this.EDUToken.approve(this.creditsManager.address, 1000);
 }
 
-async function setupPublisherNFTSale(deployer, user, payoutWallet, other, genesisNft0Holder, genesisNft1Holder) {
+async function setupPublisherNFTSale(deployer, user, payoutWallet, other, genesisNft1Holder, genesisNft2Holder) {
   await setupEDUCreditsManager.call(this, deployer, user, payoutWallet);
 
   await this.creditsManager.setInitialCredits(
-    [user.address, genesisNft0Holder.address, genesisNft1Holder.address],
+    [user.address, genesisNft1Holder.address, genesisNft2Holder.address],
     [300, 100, 100],
     [0, 0, 0],
     [true, false, false]
@@ -41,7 +41,7 @@ async function setupPublisherNFTSale(deployer, user, payoutWallet, other, genesi
     await getForwarderRegistryAddress()
   );
   await this.genesisToken.grantRole(await this.genesisToken.MINTER_ROLE(), deployer.address);
-  await this.genesisToken.safeDeliver([genesisNft0Holder.address, genesisNft1Holder.address], [0, 1], [1, 1], '0x');
+  await this.genesisToken.safeDeliver([genesisNft1Holder.address, genesisNft2Holder.address], [1, 2], [1, 1], '0x');
   this.lzEndpoint = await deployContract('LzEndpointMock');
   const now = (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp;
   const phase1Start = now + 10000;
@@ -71,8 +71,8 @@ async function setupPublisherNFTSale(deployer, user, payoutWallet, other, genesi
   });
 }
 
-async function setupPublisherNFTMinter(deployer, user, payoutWallet, other, genesisNft0Holder, genesisNft1Holder) {
-  await setupPublisherNFTSale.call(this, deployer, user, payoutWallet, other, genesisNft0Holder, genesisNft1Holder);
+async function setupPublisherNFTMinter(deployer, user, payoutWallet, other, genesisNft1Holder, genesisNft2Holder) {
+  await setupPublisherNFTSale.call(this, deployer, user, payoutWallet, other, genesisNft1Holder, genesisNft2Holder);
   this.publisherNFT = await deployContract(
     'ERC721Full',
     '',

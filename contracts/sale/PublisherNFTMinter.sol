@@ -4,10 +4,14 @@ pragma solidity 0.8.21;
 import {IERC721Mintable} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721Mintable.sol";
 import {ILayerZeroEndpoint} from "@layerzerolabs/solidity-examples/contracts/interfaces/ILayerZeroEndpoint.sol";
 import {ILayerZeroReceiver} from "@layerzerolabs/solidity-examples/contracts/interfaces/ILayerZeroReceiver.sol";
+import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
+import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 
 /// @title PublisherNFTMinter
 /// @notice This contract is used to mint season 2 Publisher NFTs on the Polygon.
-contract PublisherNFTMinter is ILayerZeroReceiver {
+contract PublisherNFTMinter is ILayerZeroReceiver, ContractOwnership {
+    using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
+
     IERC721Mintable public immutable PUBLISHER_NFT;
     ILayerZeroEndpoint public immutable LZ_ENDPOINT;
     uint16 public immutable LZ_SRC_CHAINID;
@@ -31,7 +35,13 @@ contract PublisherNFTMinter is ILayerZeroReceiver {
     /// @dev Thrown when the mint supply limit is reached.
     error InsufficientMintSupply();
 
-    constructor(IERC721Mintable publisherNFT, ILayerZeroEndpoint lzEndpoint, uint16 lzSrcChainId, address lzSrcAddress, uint256 mintSupplyLimit) {
+    constructor(
+        IERC721Mintable publisherNFT,
+        ILayerZeroEndpoint lzEndpoint,
+        uint16 lzSrcChainId,
+        address lzSrcAddress,
+        uint256 mintSupplyLimit
+    ) ContractOwnership(msg.sender) {
         PUBLISHER_NFT = publisherNFT;
         LZ_ENDPOINT = lzEndpoint;
         LZ_SRC_CHAINID = lzSrcChainId;
@@ -67,5 +77,14 @@ contract PublisherNFTMinter is ILayerZeroReceiver {
         }
         mintCount = currentMintCount;
         PUBLISHER_NFT.batchMint(tokenOwner, tokenIds);
+    }
+
+    function forceResumeReceive() external {
+        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        LZ_ENDPOINT.forceResumeReceive(LZ_SRC_CHAINID, abi.encodePacked(LZ_SRC_ADDRESS, address(this)));
+    }
+
+    function retryPayload(address minter, uint256 nbTokens) external {
+        LZ_ENDPOINT.retryPayload(LZ_SRC_CHAINID, abi.encodePacked(LZ_SRC_ADDRESS, address(this)), abi.encode(minter, nbTokens));
     }
 }

@@ -43,7 +43,6 @@ describe('PublisherNFTMinter', function () {
     });
   });
 
-  // function lzReceive(uint16 srcChainId, bytes memory destination, uint64, bytes calldata payload) external {
   describe('lzReceive(uint16,bytes,uint64,bytes)', function () {
     beforeEach(async function () {
       this.payload = ethers.utils.defaultAbiCoder.encode(['address', 'uint256'], [user.address, 1]);
@@ -92,6 +91,32 @@ describe('PublisherNFTMinter', function () {
       it('mints publisher tokens', async function () {
         await expect(this.receipt).to.emit(this.publisherNFT, 'Transfer').withArgs(ethers.constants.AddressZero, user.address, 0);
       });
+    });
+  });
+
+  describe('forceResumeReceive()', function () {
+    it('reverts when not called by the contract owner', async function () {
+      await expect(this.minter.connect(other).forceResumeReceive())
+        .to.be.revertedWithCustomError(this.minter, 'NotContractOwner')
+        .withArgs(other.address);
+    });
+
+    it('calls forceResumeReceive on the LZ endpoint', async function () {
+      await expect(this.minter.forceResumeReceive())
+        .to.be.emit(this.lzEndpoint, 'ForceResume')
+        .withArgs(0, ethers.utils.solidityPack(['address', 'address'], [this.sale.address, this.minter.address]));
+    });
+  });
+
+  describe('retryPayload(address,uint256)', function () {
+    it('calls forceResumeReceive on the LZ endpoint', async function () {
+      await expect(this.minter.retryPayload(user.address, 1))
+        .to.be.emit(this.lzEndpoint, 'PayloadRetry')
+        .withArgs(
+          0,
+          ethers.utils.solidityPack(['address', 'address'], [this.sale.address, this.minter.address]),
+          ethers.utils.defaultAbiCoder.encode(['address', 'uint256'], [user.address, 1])
+        );
     });
   });
 });

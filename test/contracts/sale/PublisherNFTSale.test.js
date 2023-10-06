@@ -9,15 +9,15 @@ const {setupPublisherNFTSale} = require('../setup');
 
 describe('PublisherNFTSale', function () {
   let accounts;
-  let deployer, user, payoutWallet, other, genesisNft0Holder, genesisNft1Holder;
+  let deployer, user, payoutWallet, other, genesisNft1Holder, genesisNft2Holder;
 
   before(async function () {
     accounts = await ethers.getSigners();
-    [deployer, user, payoutWallet, other, genesisNft0Holder, genesisNft1Holder] = accounts;
+    [deployer, user, payoutWallet, other, genesisNft1Holder, genesisNft2Holder] = accounts;
   });
 
   const fixture = async function () {
-    await setupPublisherNFTSale.call(this, deployer, user, payoutWallet, other, genesisNft0Holder, genesisNft1Holder);
+    await setupPublisherNFTSale.call(this, deployer, user, payoutWallet, other, genesisNft1Holder, genesisNft2Holder);
   };
 
   beforeEach(async function () {
@@ -239,8 +239,8 @@ describe('PublisherNFTSale', function () {
       await time.increase(30000);
       await this.sale.setLzDstAddress(other.address);
       await this.sale.connect(user).mint(1);
-      await this.sale.connect(genesisNft0Holder).mint(1);
       await this.sale.connect(genesisNft1Holder).mint(1);
+      await this.sale.connect(genesisNft2Holder).mint(1);
       await expect(this.sale.connect(user).mint(1)).to.be.revertedWithCustomError(this.sale, 'InsufficientMintSupply');
     });
 
@@ -340,13 +340,13 @@ describe('PublisherNFTSale', function () {
           });
           context('by a genesis token 0 holder', function () {
             beforeEach(async function () {
-              this.receipt = await this.sale.connect(genesisNft0Holder).mint(1);
+              this.receipt = await this.sale.connect(genesisNft1Holder).mint(1);
             });
             onSuccess(4, 100, 0);
           });
           context('by a genesis token 1 holder', function () {
             beforeEach(async function () {
-              this.receipt = await this.sale.connect(genesisNft1Holder).mint(1);
+              this.receipt = await this.sale.connect(genesisNft2Holder).mint(1);
             });
             onSuccess(5, 100, 0);
           });
@@ -366,13 +366,13 @@ describe('PublisherNFTSale', function () {
           });
           context('by a genesis token 0 holder', function () {
             beforeEach(async function () {
-              this.receipt = await this.sale.connect(genesisNft0Holder).mint(1);
+              this.receipt = await this.sale.connect(genesisNft1Holder).mint(1);
             });
             onSuccess(4, 95, 1);
           });
           context('by a genesis token 1 holder', function () {
             beforeEach(async function () {
-              this.receipt = await this.sale.connect(genesisNft1Holder).mint(1);
+              this.receipt = await this.sale.connect(genesisNft2Holder).mint(1);
             });
             onSuccess(5, 95, 1);
           });
@@ -392,13 +392,13 @@ describe('PublisherNFTSale', function () {
           });
           context('by a genesis token 0 holder', function () {
             beforeEach(async function () {
-              this.receipt = await this.sale.connect(genesisNft0Holder).mint(1);
+              this.receipt = await this.sale.connect(genesisNft1Holder).mint(1);
             });
             onSuccess(4, 90, 2);
           });
           context('by a genesis token 1 holder', function () {
             beforeEach(async function () {
-              this.receipt = await this.sale.connect(genesisNft1Holder).mint(1);
+              this.receipt = await this.sale.connect(genesisNft2Holder).mint(1);
             });
             onSuccess(5, 90, 2);
           });
@@ -418,13 +418,13 @@ describe('PublisherNFTSale', function () {
           });
           context('by a genesis token 0 holder', function () {
             beforeEach(async function () {
-              this.receipt = await this.sale.connect(genesisNft0Holder).mint(1);
+              this.receipt = await this.sale.connect(genesisNft1Holder).mint(1);
             });
             onSuccess(4, 85, 3);
           });
           context('by a genesis token 1 holder', function () {
             beforeEach(async function () {
-              this.receipt = await this.sale.connect(genesisNft1Holder).mint(1);
+              this.receipt = await this.sale.connect(genesisNft2Holder).mint(1);
             });
             onSuccess(5, 85, 3);
           });
@@ -562,12 +562,12 @@ describe('PublisherNFTSale', function () {
         expect(await this.sale.canMint(user.address)).to.be.false;
       });
 
-      it('returns false for a genesis token 0 holder account', async function () {
-        expect(await this.sale.canMint(genesisNft0Holder.address)).to.be.false;
-      });
-
       it('returns false for a genesis token 1 holder account', async function () {
         expect(await this.sale.canMint(genesisNft1Holder.address)).to.be.false;
+      });
+
+      it('returns false for a genesis token 2 holder account', async function () {
+        expect(await this.sale.canMint(genesisNft2Holder.address)).to.be.false;
       });
 
       it('returns false for another account', async function () {
@@ -585,11 +585,11 @@ describe('PublisherNFTSale', function () {
       });
 
       it('returns false for a genesis token 0 holder account', async function () {
-        expect(await this.sale.canMint(genesisNft0Holder.address)).to.be.false;
+        expect(await this.sale.canMint(genesisNft1Holder.address)).to.be.false;
       });
 
       it('returns false for a genesis token 1 holder account', async function () {
-        expect(await this.sale.canMint(genesisNft1Holder.address)).to.be.false;
+        expect(await this.sale.canMint(genesisNft2Holder.address)).to.be.false;
       });
 
       it('returns false for another account', async function () {
@@ -607,11 +607,11 @@ describe('PublisherNFTSale', function () {
       });
 
       it('returns true for a genesis token 0 holder account', async function () {
-        expect(await this.sale.canMint(genesisNft0Holder.address)).to.be.true;
+        expect(await this.sale.canMint(genesisNft1Holder.address)).to.be.true;
       });
 
       it('returns true for a genesis token 1 holder account', async function () {
-        expect(await this.sale.canMint(genesisNft1Holder.address)).to.be.true;
+        expect(await this.sale.canMint(genesisNft2Holder.address)).to.be.true;
       });
 
       it('returns false for another account', async function () {
@@ -629,11 +629,11 @@ describe('PublisherNFTSale', function () {
       });
 
       it('returns true for a genesis token 0 holder account', async function () {
-        expect(await this.sale.canMint(genesisNft0Holder.address)).to.be.true;
+        expect(await this.sale.canMint(genesisNft1Holder.address)).to.be.true;
       });
 
       it('returns true for a genesis token 1 holder account', async function () {
-        expect(await this.sale.canMint(genesisNft1Holder.address)).to.be.true;
+        expect(await this.sale.canMint(genesisNft2Holder.address)).to.be.true;
       });
 
       it('returns true for another holder account', async function () {
@@ -651,11 +651,11 @@ describe('PublisherNFTSale', function () {
       });
 
       it('returns false for a genesis token 0 holder account', async function () {
-        expect(await this.sale.canMint(genesisNft0Holder.address)).to.be.false;
+        expect(await this.sale.canMint(genesisNft1Holder.address)).to.be.false;
       });
 
       it('returns false for a genesis token 1 holder account', async function () {
-        expect(await this.sale.canMint(genesisNft1Holder.address)).to.be.false;
+        expect(await this.sale.canMint(genesisNft2Holder.address)).to.be.false;
       });
 
       it('returns false for another account', async function () {
