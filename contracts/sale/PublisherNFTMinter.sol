@@ -8,7 +8,7 @@ import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/ac
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 
 /// @title PublisherNFTMinter
-/// @notice This contract is used to mint season 2 Publisher NFTs on the Polygon.
+/// @notice This contract is used to mint season 2 Publisher NFTs on Polygon.
 contract PublisherNFTMinter is ILayerZeroReceiver, ContractOwnership {
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
 

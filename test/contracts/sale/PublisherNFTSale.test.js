@@ -25,6 +25,120 @@ describe('PublisherNFTSale', function () {
   });
 
   describe('constructor(address,address,address,uint16,uint256,uint256,uint256,uint256[],uint256[],uint256[])', function () {
+    it('reverts if the mint price is zero', async function () {
+      await expect(
+        deployContract(
+          'PublisherNFTSale',
+          this.genesisToken.address,
+          this.creditsManager.address,
+          this.lzEndpoint.address,
+          1, // lzDstChainId
+          0, // mintPrice
+          100, // mintSupplyLimit
+          2, // mintLimitPerAddress
+          [0, 1, 2, 3], // timestamps
+          [1000, 2000, 3000], // discountThresholds
+          [500, 1000, 1500], // discountPercentages
+          await getForwarderRegistryAddress()
+        )
+      ).to.be.revertedWithCustomError(this.sale, 'ZeroMintPrice');
+    });
+
+    it('reverts if the mint supply limit is zero', async function () {
+      await expect(
+        deployContract(
+          'PublisherNFTSale',
+          this.genesisToken.address,
+          this.creditsManager.address,
+          this.lzEndpoint.address,
+          1, // lzDstChainId
+          1, // mintPrice
+          0, // mintSupplyLimit
+          2, // mintLimitPerAddress
+          [0, 1, 2, 3], // timestamps
+          [1000, 2000, 3000], // discountThresholds
+          [500, 1000, 1500], // discountPercentages
+          await getForwarderRegistryAddress()
+        )
+      ).to.be.revertedWithCustomError(this.sale, 'ZeroMintSupplyLimit');
+    });
+
+    it('reverts if the mint limit per address is zero', async function () {
+      await expect(
+        deployContract(
+          'PublisherNFTSale',
+          this.genesisToken.address,
+          this.creditsManager.address,
+          this.lzEndpoint.address,
+          1, // lzDstChainId
+          1, // mintPrice
+          1, // mintSupplyLimit
+          0, // mintLimitPerAddress
+          [0, 1, 2, 3], // timestamps
+          [1000, 2000, 3000], // discountThresholds
+          [500, 1000, 1500], // discountPercentages
+          await getForwarderRegistryAddress()
+        )
+      ).to.be.revertedWithCustomError(this.sale, 'ZeroMintLimitPerAddress');
+    });
+
+    it('reverts if the timestamps length is not 4', async function () {
+      await expect(
+        deployContract(
+          'PublisherNFTSale',
+          this.genesisToken.address,
+          this.creditsManager.address,
+          this.lzEndpoint.address,
+          1, // lzDstChainId
+          1, // mintPrice
+          1, // mintSupplyLimit
+          1, // mintLimitPerAddress
+          [0, 1, 2], // timestamps
+          [1000, 2000, 3000], // discountThresholds
+          [500, 1000, 1500], // discountPercentages
+          await getForwarderRegistryAddress()
+        )
+      ).to.be.revertedWithCustomError(this.sale, 'InvalidTimestampsLength');
+    });
+
+    it('reverts if the discount thresholds length is not 3', async function () {
+      await expect(
+        deployContract(
+          'PublisherNFTSale',
+          this.genesisToken.address,
+          this.creditsManager.address,
+          this.lzEndpoint.address,
+          1, // lzDstChainId
+          1, // mintPrice
+          1, // mintSupplyLimit
+          1, // mintLimitPerAddress
+          [0, 1, 2, 3], // timestamps
+          [1000, 2000, 3000, 4000], // discountThresholds
+          [500, 1000, 1500], // discountPercentages
+          await getForwarderRegistryAddress()
+        )
+      ).to.be.revertedWithCustomError(this.sale, 'InvalidDiscountThresholdsLength');
+    });
+
+    it('reverts if the discount percentages length is not 3', async function () {
+      await expect(
+        deployContract(
+          'PublisherNFTSale',
+          this.genesisToken.address,
+          this.creditsManager.address,
+          this.lzEndpoint.address,
+          1, // lzDstChainId
+          1, // mintPrice
+          1, // mintSupplyLimit
+          1, // mintLimitPerAddress
+          [0, 1, 2, 3], // timestamps
+          [1000, 2000, 3000], // discountThresholds
+          [500, 1000, 1500, 2000], // discountPercentages
+          await getForwarderRegistryAddress()
+        )
+      ).to.be.revertedWithCustomError(this.sale, 'InvalidDiscountPercentagesLength');
+    });
+
     it('reverts if the timestamps are not increasing', async function () {
       await expect(
         deployContract(
@@ -38,10 +152,10 @@ describe('PublisherNFTSale', function () {
           2, // mintLimitPerAddress
           [1, 0, 0, 0], // timestamps
           [1000, 2000, 3000], // discountThresholds
-          [5, 10, 15], // discountPercentages
+          [500, 1000, 1500], // discountPercentages
           await getForwarderRegistryAddress()
         )
-      ).to.be.revertedWithCustomError(this.sale, 'InvalidTimestamps');
+      ).to.be.revertedWithCustomError(this.sale, 'NonIncreasingTimestamps');
       await expect(
         deployContract(
           'PublisherNFTSale',
@@ -54,10 +168,10 @@ describe('PublisherNFTSale', function () {
           2, // mintLimitPerAddress
           [0, 1, 0, 1], // timestamps
           [1000, 2000, 3000], // discountThresholds
-          [5, 10, 15], // discountPercentages
+          [500, 1000, 1500], // discountPercentages
           await getForwarderRegistryAddress()
         )
-      ).to.be.revertedWithCustomError(this.sale, 'InvalidTimestamps');
+      ).to.be.revertedWithCustomError(this.sale, 'NonIncreasingTimestamps');
       await expect(
         deployContract(
           'PublisherNFTSale',
@@ -70,10 +184,10 @@ describe('PublisherNFTSale', function () {
           2, // mintLimitPerAddress
           [0, 1, 2, 1], // timestamps
           [1000, 2000, 3000], // discountThresholds
-          [5, 10, 15], // discountPercentages
+          [500, 1000, 1500], // discountPercentages
           await getForwarderRegistryAddress()
         )
-      ).to.be.revertedWithCustomError(this.sale, 'InvalidTimestamps');
+      ).to.be.revertedWithCustomError(this.sale, 'NonIncreasingTimestamps');
     });
     it('reverts if the discount thresholds are not increasing', async function () {
       await expect(
@@ -88,10 +202,10 @@ describe('PublisherNFTSale', function () {
           2, // mintLimitPerAddress
           [0, 1, 2, 3], // timestamps
           [1000, 0, 1999], // discountThresholds
-          [5, 10, 15], // discountPercentages
+          [500, 1000, 1500], // discountPercentages
           await getForwarderRegistryAddress()
         )
-      ).to.be.revertedWithCustomError(this.sale, 'InvalidDiscountThresholds');
+      ).to.be.revertedWithCustomError(this.sale, 'NonIncreasingDiscountThresholds');
       await expect(
         deployContract(
           'PublisherNFTSale',
@@ -104,11 +218,46 @@ describe('PublisherNFTSale', function () {
           2, // mintLimitPerAddress
           [0, 1, 2, 3], // timestamps
           [1000, 2000, 1999], // discountThresholds
-          [5, 10, 15], // discountPercentages
+          [500, 1000, 1500], // discountPercentages
           await getForwarderRegistryAddress()
         )
-      ).to.be.revertedWithCustomError(this.sale, 'InvalidDiscountThresholds');
+      ).to.be.revertedWithCustomError(this.sale, 'NonIncreasingDiscountThresholds');
     });
+    it('reverts if some discount percentages are invalid', async function () {
+      await expect(
+        deployContract(
+          'PublisherNFTSale',
+          this.genesisToken.address,
+          this.creditsManager.address,
+          this.lzEndpoint.address,
+          1, // lzDstChainId
+          100, // mintPrice
+          100, // mintSupplyLimit
+          2, // mintLimitPerAddress
+          [0, 1, 2, 3], // timestamps
+          [1000, 2000, 3000], // discountThresholds
+          [9000, 10000, 10001], // discountPercentages
+          await getForwarderRegistryAddress()
+        )
+      ).to.be.revertedWithCustomError(this.sale, 'InvalidDiscountPercentages');
+      await expect(
+        deployContract(
+          'PublisherNFTSale',
+          this.genesisToken.address,
+          this.creditsManager.address,
+          this.lzEndpoint.address,
+          1, // lzDstChainId
+          100, // mintPrice
+          100, // mintSupplyLimit
+          2, // mintLimitPerAddress
+          [0, 1, 2, 3], // timestamps
+          [1000, 2000, 3000], // discountThresholds
+          [10001, 10002, 10003], // discountPercentages
+          await getForwarderRegistryAddress()
+        )
+      ).to.be.revertedWithCustomError(this.sale, 'InvalidDiscountPercentages');
+    });
+
     it('reverts if the discount percentages are not increasing', async function () {
       await expect(
         deployContract(
@@ -122,10 +271,10 @@ describe('PublisherNFTSale', function () {
           2, // mintLimitPerAddress
           [0, 1, 2, 3], // timestamps
           [1000, 2000, 3000], // discountThresholds
-          [5, 0, 5], // discountPercentages
+          [500, 0, 500], // discountPercentages
           await getForwarderRegistryAddress()
         )
-      ).to.be.revertedWithCustomError(this.sale, 'InvalidDiscountPercentages');
+      ).to.be.revertedWithCustomError(this.sale, 'NonIncreasingDiscountPercentages');
       await expect(
         deployContract(
           'PublisherNFTSale',
@@ -138,10 +287,10 @@ describe('PublisherNFTSale', function () {
           2, // mintLimitPerAddress
           [0, 1, 2, 3], // timestamps
           [1000, 2000, 3000], // discountThresholds
-          [5, 10, 5], // discountPercentages
+          [500, 1000, 500], // discountPercentages
           await getForwarderRegistryAddress()
         )
-      ).to.be.revertedWithCustomError(this.sale, 'InvalidDiscountPercentages');
+      ).to.be.revertedWithCustomError(this.sale, 'NonIncreasingDiscountPercentages');
     });
 
     it('sets the genesis token address', async function () {
@@ -184,6 +333,21 @@ describe('PublisherNFTSale', function () {
     it('sets the lzDstAddress', async function () {
       await this.sale.setLzDstAddress(user.address);
       expect(await this.sale.lzDstAddress()).to.equal(user.address);
+    });
+  });
+
+  describe('setLzCallbackGasUsage(uint128,uint128)', function () {
+    it('reverts when not called by the contract owner', async function () {
+      await expect(this.sale.connect(user).setLzCallbackGasUsage(1, 1))
+        .to.be.revertedWithCustomError(this.sale, 'NotContractOwner')
+        .withArgs(user.address);
+    });
+
+    it('sets the lzGasUSage', async function () {
+      await this.sale.setLzCallbackGasUsage(1, 2);
+      const gasUsage = await this.sale.getLzCallbackGasUsage();
+      expect(gasUsage[0]).to.equal(1);
+      expect(gasUsage[1]).to.equal(2);
     });
   });
 
@@ -485,6 +649,11 @@ describe('PublisherNFTSale', function () {
         .withArgs(user.address);
     });
 
+    it('reverts when transferring to a contract which fails to receive', async function () {
+      const rejector = await deployContract('Rejector');
+      await expect(this.sale.withdraw(rejector.address)).to.be.revertedWithCustomError(this.sale, 'TransferFailed');
+    });
+
     it('transfers the ETH balance to the contract owner', async function () {
       const balanceBefore = await other.getBalance();
       await this.sale.withdraw(other.address);
@@ -527,6 +696,89 @@ describe('PublisherNFTSale', function () {
       const currentPrice = await this.sale.currentMintPrice();
       expect(currentPrice[0]).to.equal(85);
       expect(currentPrice[1]).to.equal(3);
+    });
+
+    it('never returns 0', async function () {
+      const EDUToken = await deployContract(
+        'ERC20FixedSupply',
+        '',
+        '',
+        18,
+        [user.address, deployer.address],
+        [1000000000, 1000000000],
+        await getForwarderRegistryAddress()
+      );
+      const creditsManager = await deployContract(
+        'EDUCreditsManagerMock',
+        EDUToken.address,
+        payoutWallet.address,
+        deployer.address,
+        await getForwarderRegistryAddress()
+      );
+      await EDUToken.approve(creditsManager.address, 1000);
+
+      await creditsManager.setInitialCredits(
+        [user.address, genesisNft1Holder.address, genesisNft2Holder.address],
+        [300, 100, 100],
+        [0, 0, 0],
+        [true, false, false]
+      );
+      await creditsManager.setPhase(await creditsManager.SALE_PHASE());
+      const genesisToken = await deployContract(
+        'ERC1155Full',
+        '',
+        '',
+        ethers.constants.AddressZero,
+        await getOperatorFilterRegistryAddress(),
+        await getForwarderRegistryAddress()
+      );
+      await genesisToken.grantRole(await genesisToken.MINTER_ROLE(), deployer.address);
+      await genesisToken.safeDeliver([genesisNft1Holder.address, genesisNft2Holder.address], [1, 2], [1, 1], '0x');
+      const lzEndpoint = await deployContract('LzEndpointMock');
+      const now = (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp;
+      const phase1Start = now + 10000;
+      const phase2Start = phase1Start + 10000;
+      const phase3Start = phase2Start + 10000;
+      const saleEnd = phase3Start + 10000;
+
+      const sale1 = await deployContract(
+        'PublisherNFTSaleMock',
+        genesisToken.address,
+        creditsManager.address,
+        lzEndpoint.address,
+        1, // lzDstChainId
+        1, // mintPrice
+        3, // mintSupplyLimit
+        2, // mintLimitPerAddress
+        [phase1Start, phase2Start, phase3Start, saleEnd], // timestamps
+        // [10000, 20000, 30000, 40000], // timestamps
+        [0, 2000, 3000], // discountThresholds
+        [100, 200, 300], // discountPercentages
+        await getForwarderRegistryAddress()
+      );
+      const sale1MintPrice = await sale1.currentMintPrice();
+      expect(sale1MintPrice[0]).to.equal(1);
+      expect(sale1MintPrice[1]).to.equal(1);
+
+      const sale2 = await deployContract(
+        'PublisherNFTSaleMock',
+        genesisToken.address,
+        creditsManager.address,
+        lzEndpoint.address,
+        1, // lzDstChainId
+        99, // mintPrice
+        3, // mintSupplyLimit
+        2, // mintLimitPerAddress
+        [phase1Start, phase2Start, phase3Start, saleEnd], // timestamps
+        // [10000, 20000, 30000, 40000], // timestamps
+        [0, 2000, 3000], // discountThresholds
+        [9900, 9901, 9902], // discountPercentages
+        await getForwarderRegistryAddress()
+      );
+      const sale2MintPrice = await sale2.currentMintPrice();
+
+      expect(sale2MintPrice[0]).to.equal(1);
+      expect(sale2MintPrice[1]).to.equal(1);
     });
   });
 

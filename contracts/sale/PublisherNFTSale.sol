@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.21;
 
+import {TransferFailed} from "@animoca/ethereum-contracts/contracts/CommonErrors.sol";
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
 import {IERC1155} from "@animoca/ethereum-contracts/contracts/token/ERC1155/interfaces/IERC1155.sol";
 import {ILayerZeroEndpoint} from "@layerzerolabs/solidity-examples/contracts/interfaces/ILayerZeroEndpoint.sol";
@@ -42,7 +43,10 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
     uint256 public immutable DISCOUNT_PERCENTAGE_2;
     uint256 public immutable DISCOUNT_PERCENTAGE_3;
 
+    uint256 internal constant _PERCENTAGE_PRECISION = 10000;
+
     address public lzDstAddress;
+    uint256 public lzCallbackGasUsage;
     uint256 public mintCount;
     mapping(address => uint256) public mintCountPerAddress;
 
@@ -52,14 +56,35 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
     /// @param discountThreshold The discount threshold that was reached at the moment of the mint.
     event MintInitiated(address sender, uint256 nbTokens, uint256 discountThreshold);
 
+    /// @notice Thrown at construction if the mint price is zero.
+    error ZeroMintPrice();
+
+    /// @notice Thrown at construction if the mint supply limit is zero.
+    error ZeroMintSupplyLimit();
+
+    /// @notice Thrown at construction if the mint limit per address is zero.
+    error ZeroMintLimitPerAddress();
+
+    /// @notice Thrown at construction if the timestamps length is not 4.
+    error InvalidTimestampsLength();
+
+    /// @notice Thrown at construction if the discount thresholds length is not 3.
+    error InvalidDiscountThresholdsLength();
+
+    /// @notice Thrown at construction if the discount percentages length is not 3.
+    error InvalidDiscountPercentagesLength();
+
     /// @notice Thrown at construction if the timestamps are not in increasing order.
-    error InvalidTimestamps();
+    error NonIncreasingTimestamps();
 
     /// @notice Thrown at construction if the discount thresholds are not in increasing order.
-    error InvalidDiscountThresholds();
+    error NonIncreasingDiscountThresholds();
+
+    /// @notice Thrown at construction if at least one of the discount percentages goes above 100% .
+    error InvalidDiscountPercentages();
 
     /// @notice Thrown at construction if the discount percentages are not in increasing order.
-    error InvalidDiscountPercentages();
+    error NonIncreasingDiscountPercentages();
 
     /// @notice Thrown when trying to set the LZ destination address but it is already set.
     error LzDstAddressAlreadySet();
@@ -91,9 +116,16 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
     /// @notice Thrown when trying to mint but the mint supply limit has been reached.
     error InsufficientMintSupply();
 
-    /// @dev Reverts with `InvalidTimestamps` if the timestamps are not in increasing order.
-    /// @dev Reverts with `InvalidDiscountThresholds` if the discount thresholds are not in increasing order.
-    /// @dev Reverts with `InvalidDiscountPercentages` if the discount percentages are not in increasing order.
+    /// @dev Reverts with `ZeroMintPrice` if the mint price is zero.
+    /// @dev Reverts with `ZeroMintSupplyLimit` if the mint supply limit is zero.
+    /// @dev Reverts with `ZeroMintLimitPerAddress` if the mint limit per address is zero.
+    /// @dev Reverts with `InvalidTimestampsLength` if the timestamps length is not 4.
+    /// @dev Reverts with `InvalidDiscountThresholdsLength` if the discount thresholds length is not 3.
+    /// @dev Reverts with `InvalidDiscountPercentagesLength` if the discount percentages length is not 3.
+    /// @dev Reverts with `NonIncreasingTimestamps` if the timestamps are not in increasing order.
+    /// @dev Reverts with `NonIncreasingDiscountThresholds` if the discount thresholds are not in increasing order.
+    /// @dev Reverts with `InvalidDiscountPercentages` if at least one of the discount percentages goes above 100% .
+    /// @dev Reverts with `NonIncreasingDiscountPercentages` if the discount percentages are not in increasing order.
     /// @param genesisToken The address of the Genesis Token contract.
     /// @param eduCreditsManager The address of the EDUCreditsManager contract.
     /// @param lzEndpoint The address of the LayerZeroEndpoint contract.
@@ -117,6 +149,19 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         uint256[] memory discountPercentages,
         IForwarderRegistry forwarderRegistry
     ) payable ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
+        if (mintPrice == 0) revert ZeroMintPrice();
+        if (mintSupplyLimit == 0) revert ZeroMintSupplyLimit();
+        if (mintLimitPerAddress == 0) revert ZeroMintLimitPerAddress();
+        if (timestamps.length != 4) revert InvalidTimestampsLength();
+        if (discountThresholds.length != 3) revert InvalidDiscountThresholdsLength();
+        if (discountPercentages.length != 3) revert InvalidDiscountPercentagesLength();
+        if (timestamps[1] <= timestamps[0] || timestamps[2] <= timestamps[1] || timestamps[3] <= timestamps[2]) revert NonIncreasingTimestamps();
+        if (discountThresholds[1] <= discountThresholds[0] || discountThresholds[2] <= discountThresholds[1])
+            revert NonIncreasingDiscountThresholds();
+        if (discountPercentages[1] <= discountPercentages[0] || discountPercentages[2] <= discountPercentages[1])
+            revert NonIncreasingDiscountPercentages();
+        if (discountPercentages[2] >= _PERCENTAGE_PRECISION) revert InvalidDiscountPercentages();
+
         GENESIS_TOKEN = genesisToken;
         EDU_CREDITS_MANAGER = eduCreditsManager;
         LZ_ENDPOINT = lzEndpoint;
@@ -124,19 +169,18 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         MINT_PRICE = mintPrice;
         MINT_SUPPLY_LIMIT = mintSupplyLimit;
         MINT_LIMIT_PER_ADDRESS = mintLimitPerAddress;
-        if (timestamps[1] <= timestamps[0] || timestamps[2] <= timestamps[1] || timestamps[3] <= timestamps[2]) revert InvalidTimestamps();
         PHASE1_START_TIMESTAMP = timestamps[0];
         PHASE2_START_TIMESTAMP = timestamps[1];
         PHASE3_START_TIMESTAMP = timestamps[2];
         SALE_END_TIMESTAMP = timestamps[3];
-        if (discountThresholds[1] <= discountThresholds[0] || discountThresholds[2] <= discountThresholds[1]) revert InvalidDiscountThresholds();
         DISCOUNT_THRESHOLD_1 = discountThresholds[0];
         DISCOUNT_THRESHOLD_2 = discountThresholds[1];
         DISCOUNT_THRESHOLD_3 = discountThresholds[2];
-        if (discountPercentages[1] <= discountPercentages[0] || discountPercentages[2] <= discountPercentages[1]) revert InvalidDiscountPercentages();
         DISCOUNT_PERCENTAGE_1 = discountPercentages[0];
         DISCOUNT_PERCENTAGE_2 = discountPercentages[1];
         DISCOUNT_PERCENTAGE_3 = discountPercentages[2];
+
+        _setLzCallbackGasUsage(125000, 30000);
     }
 
     receive() external payable {}
@@ -151,6 +195,15 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         lzDstAddress = lzDstAddress_;
     }
 
+    /// @notice Sets the LZ callback gas usage.
+    /// @dev Reverts with `NotContractOwner` if the sender is not the contract owner.
+    /// @param base The base gas usage.
+    /// @param perToken The gas usage per token.
+    function setLzCallbackGasUsage(uint128 base, uint128 perToken) external {
+        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        _setLzCallbackGasUsage(base, perToken);
+    }
+
     /// @notice Withdraws the contract's balance.
     /// @dev Reverts with `NotContractOwner` if the sender is not the contract owner.
     /// @param to The address to receive the withdrawn balance.
@@ -158,7 +211,8 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
         uint256 balance = address(this).balance;
         if (balance > 0) {
-            payable(to).transfer(balance);
+            (bool success, ) = to.call{value: balance}("");
+            if (!success) revert TransferFailed();
         }
     }
 
@@ -196,22 +250,15 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         address dstAddress = lzDstAddress;
         if (dstAddress == address(0)) revert LzDstAddressNotSet();
 
-        uint256 currentMintCount = mintCount;
-        uint256 newMintCount = currentMintCount + nbTokens;
-        if (newMintCount > MINT_SUPPLY_LIMIT) revert InsufficientMintSupply();
-        mintCount = newMintCount;
-
-        uint256 currentAddressMintCount = mintCountPerAddress[sender];
-        uint256 newAdressMintCount = currentAddressMintCount + nbTokens;
-        if (newAdressMintCount > MINT_LIMIT_PER_ADDRESS) revert AddressMintingLimitReached();
-        mintCountPerAddress[sender] = newAdressMintCount;
+        _incrementMintCount(nbTokens);
+        _incrementMintCountPerAddress(nbTokens, sender);
 
         (uint256 price, uint256 discountThreshold) = currentMintPrice();
         EDU_CREDITS_MANAGER.spend(sender, price * nbTokens);
 
         bytes memory payload = abi.encode(sender, nbTokens);
-        uint256 gasUsage = 125000 + 30000 * nbTokens;
-        bytes memory adapterParams = abi.encodePacked(uint16(1), gasUsage);
+        (uint256 gasBase, uint256 gasPerToken) = getLzCallbackGasUsage();
+        bytes memory adapterParams = abi.encodePacked(uint16(1), gasBase + gasPerToken * nbTokens);
         (uint256 fees, ) = LZ_ENDPOINT.estimateFees(LZ_DST_CHAINID, dstAddress, payload, false, adapterParams);
         // solhint-disable-next-line check-send-result
         LZ_ENDPOINT.send{value: fees}(
@@ -232,15 +279,16 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         price = MINT_PRICE;
         uint256 currentCreditsInPool = EDU_CREDITS_MANAGER.totalCredits();
         if (currentCreditsInPool >= DISCOUNT_THRESHOLD_3) {
-            price = (price * (100 - DISCOUNT_PERCENTAGE_3)) / 100;
+            price = (price * (_PERCENTAGE_PRECISION - DISCOUNT_PERCENTAGE_3)) / _PERCENTAGE_PRECISION;
             discountThreshold = 3;
         } else if (currentCreditsInPool >= DISCOUNT_THRESHOLD_2) {
-            price = (price * (100 - DISCOUNT_PERCENTAGE_2)) / 100;
+            price = (price * (_PERCENTAGE_PRECISION - DISCOUNT_PERCENTAGE_2)) / _PERCENTAGE_PRECISION;
             discountThreshold = 2;
         } else if (currentCreditsInPool >= DISCOUNT_THRESHOLD_1) {
-            price = (price * (100 - DISCOUNT_PERCENTAGE_1)) / 100;
+            price = (price * (_PERCENTAGE_PRECISION - DISCOUNT_PERCENTAGE_1)) / _PERCENTAGE_PRECISION;
             discountThreshold = 1;
         }
+        if (price == 0) price = 1;
     }
 
     /// @notice Returns the current sale phase.
@@ -275,6 +323,29 @@ contract PublisherNFTSale is ContractOwnership, ForwarderRegistryContext {
         } else {
             return false;
         }
+    }
+
+    function getLzCallbackGasUsage() public view returns (uint128 base, uint128 perToken) {
+        uint256 gasUsage = lzCallbackGasUsage;
+        return (uint128(gasUsage), uint128(gasUsage >> 128));
+    }
+
+    function _incrementMintCount(uint256 nbTokens) internal {
+        uint256 currentMintCount = mintCount;
+        uint256 newMintCount = currentMintCount + nbTokens;
+        if (newMintCount > MINT_SUPPLY_LIMIT) revert InsufficientMintSupply();
+        mintCount = newMintCount;
+    }
+
+    function _incrementMintCountPerAddress(uint256 nbTokens, address sender) internal {
+        uint256 currentAddressMintCount = mintCountPerAddress[sender];
+        uint256 newAdressMintCount = currentAddressMintCount + nbTokens;
+        if (newAdressMintCount > MINT_LIMIT_PER_ADDRESS) revert AddressMintingLimitReached();
+        mintCountPerAddress[sender] = newAdressMintCount;
+    }
+
+    function _setLzCallbackGasUsage(uint128 base, uint128 perToken) internal {
+        lzCallbackGasUsage = uint256(base) | (uint256(perToken) << 128);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase

@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "@animoca/ethereum-contract-helpers": "^0.0.6",
-    "@animoca/ethereum-contracts": "=3.0.0-rc.5",
+    "@animoca/ethereum-contracts": "=3.0.0-rc.7",
     "@layerzerolabs/solidity-examples": "^0.0.13",
     "@nomicfoundation/hardhat-chai-matchers": "^1.0.6",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.9",

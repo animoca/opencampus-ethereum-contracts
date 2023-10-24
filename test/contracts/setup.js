@@ -61,7 +61,7 @@ async function setupPublisherNFTSale(deployer, user, payoutWallet, other, genesi
     [phase1Start, phase2Start, phase3Start, saleEnd], // timestamps
     // [10000, 20000, 30000, 40000], // timestamps
     [1000, 2000, 3000], // discountThresholds
-    [5, 10, 15], // discountPercentages
+    [500, 1000, 1500], // discountPercentages
     await getForwarderRegistryAddress()
   );
   await this.creditsManager.grantRole(await this.creditsManager.SPENDER_ROLE(), this.sale.address);
