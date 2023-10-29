@@ -9,7 +9,7 @@ Solidity contracts for the Open Campus project.
 
 | Date       | Scope        | Commit                                                                                                                                  | Package version                                                            | Auditor                             | Report                                                                                    |
 | ---------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
-| xx/xx/xxxx | xxxx | [commit-hash](https://github.com/animoca/template-ethereum-contracts/tree/commit-hash) | [x.x.x](https://www.npmjs.com/package/@animoca/ethereum-contracts/v/0.2.0) | [xxxx](https://) | [link](/audit/xxxx) |
+| 18/10/2023 | sale/PublisherNFTMinter.sol sale/PublisherNFTSale.sol  | [3ec9be0e99a9b32620b1b302b4e83d4fcacf44d4](https://github.com/animoca/ethereum-contracts/tree/3ec9be0e99a9b32620b1b302b4e83d4fcacf44d4) | [1.0.0](https://www.npmjs.com/package/@animoca/ethereum-contracts/v/1.0.0) | [Solidified](https://solidified.io)    | [link](/audit/Audit%20Report%20-%20Animoca%20Open%20Campus%20Contracts%20%5B18.10.2023%5D-final.pdf)   |
 
 ## Development
 

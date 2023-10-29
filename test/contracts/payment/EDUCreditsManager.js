@@ -27,7 +27,7 @@ describe('EDUCreditsManager', function () {
     });
 
     it('emits a PhaseSet event', async function () {
-      await expect(this.creditsManager.deployTransaction.hash)
+      await expect(this.creditsManager.deploymentTransaction().hash)
         .to.emit(this.creditsManager, 'PhaseSet')
         .withArgs(await this.creditsManager.INIT_PHASE());
     });
@@ -35,7 +35,7 @@ describe('EDUCreditsManager', function () {
 
   describe('setPhase(uint256)', function () {
     it('reverts if the phase is invalid', async function () {
-      const invalidPhase = (await this.creditsManager.WITHDRAW_PHASE()).add(1);
+      const invalidPhase = (await this.creditsManager.WITHDRAW_PHASE()) + 1n;
       await expect(this.creditsManager.setPhase(invalidPhase))
         .to.be.revertedWithCustomError(this.creditsManager, 'SettingInvalidPhase')
         .withArgs(invalidPhase);
@@ -70,15 +70,15 @@ describe('EDUCreditsManager', function () {
         this.creditsManager,
         'InconsistentArrayLengths'
       );
-      await expect(this.creditsManager.setInitialCredits([ethers.constants.AddressZero], [], [1], [true])).to.be.revertedWithCustomError(
+      await expect(this.creditsManager.setInitialCredits([ethers.ZeroAddress], [], [1], [true])).to.be.revertedWithCustomError(
         this.creditsManager,
         'InconsistentArrayLengths'
       );
-      await expect(this.creditsManager.setInitialCredits([ethers.constants.AddressZero], [1], [], [true])).to.be.revertedWithCustomError(
+      await expect(this.creditsManager.setInitialCredits([ethers.ZeroAddress], [1], [], [true])).to.be.revertedWithCustomError(
         this.creditsManager,
         'InconsistentArrayLengths'
       );
-      await expect(this.creditsManager.setInitialCredits([ethers.constants.AddressZero], [1], [1], [])).to.be.revertedWithCustomError(
+      await expect(this.creditsManager.setInitialCredits([ethers.ZeroAddress], [1], [1], [])).to.be.revertedWithCustomError(
         this.creditsManager,
         'InconsistentArrayLengths'
       );
@@ -98,7 +98,7 @@ describe('EDUCreditsManager', function () {
     });
 
     it('reverts with a zero address user', async function () {
-      await expect(this.creditsManager.setInitialCredits([ethers.constants.AddressZero], [1], [1], [true])).to.be.revertedWithCustomError(
+      await expect(this.creditsManager.setInitialCredits([ethers.ZeroAddress], [1], [1], [true])).to.be.revertedWithCustomError(
         this.creditsManager,
         'ZeroAddressUser'
       );
@@ -147,7 +147,7 @@ describe('EDUCreditsManager', function () {
 
   describe('onERC20Received(address,address,uint256,bytes)', function () {
     it('reverts if the current phase is incorret', async function () {
-      await expect(this.EDUToken.connect(user).safeTransfer(this.creditsManager.address, 0, '0x'))
+      await expect(this.EDUToken.connect(user).safeTransfer(this.creditsManager.getAddress(), 0, '0x'))
         .to.be.revertedWithCustomError(this.creditsManager, 'OnlyDuringPhase')
         .withArgs(await this.creditsManager.DEPOSIT_PHASE(), await this.creditsManager.INIT_PHASE());
     });
@@ -155,7 +155,7 @@ describe('EDUCreditsManager', function () {
     context('when successful', function () {
       beforeEach(async function () {
         await this.creditsManager.setPhase(await this.creditsManager.DEPOSIT_PHASE());
-        this.receipt = await this.EDUToken.connect(user).safeTransfer(this.creditsManager.address, 1, '0x');
+        this.receipt = await this.EDUToken.connect(user).safeTransfer(this.creditsManager.getAddress(), 1, '0x');
       });
 
       it('increases the deposited balance', async function () {
@@ -172,15 +172,17 @@ describe('EDUCreditsManager', function () {
       });
 
       it('emits a Transfer event', async function () {
-        await expect(this.receipt).to.emit(this.EDUToken, 'Transfer').withArgs(user.address, this.creditsManager.address, 1);
+        await expect(this.receipt)
+          .to.emit(this.EDUToken, 'Transfer')
+          .withArgs(user.address, await this.creditsManager.getAddress(), 1);
       });
     });
 
     context('when consecutively successful', function () {
       beforeEach(async function () {
         await this.creditsManager.setPhase(await this.creditsManager.DEPOSIT_PHASE());
-        await this.EDUToken.connect(user).safeTransfer(this.creditsManager.address, 1, '0x');
-        this.receipt = await this.EDUToken.connect(user).safeTransfer(this.creditsManager.address, 2, '0x');
+        await this.EDUToken.connect(user).safeTransfer(this.creditsManager.getAddress(), 1, '0x');
+        this.receipt = await this.EDUToken.connect(user).safeTransfer(this.creditsManager.getAddress(), 2, '0x');
       });
 
       it('increases the deposited balance', async function () {
@@ -197,7 +199,9 @@ describe('EDUCreditsManager', function () {
       });
 
       it('emits a Transfer event', async function () {
-        await expect(this.receipt).to.emit(this.EDUToken, 'Transfer').withArgs(user.address, this.creditsManager.address, 2);
+        await expect(this.receipt)
+          .to.emit(this.EDUToken, 'Transfer')
+          .withArgs(user.address, await this.creditsManager.getAddress(), 2);
       });
     });
   });
@@ -236,7 +240,7 @@ describe('EDUCreditsManager', function () {
       beforeEach(async function () {
         await this.creditsManager.setInitialCredits([user.address], [10], [10], [true]);
         await this.creditsManager.setPhase(await this.creditsManager.DEPOSIT_PHASE());
-        await this.EDUToken.connect(user).safeTransfer(this.creditsManager.address, 10, '0x');
+        await this.EDUToken.connect(user).safeTransfer(this.creditsManager.getAddress(), 10, '0x');
         await this.creditsManager.setPhase(await this.creditsManager.SALE_PHASE());
         await this.creditsManager.grantRole(await this.creditsManager.SPENDER_ROLE(), deployer.address);
       });
@@ -362,7 +366,9 @@ describe('EDUCreditsManager', function () {
         });
 
         it('emits a Transfer event', async function () {
-          await expect(this.receipt).to.emit(this.EDUToken, 'Transfer').withArgs(this.creditsManager.address, payoutWallet.address, 5);
+          await expect(this.receipt)
+            .to.emit(this.EDUToken, 'Transfer')
+            .withArgs(await this.creditsManager.getAddress(), payoutWallet.address, 5);
         });
       });
 
@@ -387,7 +393,9 @@ describe('EDUCreditsManager', function () {
         });
 
         it('emits a Transfer event', async function () {
-          await expect(this.receipt).to.emit(this.EDUToken, 'Transfer').withArgs(this.creditsManager.address, payoutWallet.address, 10);
+          await expect(this.receipt)
+            .to.emit(this.EDUToken, 'Transfer')
+            .withArgs(await this.creditsManager.getAddress(), payoutWallet.address, 10);
         });
       });
     });
@@ -419,7 +427,7 @@ describe('EDUCreditsManager', function () {
       context('when successful, with only deposited balance', function () {
         beforeEach(async function () {
           await this.creditsManager.setPhase(await this.creditsManager.DEPOSIT_PHASE());
-          await this.EDUToken.connect(user).safeTransfer(this.creditsManager.address, 10, '0x');
+          await this.EDUToken.connect(user).safeTransfer(this.creditsManager.getAddress(), 10, '0x');
           await this.creditsManager.setPhase(await this.creditsManager.WITHDRAW_PHASE());
           this.receipt = await this.creditsManager.connect(user).withdraw();
         });
@@ -434,7 +442,9 @@ describe('EDUCreditsManager', function () {
         });
 
         it('emits a Transfer event', async function () {
-          await expect(this.receipt).to.emit(this.EDUToken, 'Transfer').withArgs(this.creditsManager.address, user.address, 10);
+          await expect(this.receipt)
+            .to.emit(this.EDUToken, 'Transfer')
+            .withArgs(await this.creditsManager.getAddress(), user.address, 10);
         });
       });
 
@@ -442,7 +452,7 @@ describe('EDUCreditsManager', function () {
         beforeEach(async function () {
           await this.creditsManager.setInitialCredits([user.address], [10], [0], [true]);
           await this.creditsManager.setPhase(await this.creditsManager.DEPOSIT_PHASE());
-          await this.EDUToken.connect(user).safeTransfer(this.creditsManager.address, 5, '0x');
+          await this.EDUToken.connect(user).safeTransfer(this.creditsManager.getAddress(), 5, '0x');
           await this.creditsManager.setPhase(await this.creditsManager.WITHDRAW_PHASE());
           this.receipt = await this.creditsManager.connect(user).withdraw();
         });
@@ -458,7 +468,9 @@ describe('EDUCreditsManager', function () {
 
         it('emits 2 Transfer events', async function () {
           await expect(this.receipt).to.emit(this.EDUToken, 'Transfer').withArgs(deployer.address, user.address, 10);
-          await expect(this.receipt).to.emit(this.EDUToken, 'Transfer').withArgs(this.creditsManager.address, user.address, 5);
+          await expect(this.receipt)
+            .to.emit(this.EDUToken, 'Transfer')
+            .withArgs(await this.creditsManager.getAddress(), user.address, 5);
         });
       });
 
@@ -484,8 +496,8 @@ describe('EDUCreditsManager', function () {
 
     it('reverts if trying to recover deposited ERC20', async function () {
       await this.creditsManager.setPhase(await this.creditsManager.DEPOSIT_PHASE());
-      await this.EDUToken.connect(user).safeTransfer(this.creditsManager.address, 10, '0x');
-      await expect(this.creditsManager.recoverERC20s([other.address], [this.EDUToken.address], [1])).to.be.revertedWithCustomError(
+      await this.EDUToken.connect(user).safeTransfer(this.creditsManager.getAddress(), 10, '0x');
+      await expect(this.creditsManager.recoverERC20s([other.address], [this.EDUToken.getAddress()], [1])).to.be.revertedWithCustomError(
         this.creditsManager,
         'UnrecoverableEDU'
       );
@@ -495,18 +507,22 @@ describe('EDUCreditsManager', function () {
       beforeEach(async function () {
         this.otherERC20 = await deployContract('ERC20MintBurn', '', '', 18, await getForwarderRegistryAddress());
         await this.creditsManager.setPhase(await this.creditsManager.DEPOSIT_PHASE());
-        await this.EDUToken.connect(user).safeTransfer(this.creditsManager.address, 10, '0x');
-        await this.EDUToken.connect(user).transfer(this.creditsManager.address, 5);
+        await this.EDUToken.connect(user).safeTransfer(this.creditsManager.getAddress(), 10, '0x');
+        await this.EDUToken.connect(user).transfer(this.creditsManager.getAddress(), 5);
         this.receipt = await this.creditsManager.recoverERC20s(
           [other.address, other.address, other.address],
-          [this.EDUToken.address, this.EDUToken.address, this.otherERC20.address],
+          [this.EDUToken.getAddress(), this.EDUToken.getAddress(), this.otherERC20.getAddress()],
           [3, 2, 0]
         );
       });
 
       it('emits Transfer events', async function () {
-        await expect(this.receipt).to.emit(this.EDUToken, 'Transfer').withArgs(this.creditsManager.address, other.address, 3);
-        await expect(this.receipt).to.emit(this.EDUToken, 'Transfer').withArgs(this.creditsManager.address, other.address, 2);
+        await expect(this.receipt)
+          .to.emit(this.EDUToken, 'Transfer')
+          .withArgs(await this.creditsManager.getAddress(), other.address, 3);
+        await expect(this.receipt)
+          .to.emit(this.EDUToken, 'Transfer')
+          .withArgs(await this.creditsManager.getAddress(), other.address, 2);
       });
     });
   });

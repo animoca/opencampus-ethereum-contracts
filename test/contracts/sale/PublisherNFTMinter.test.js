@@ -1,4 +1,4 @@
-const {ethers, network} = require('hardhat');
+const {ethers} = require('hardhat');
 const {expect} = require('chai');
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
 
@@ -23,11 +23,11 @@ describe('PublisherNFTMinter', function () {
 
   describe('constructor(address,address,uint16,address,uint256)', function () {
     it('sets the publisher NFT address', async function () {
-      expect(await this.minter.PUBLISHER_NFT()).to.equal(await this.publisherNFT.address);
+      expect(await this.minter.PUBLISHER_NFT()).to.equal(await this.publisherNFT.getAddress());
     });
 
     it('sets the LZ endpoint address', async function () {
-      expect(await this.minter.LZ_ENDPOINT()).to.equal(await this.lzEndpoint.address);
+      expect(await this.minter.LZ_ENDPOINT()).to.equal(await this.lzEndpoint.getAddress());
     });
 
     it('sets the LZ src chain id ', async function () {
@@ -35,7 +35,7 @@ describe('PublisherNFTMinter', function () {
     });
 
     it('sets the LZ src address ', async function () {
-      expect(await this.minter.LZ_SRC_ADDRESS()).to.equal(this.sale.address);
+      expect(await this.minter.LZ_SRC_ADDRESS()).to.equal(await this.sale.getAddress());
     });
 
     it('sets the mint supply limit', async function () {
@@ -45,7 +45,7 @@ describe('PublisherNFTMinter', function () {
 
   describe('lzReceive(uint16,bytes,uint64,bytes)', function () {
     beforeEach(async function () {
-      this.payload = ethers.utils.defaultAbiCoder.encode(['address', 'uint256'], [user.address, 1]);
+      this.payload = ethers.AbiCoder.defaultAbiCoder().encode(['address', 'uint256'], [user.address, 1]);
     });
 
     it('reverts when not called by the LZ endpoint', async function () {
@@ -55,13 +55,13 @@ describe('PublisherNFTMinter', function () {
     });
 
     it('reverts with an incorrect src chain id', async function () {
-      await expect(this.lzEndpoint.callLzReceive(666, this.sale.address, this.minter.address, this.payload))
+      await expect(this.lzEndpoint.callLzReceive(666, this.sale.getAddress(), this.minter.getAddress(), this.payload))
         .to.be.revertedWithCustomError(this.minter, 'IncorrectSrcChainId')
         .withArgs(666);
     });
 
     it('reverts with an incorrect src address', async function () {
-      await expect(this.lzEndpoint.callLzReceive(0, deployer.address, this.minter.address, this.payload))
+      await expect(this.lzEndpoint.callLzReceive(0, deployer.address, this.minter.getAddress(), this.payload))
         .to.be.revertedWithCustomError(this.minter, 'IncorrectSrcAddress')
         .withArgs(deployer.address);
     });
@@ -69,11 +69,11 @@ describe('PublisherNFTMinter', function () {
     it('reverts when the mint supply is insufficient', async function () {
       await this.lzEndpoint.callLzReceive(
         0,
-        this.sale.address,
-        this.minter.address,
-        ethers.utils.defaultAbiCoder.encode(['address', 'uint256'], [user.address, 2])
+        this.sale.getAddress(),
+        this.minter.getAddress(),
+        ethers.AbiCoder.defaultAbiCoder().encode(['address', 'uint256'], [user.address, 2])
       );
-      await expect(this.lzEndpoint.callLzReceive(0, this.sale.address, this.minter.address, this.payload)).to.be.revertedWithCustomError(
+      await expect(this.lzEndpoint.callLzReceive(0, this.sale.getAddress(), this.minter.getAddress(), this.payload)).to.be.revertedWithCustomError(
         this.minter,
         'InsufficientMintSupply'
       );
@@ -81,7 +81,7 @@ describe('PublisherNFTMinter', function () {
 
     context('when successful', function () {
       beforeEach(async function () {
-        this.receipt = await this.lzEndpoint.callLzReceive(0, this.sale.address, this.minter.address, this.payload);
+        this.receipt = await this.lzEndpoint.callLzReceive(0, this.sale.getAddress(), this.minter.getAddress(), this.payload);
       });
 
       it('increases the mint count', async function () {
@@ -89,7 +89,7 @@ describe('PublisherNFTMinter', function () {
       });
 
       it('mints publisher tokens', async function () {
-        await expect(this.receipt).to.emit(this.publisherNFT, 'Transfer').withArgs(ethers.constants.AddressZero, user.address, 0);
+        await expect(this.receipt).to.emit(this.publisherNFT, 'Transfer').withArgs(ethers.ZeroAddress, user.address, 0);
       });
     });
   });
@@ -104,7 +104,7 @@ describe('PublisherNFTMinter', function () {
     it('calls forceResumeReceive on the LZ endpoint', async function () {
       await expect(this.minter.forceResumeReceive())
         .to.be.emit(this.lzEndpoint, 'ForceResume')
-        .withArgs(0, ethers.utils.solidityPack(['address', 'address'], [this.sale.address, this.minter.address]));
+        .withArgs(0, ethers.solidityPacked(['address', 'address'], [await this.sale.getAddress(), await this.minter.getAddress()]));
     });
   });
 
@@ -114,8 +114,8 @@ describe('PublisherNFTMinter', function () {
         .to.be.emit(this.lzEndpoint, 'PayloadRetry')
         .withArgs(
           0,
-          ethers.utils.solidityPack(['address', 'address'], [this.sale.address, this.minter.address]),
-          ethers.utils.defaultAbiCoder.encode(['address', 'uint256'], [user.address, 1])
+          ethers.solidityPacked(['address', 'address'], [await this.sale.getAddress(), await this.minter.getAddress()]),
+          ethers.AbiCoder.defaultAbiCoder().encode(['address', 'uint256'], [user.address, 1])
         );
     });
   });
