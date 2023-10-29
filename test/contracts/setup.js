@@ -14,12 +14,12 @@ async function setupEDUCreditsManager(deployer, user, payoutWallet) {
   );
   this.creditsManager = await deployContract(
     'EDUCreditsManagerMock',
-    this.EDUToken.address,
+    this.EDUToken.getAddress(),
     payoutWallet.address,
     deployer.address,
     await getForwarderRegistryAddress()
   );
-  await this.EDUToken.approve(this.creditsManager.address, 1000);
+  await this.EDUToken.approve(this.creditsManager.getAddress(), 1000);
 }
 
 async function setupPublisherNFTSale(deployer, user, payoutWallet, other, genesisNft1Holder, genesisNft2Holder) {
@@ -36,7 +36,7 @@ async function setupPublisherNFTSale(deployer, user, payoutWallet, other, genesi
     'ERC1155Full',
     '',
     '',
-    ethers.constants.AddressZero,
+    ethers.ZeroAddress,
     await getOperatorFilterRegistryAddress(),
     await getForwarderRegistryAddress()
   );
@@ -51,9 +51,9 @@ async function setupPublisherNFTSale(deployer, user, payoutWallet, other, genesi
 
   this.sale = await deployContract(
     'PublisherNFTSaleMock',
-    this.genesisToken.address,
-    this.creditsManager.address,
-    this.lzEndpoint.address,
+    this.genesisToken.getAddress(),
+    this.creditsManager.getAddress(),
+    this.lzEndpoint.getAddress(),
     1, // lzDstChainId
     100, // mintPrice
     3, // mintSupplyLimit
@@ -64,10 +64,10 @@ async function setupPublisherNFTSale(deployer, user, payoutWallet, other, genesi
     [500, 1000, 1500], // discountPercentages
     await getForwarderRegistryAddress()
   );
-  await this.creditsManager.grantRole(await this.creditsManager.SPENDER_ROLE(), this.sale.address);
+  await this.creditsManager.grantRole(await this.creditsManager.SPENDER_ROLE(), this.sale.getAddress());
   await deployer.sendTransaction({
-    to: this.sale.address,
-    value: ethers.utils.parseEther('10.0'),
+    to: await this.sale.getAddress(),
+    value: ethers.parseEther('10.0'),
   });
 }
 
@@ -77,22 +77,22 @@ async function setupPublisherNFTMinter(deployer, user, payoutWallet, other, gene
     'ERC721Full',
     '',
     '',
-    ethers.constants.AddressZero,
+    ethers.ZeroAddress,
     await getOperatorFilterRegistryAddress(),
     await getForwarderRegistryAddress()
   );
 
   this.minter = await deployContract(
     'PublisherNFTMinter',
-    this.publisherNFT.address,
-    this.lzEndpoint.address,
+    this.publisherNFT.getAddress(),
+    this.lzEndpoint.getAddress(),
     0, // lzSrcChainId
-    this.sale.address, // lzSrcAddress
+    this.sale.getAddress(), // lzSrcAddress
     2 // mintSupplyLimit
   );
 
-  await this.sale.setLzDstAddress(this.minter.address);
-  await this.publisherNFT.grantRole(await this.publisherNFT.MINTER_ROLE(), this.minter.address);
+  await this.sale.setLzDstAddress(this.minter.getAddress());
+  await this.publisherNFT.grantRole(await this.publisherNFT.MINTER_ROLE(), this.minter.getAddress());
 }
 
 module.exports = {

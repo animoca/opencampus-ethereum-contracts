@@ -1,4 +1,4 @@
-const {ethers, network} = require('hardhat');
+const {ethers} = require('hardhat');
 const {expect} = require('chai');
 const {time} = require('@nomicfoundation/hardhat-network-helpers');
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
@@ -29,9 +29,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           0, // mintPrice
           100, // mintSupplyLimit
@@ -48,9 +48,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           1, // mintPrice
           0, // mintSupplyLimit
@@ -67,9 +67,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           1, // mintPrice
           1, // mintSupplyLimit
@@ -86,9 +86,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           1, // mintPrice
           1, // mintSupplyLimit
@@ -105,9 +105,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           1, // mintPrice
           1, // mintSupplyLimit
@@ -124,9 +124,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           1, // mintPrice
           1, // mintSupplyLimit
@@ -143,9 +143,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
@@ -159,9 +159,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
@@ -175,9 +175,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
@@ -193,9 +193,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
@@ -209,9 +209,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
@@ -227,9 +227,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
@@ -243,9 +243,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
@@ -262,9 +262,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
@@ -278,9 +278,9 @@ describe('PublisherNFTSale', function () {
       await expect(
         deployContract(
           'PublisherNFTSale',
-          this.genesisToken.address,
-          this.creditsManager.address,
-          this.lzEndpoint.address,
+          this.genesisToken.getAddress(),
+          this.creditsManager.getAddress(),
+          this.lzEndpoint.getAddress(),
           1, // lzDstChainId
           100, // mintPrice
           100, // mintSupplyLimit
@@ -294,15 +294,15 @@ describe('PublisherNFTSale', function () {
     });
 
     it('sets the genesis token address', async function () {
-      expect(await this.sale.GENESIS_TOKEN()).to.equal(await this.genesisToken.address);
+      expect(await this.sale.GENESIS_TOKEN()).to.equal(await this.genesisToken.getAddress());
     });
 
     it('sets the EDU credits manager address', async function () {
-      expect(await this.sale.EDU_CREDITS_MANAGER()).to.equal(await this.creditsManager.address);
+      expect(await this.sale.EDU_CREDITS_MANAGER()).to.equal(await this.creditsManager.getAddress());
     });
 
     it('sets the LZ endpoint address', async function () {
-      expect(await this.sale.LZ_ENDPOINT()).to.equal(await this.lzEndpoint.address);
+      expect(await this.sale.LZ_ENDPOINT()).to.equal(await this.lzEndpoint.getAddress());
     });
 
     it('sets the LZ destination chain id ', async function () {
@@ -320,7 +320,7 @@ describe('PublisherNFTSale', function () {
 
   describe('setLzDstAddress(address)', function () {
     it('reverts when not called by the contract owner', async function () {
-      await expect(this.sale.connect(user).setLzDstAddress(ethers.constants.AddressZero))
+      await expect(this.sale.connect(user).setLzDstAddress(ethers.ZeroAddress))
         .to.be.revertedWithCustomError(this.sale, 'NotContractOwner')
         .withArgs(user.address);
     });
@@ -421,7 +421,7 @@ describe('PublisherNFTSale', function () {
         it('spends the amount of EDU from the credits manager', async function () {
           await expect(this.receipt)
             .to.emit(this.creditsManager, 'CreditsSpent')
-            .withArgs(this.sale.address, accounts[buyerIndex].address, 0, price, 0);
+            .withArgs(await this.sale.getAddress(), accounts[buyerIndex].address, 0, price, 0);
         });
 
         it('emits a MintInitiated event', async function () {
@@ -433,18 +433,18 @@ describe('PublisherNFTSale', function () {
             .to.emit(this.lzEndpoint, 'LzSent')
             .withArgs(
               1,
-              this.sale.address,
+              await this.sale.getAddress(),
               other.address,
-              ethers.utils.defaultAbiCoder.encode(['address', 'uint256'], [accounts[buyerIndex].address, 1]),
-              this.sale.address,
-              ethers.constants.AddressZero,
-              ethers.utils.solidityPack(['uint16', 'uint256'], [1, 125000 + 30000])
+              ethers.AbiCoder.defaultAbiCoder().encode(['address', 'uint256'], [accounts[buyerIndex].address, 1]),
+              await this.sale.getAddress(),
+              ethers.ZeroAddress,
+              ethers.solidityPacked(['uint16', 'uint256'], [1, 125000 + 30000])
             );
         });
 
         it('transfers ETH to the LZ endpoint', async function () {
-          expect(await this.lzEndpoint.provider.getBalance(this.lzEndpoint.address)).to.equal(
-            (await this.lzEndpoint.estimateFees(0, ethers.constants.AddressZero, '0x', false, '0x'))[0]
+          expect(await ethers.provider.getBalance(this.lzEndpoint.getAddress())).to.equal(
+            (await this.lzEndpoint.estimateFees(0, ethers.ZeroAddress, '0x', false, '0x'))[0]
           );
         });
       }
@@ -651,16 +651,16 @@ describe('PublisherNFTSale', function () {
 
     it('reverts when transferring to a contract which fails to receive', async function () {
       const rejector = await deployContract('Rejector');
-      await expect(this.sale.withdraw(rejector.address)).to.be.revertedWithCustomError(this.sale, 'TransferFailed');
+      await expect(this.sale.withdraw(rejector.getAddress())).to.be.revertedWithCustomError(this.sale, 'TransferFailed');
     });
 
     it('transfers the ETH balance to the contract owner', async function () {
-      const balanceBefore = await other.getBalance();
+      const balanceBefore = await ethers.provider.getBalance(other.address);
       await this.sale.withdraw(other.address);
-      const balanceAfter = await other.getBalance();
-      expect(balanceAfter.sub(balanceBefore)).to.equal(ethers.utils.parseEther('10.0'));
+      const balanceAfter = await ethers.provider.getBalance(other.address);
+      expect(balanceAfter - balanceBefore).to.equal(ethers.parseEther('10.0'));
       await this.sale.withdraw(other.address); // case with 0 balance, does nothing
-      expect(balanceAfter.sub(balanceBefore)).to.equal(ethers.utils.parseEther('10.0'));
+      expect(balanceAfter - balanceBefore).to.equal(ethers.parseEther('10.0'));
     });
   });
 
@@ -710,12 +710,12 @@ describe('PublisherNFTSale', function () {
       );
       const creditsManager = await deployContract(
         'EDUCreditsManagerMock',
-        EDUToken.address,
+        EDUToken.getAddress(),
         payoutWallet.address,
         deployer.address,
         await getForwarderRegistryAddress()
       );
-      await EDUToken.approve(creditsManager.address, 1000);
+      await EDUToken.approve(creditsManager.getAddress(), 1000);
 
       await creditsManager.setInitialCredits(
         [user.address, genesisNft1Holder.address, genesisNft2Holder.address],
@@ -728,7 +728,7 @@ describe('PublisherNFTSale', function () {
         'ERC1155Full',
         '',
         '',
-        ethers.constants.AddressZero,
+        ethers.ZeroAddress,
         await getOperatorFilterRegistryAddress(),
         await getForwarderRegistryAddress()
       );
@@ -743,9 +743,9 @@ describe('PublisherNFTSale', function () {
 
       const sale1 = await deployContract(
         'PublisherNFTSaleMock',
-        genesisToken.address,
-        creditsManager.address,
-        lzEndpoint.address,
+        genesisToken.getAddress(),
+        creditsManager.getAddress(),
+        lzEndpoint.getAddress(),
         1, // lzDstChainId
         1, // mintPrice
         3, // mintSupplyLimit
@@ -762,9 +762,9 @@ describe('PublisherNFTSale', function () {
 
       const sale2 = await deployContract(
         'PublisherNFTSaleMock',
-        genesisToken.address,
-        creditsManager.address,
-        lzEndpoint.address,
+        genesisToken.getAddress(),
+        creditsManager.getAddress(),
+        lzEndpoint.getAddress(),
         1, // lzDstChainId
         99, // mintPrice
         3, // mintSupplyLimit
