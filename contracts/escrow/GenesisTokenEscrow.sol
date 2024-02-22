@@ -17,8 +17,8 @@ import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/me
 /// @notice Contract that allows users to escrow tokens for use in the Anichess Game.
 contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderRegistryContext {
     struct Escrow {
-        uint256 genesis1Quantity;
-        uint256 genesis2Quantity;
+        uint128 genesis1Quantity;
+        uint128 genesis2Quantity;
     }
 
     /// @notice Emitted when tokens are deposited
@@ -67,9 +67,9 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
         (address publisherTokenAddress, uint256 publisherTokenId) = abi.decode(data, (address, uint256));
         Escrow storage escrow = escrowed[from][publisherTokenAddress][publisherTokenId];
         if (id == 1) {
-            escrow.genesis1Quantity += quantity;
+            escrow.genesis1Quantity += uint128(quantity);
         } else if (id == 2) {
-            escrow.genesis2Quantity += quantity;
+            escrow.genesis2Quantity += uint128(quantity);
         } else {
             revert InvalidInputParams();
         }
@@ -101,7 +101,7 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
         uint256[] calldata quantities,
         bytes calldata data
     ) external returns (bytes4) {
-        (address[] memory publisherTokenAddresses, uint256[] memory publisherTokenIds, uint256[] memory genesis1Quantities, uint256[] memory genesis2Quantities) = abi.decode(data, (address[], uint256[], uint256[], uint256[]));
+        (address[] memory publisherTokenAddresses, uint256[] memory publisherTokenIds, uint128[] memory genesis1Quantities, uint128[] memory genesis2Quantities) = abi.decode(data, (address[], uint256[], uint128[], uint128[]));
         if (publisherTokenAddresses.length != publisherTokenIds.length) {
             revert InconsistentArrayLengths();
         }
@@ -114,8 +114,10 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
             revert InconsistentArrayLengths();
         }
 
+        // For verifying the data with ids and values
         uint256 genesis1Total = 0;
         uint256 genesis2Total = 0;
+
         Escrow[] memory escrows = new Escrow[](publisherTokenAddresses.length);
         address fromAddress = from;
         for (uint256 i = 0; i < publisherTokenAddresses.length; i++) {
@@ -128,10 +130,21 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
             genesis2Total += genesis2Quantities[i];
         }
 
-        for (uint256 i = 0; i < ids.length; i++) {
-            if (ids[i] == 1) {
+        // verifying the data with ids and values
+        uint256[] memory tokenIds = ids;
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            uint256 id = tokenIds[i];
+            if (id == 1) {
+                if (genesis1Total < quantities[i]) {
+                    revert InvalidInputParams();
+                }
+
                 genesis1Total -= quantities[i];
-            } else if (ids[i] == 2) {
+            } else if (id == 2) {
+                if (genesis2Total < quantities[i]) {
+                    revert InvalidInputParams();
+                }
+
                 genesis2Total -= quantities[i];
             } else {
                 revert InvalidInputParams();
@@ -171,7 +184,7 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
             uint256 publisherTokenId = publisherTokenIds[i];
 
             Escrow memory prevEscrow = escrowed[account][publisherTokenAddress][publisherTokenId];
-            if (prevEscrow.genesis1Quantity != 0 && prevEscrow.genesis2Quantity != 0) {
+            if (prevEscrow.genesis1Quantity != 0 || prevEscrow.genesis2Quantity != 0) {
                 escrowed[account][publisherTokenAddress][publisherTokenId] = Escrow(0, 0);
 
                 values[0] += prevEscrow.genesis1Quantity;

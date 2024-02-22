@@ -63,14 +63,14 @@ contract EDuCoinMerkleClaim is Pause, ForwarderRegistryContext {
     /// @notice Thrown when a signature is invalid.
     /// @param recipient The recipient of the claim.
     /// @param signature The signature that was invalid.
-    /// @param expiry The expiry of the signature.
-    error InvalidSignature(address recipient, bytes signature, uint256 expiry);
+    /// @param expireAt The expireAt of the signature.
+    error InvalidSignature(address recipient, bytes signature, uint256 expireAt);
 
     /// @notice Thrown when a signature is expired.
     /// @param recipient The recipient of the claim.
     /// @param signature The signature that was invalid.
-    /// @param expiry The expiry of the signature.
-    error ExpiredSignature(address recipient, bytes signature, uint256 expiry);
+    /// @param expireAt The expireAt of the signature.
+    error ExpiredSignature(address recipient, bytes signature, uint256 expireAt);
 
     /// @dev Emits a MessageSignerSet event.
     constructor(
@@ -118,20 +118,20 @@ contract EDuCoinMerkleClaim is Pause, ForwarderRegistryContext {
     /// @param amount uint256 amount of the ERC20 payout
     /// @param proof Merkle proof of the user based on the merkle root
     /// @param signature Signature that signed by the message signer
-    /// @param expiry Expiry of the signature
-    function claimPayout(address recipient, uint256 amount, bytes32[] calldata proof, bytes calldata signature, uint256 expiry) external {
+    /// @param expireAt Expiry time of the signature
+    function claimPayout(address recipient, uint256 amount, bytes32[] calldata proof, bytes calldata signature, uint256 expireAt) external {
         PauseStorage.layout().enforceIsNotPaused();
 
         uint256 currentNonce = nonce;
         bytes32 currentRoot = root;
 
-        if (block.timestamp > expiry) {
-            revert ExpiredSignature(recipient, signature, expiry);
+        if (block.timestamp >= expireAt) {
+            revert ExpiredSignature(recipient, signature, expireAt);
         }
 
-        bytes32 sigHash = keccak256(abi.encodePacked(address(this), recipient, expiry));
+        bytes32 sigHash = keccak256(abi.encodePacked(address(this), recipient, expireAt));
         if (sigHash.toEthSignedMessageHash().recover(signature) != messageSigner) {
-            revert InvalidSignature(recipient, signature, expiry);
+            revert InvalidSignature(recipient, signature, expireAt);
         }
 
         bytes32 leaf = keccak256(abi.encodePacked(recipient, amount, currentNonce));
