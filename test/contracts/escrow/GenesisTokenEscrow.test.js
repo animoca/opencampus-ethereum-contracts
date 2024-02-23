@@ -30,10 +30,10 @@ describe('GenesisTokenEscrow', function () {
     this.erc1155EscrowAddress = await this.escrow1155.getAddress();
     await this.erc1155.safeBatchMint(deployer.address, [0n, 1n, 2n, 3n], [10n, 10n, 10n, 10n], '0x');
 
-    this.erc1155Alt = await deployContract('ERC1155Full', '', '', this.metadataResolverAddress, ethers.ZeroAddress, this.forwarderRegistryAddress);
-    await this.erc1155Alt.grantRole(await this.erc1155Alt.MINTER_ROLE(), deployer.address);
-    this.erc1155AltAddress = await this.erc1155Alt.getAddress();
-    await this.erc1155Alt.safeBatchMint(deployer.address, [0n, 1n, 2n, 3n], [10n, 10n, 10n, 10n], '0x');
+    this.erc1155Unsupported = await deployContract('ERC1155Full', '', '', this.metadataResolverAddress, ethers.ZeroAddress, this.forwarderRegistryAddress);
+    await this.erc1155Unsupported.grantRole(await this.erc1155Unsupported.MINTER_ROLE(), deployer.address);
+    this.erc1155UnsupportedAddress = await this.erc1155Unsupported.getAddress();
+    await this.erc1155Unsupported.safeBatchMint(deployer.address, [0n, 1n, 2n, 3n], [10n, 10n, 10n, 10n], '0x');
   };
 
   beforeEach(async function () {
@@ -82,7 +82,7 @@ describe('GenesisTokenEscrow', function () {
 
     it('Deposit an unsupported ERC1155 contract', async function () {
       const data = ethers.AbiCoder.defaultAbiCoder().encode(['address', 'uint256'], [this.erc721Address, 1n]);
-      await expect(this.erc1155Alt['safeTransferFrom(address,address,uint256,uint256,bytes)'](deployer.address, this.erc1155EscrowAddress, 1n, 1n, data))
+      await expect(this.erc1155Unsupported['safeTransferFrom(address,address,uint256,uint256,bytes)'](deployer.address, this.erc1155EscrowAddress, 1n, 1n, data))
       .to.be.revertedWithCustomError(this.escrow1155, 'InvalidInventory');
     });
   });
