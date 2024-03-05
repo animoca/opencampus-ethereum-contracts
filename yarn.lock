@@ -4087,6 +4087,10 @@ once@1.x, once@^1.3.0:
   dependencies:
     wrappy "1"
 
+opencampus-xyz/EDU-smart-contract@opencampus-xyz/EDU-smart-contract#ef436f0cee1b71633aa2597b3272bd89559ccccd:
+  version "1.0.0"
+  resolved "https://codeload.github.com/opencampus-xyz/EDU-smart-contract/tar.gz/ef436f0cee1b71633aa2597b3272bd89559ccccd"
+
 optionator@^0.8.1:
   version "0.8.3"
   resolved "https://registry.yarnpkg.com/optionator/-/optionator-0.8.3.tgz#84fa1d036fe9d3c7e21d99884b601167ec8fb495"

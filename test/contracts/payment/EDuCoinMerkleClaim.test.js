@@ -13,7 +13,7 @@ describe('EDuCoinMerkleClaim', function () {
 
   const fixture = async function () {
     const forwarderRegistryAddress = await getForwarderRegistryAddress();
-    this.erc20 = await deployContract('ERC20FixedSupply', 'EDU', 'EDU', 18, [deployer], [ethers.MaxInt256], forwarderRegistryAddress);
+    this.erc20 = await deployContract('EDuCoin', 'EDU', 'EDU', 18, [deployer], [ethers.MaxInt256], forwarderRegistryAddress);
     this.contract = await deployContract('EDuCoinMerkleClaimMock', this.erc20.target, messageSigner1, forwarderRegistryAddress);
   };
 
