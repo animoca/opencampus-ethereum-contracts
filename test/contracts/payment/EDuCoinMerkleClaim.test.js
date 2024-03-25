@@ -23,7 +23,7 @@ describe('EDuCoinMerkleClaim', function () {
 
   context('claimPayout(address,uint256,bytes32[])', function () {
     beforeEach(async function () {
-      this.nextNonce = (await this.contract.nonce()) + 1n;
+      this.nextTreeCounter = (await this.contract.treeCounter()) + 1n;
 
       this.elements = [
         {
@@ -43,7 +43,7 @@ describe('EDuCoinMerkleClaim', function () {
           amount: 4n,
         },
       ];
-      this.leaves = this.elements.map((el) => ethers.solidityPacked(['address', 'uint256', 'uint256'], [el.claimer, el.amount, this.nextNonce]));
+      this.leaves = this.elements.map((el) => ethers.solidityPacked(['address', 'uint256', 'uint256'], [el.claimer, el.amount, this.nextTreeCounter]));
       const sum = this.elements.reduce((acc, el) => acc + el.amount, 0n);
       this.erc20.approve(this.contract.target, sum);
       this.tree = new MerkleTree(this.leaves, keccak256, {hashLeaves: true, sortPairs: true});
@@ -68,7 +68,7 @@ describe('EDuCoinMerkleClaim', function () {
         .to.emit(this.erc20, 'Transfer')
         .withArgs(deployer.address, this.elements[0].claimer, this.elements[0].amount)
         .to.emit(this.contract, 'PayoutClaimed')
-        .withArgs(this.root, this.elements[0].claimer, this.elements[0].amount, this.nextNonce);
+        .withArgs(this.root, this.elements[0].claimer, this.elements[0].amount, this.nextTreeCounter);
     });
 
     it('use a claimed leaf to claim again', async function () {
