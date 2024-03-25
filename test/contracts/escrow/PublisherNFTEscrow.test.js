@@ -51,7 +51,10 @@ describe('PublisherNFTEscrow', function () {
 
     it('Deposit ERC721 with deposit function with inconsistent array lengths args, should revert', async function () {
       await this.erc721.setApprovalForAll(this.erc721EscrowAddress, true);
-      await expect(this.escrow721.deposit([this.erc721Address], ['1', '2'])).to.be.revertedWithCustomError(this.escrow721, 'InconsistentArrayLengths');
+      await expect(this.escrow721.deposit([this.erc721Address], ['1', '2'])).to.be.revertedWithCustomError(
+        this.escrow721,
+        'InconsistentArrayLengths'
+      );
     });
   });
 
@@ -81,15 +84,24 @@ describe('PublisherNFTEscrow', function () {
     });
 
     it('Withdraw ERC721 with inconsistent array lengths args, should revert', async function () {
-      await expect(this.escrow721.withdraw([this.erc721Address], ['1', '2'])).to.be.revertedWithCustomError(this.escrow721, 'InconsistentArrayLengths');
+      await expect(this.escrow721.withdraw([this.erc721Address], ['1', '2'])).to.be.revertedWithCustomError(
+        this.escrow721,
+        'InconsistentArrayLengths'
+      );
     });
 
     it('Withdraw ERC721 that staked by another wallet, should fail', async function () {
-      await expect(this.escrow721.connect(wallet1).withdraw([this.erc721Address], ['2'])).to.be.revertedWithCustomError(this.escrow721, 'NotEscrowed');
+      await expect(this.escrow721.connect(wallet1).withdraw([this.erc721Address], ['2'])).to.be.revertedWithCustomError(
+        this.escrow721,
+        'NotEscrowed'
+      );
     });
 
     it('Withdraw ERC721 that is not escrowed, should fail', async function () {
-      await expect(this.escrow721.connect(wallet1).withdraw([this.erc721Address], ['3'])).to.be.revertedWithCustomError(this.escrow721, 'NotEscrowed');
+      await expect(this.escrow721.connect(wallet1).withdraw([this.erc721Address], ['3'])).to.be.revertedWithCustomError(
+        this.escrow721,
+        'NotEscrowed'
+      );
     });
   });
 
@@ -114,9 +126,7 @@ describe('PublisherNFTEscrow', function () {
     });
 
     it('Deposit a non-whitelisted ERC721 with deposit(), should revert', async function () {
-      await expect(
-        this.escrow721.deposit([this.erc721NonWhitelisted], ['1'])
-      ).to.be.revertedWithCustomError(this.escrow721, 'UnsupportedInventory');
+      await expect(this.escrow721.deposit([this.erc721NonWhitelisted], ['1'])).to.be.revertedWithCustomError(this.escrow721, 'UnsupportedInventory');
     });
 
     it('Add a new ERC721 to whitelist', async function () {
@@ -128,7 +138,9 @@ describe('PublisherNFTEscrow', function () {
         .to.emit(this.escrow721, 'Deposited')
         .withArgs(deployer.address, [erc721Address], ['1']);
 
-      await expect(this.escrow721.removeSupportedInventory(erc721Address)).to.emit(this.escrow721, 'SupportedInventoryRemoved').withArgs(erc721Address);
+      await expect(this.escrow721.removeSupportedInventory(erc721Address))
+        .to.emit(this.escrow721, 'SupportedInventoryRemoved')
+        .withArgs(erc721Address);
     });
 
     it('Add empty address as ERC721 to whitelist', async function () {
@@ -174,15 +186,24 @@ describe('PublisherNFTEscrow', function () {
 
     it('recover a non escrowed token but in the case of InconsistentArrayLengths', async function () {
       await this.erc721.transferFrom(deployer.address, this.erc721EscrowAddress, '1');
-      await expect(this.escrow721.recoverERC721s([deployer.address], [this.erc721Address, this.erc721Address], [1])).to.be.revertedWithCustomError(this.escrow721, 'InconsistentArrayLengths');
-      await expect(this.escrow721.recoverERC721s([deployer.address], [this.erc721Address], [1, 2])).to.be.revertedWithCustomError(this.escrow721, 'InconsistentArrayLengths');
+      await expect(this.escrow721.recoverERC721s([deployer.address], [this.erc721Address, this.erc721Address], [1])).to.be.revertedWithCustomError(
+        this.escrow721,
+        'InconsistentArrayLengths'
+      );
+      await expect(this.escrow721.recoverERC721s([deployer.address], [this.erc721Address], [1, 2])).to.be.revertedWithCustomError(
+        this.escrow721,
+        'InconsistentArrayLengths'
+      );
     });
 
     it('recover an escrowed token should fail', async function () {
       await expect(this.erc721['safeTransferFrom(address,address,uint256)'](deployer.address, this.erc721EscrowAddress, '1'))
-      .to.emit(this.escrow721, 'Deposited')
-      .withArgs(deployer.address, [this.erc721Address], ['1']);
-      await expect(this.escrow721.recoverERC721s([deployer.address], [this.erc721Address], [1])).to.be.revertedWithCustomError(this.escrow721, 'NotRecoverable');
+        .to.emit(this.escrow721, 'Deposited')
+        .withArgs(deployer.address, [this.erc721Address], ['1']);
+      await expect(this.escrow721.recoverERC721s([deployer.address], [this.erc721Address], [1])).to.be.revertedWithCustomError(
+        this.escrow721,
+        'NotRecoverable'
+      );
     });
   });
 

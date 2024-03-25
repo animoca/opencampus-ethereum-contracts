@@ -2,7 +2,6 @@
 pragma solidity 0.8.22;
 
 import {InconsistentArrayLengths} from "@animoca/ethereum-contracts/contracts/CommonErrors.sol";
-import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
 import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {TokenRecovery} from "@animoca/ethereum-contracts/contracts/security/TokenRecovery.sol";
@@ -37,7 +36,10 @@ contract PublisherNFTEscrow is TokenRecovery, ERC721Receiver, ForwarderRegistryC
     error UnsupportedInventory(address inventory);
     error NotEscrowed(address inventory, uint256 id);
 
-    constructor(address[] memory supportedInventories_, IForwarderRegistry forwarderRegistry) ContractOwnership(_msgSender()) ForwarderRegistryContext(forwarderRegistry) {
+    constructor(
+        address[] memory supportedInventories_,
+        IForwarderRegistry forwarderRegistry
+    ) ContractOwnership(_msgSender()) ForwarderRegistryContext(forwarderRegistry) {
         uint256 length = supportedInventories_.length;
         for (uint256 i; i < length; ++i) {
             addSupportedInventory(supportedInventories_[i]);

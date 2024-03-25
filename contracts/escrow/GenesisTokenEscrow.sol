@@ -2,7 +2,6 @@
 pragma solidity ^0.8.22;
 
 import {InconsistentArrayLengths} from "@animoca/ethereum-contracts/contracts/CommonErrors.sol";
-import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {TokenRecovery} from "@animoca/ethereum-contracts/contracts/security/TokenRecovery.sol";
 import {ERC1155TokenReceiver} from "@animoca/ethereum-contracts/contracts/token/ERC1155/ERC1155TokenReceiver.sol";
@@ -27,8 +26,7 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
     /// @notice Emitted when tokens are withdrawn
     event Withdrawn(address indexed account, address[] publisherTokenAddresses, uint256[] publisherTokenIds);
 
-
-    // Custom errors
+    /// Custom errors
     error InvalidInventory(address inventory);
     error InvalidInputParams();
     error NotEscrowed(address account, address publisherTokenAddress, uint256 publisherTokenId);
@@ -42,7 +40,10 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
     /// @dev Throws if the _inventory address is a zero address.
     /// @dev ContractOwnership is required to initiate TokenRecovery
     /// @param genesisToken_ The inventory contract address
-    constructor(address genesisToken_, IForwarderRegistry forwarderRegistry) ContractOwnership(_msgSender()) ForwarderRegistryContext(forwarderRegistry) {
+    constructor(
+        address genesisToken_,
+        IForwarderRegistry forwarderRegistry
+    ) ContractOwnership(_msgSender()) ForwarderRegistryContext(forwarderRegistry) {
         if (genesisToken_ == address(0)) {
             revert InvalidInventory(genesisToken_);
         }
@@ -54,7 +55,7 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
     /// @dev Updates the escrowed mapping.
     /// @dev Emits a {Deposited} event.
     /// @param from The address which previously owned the token
-    /// @param id The ID of the token being transferred (corresponds to orbType)
+    /// @param id The ID of the token being transferred
     /// @param quantity The quantity of the token being transferred
     /// @param data A bytes array containing which publisher token address and id should be escrowed into.
     /// @return selector The function selector
@@ -101,7 +102,13 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
         uint256[] calldata quantities,
         bytes calldata data
     ) external returns (bytes4) {
-        (address[] memory publisherTokenAddresses, uint256[] memory publisherTokenIds, uint128[] memory genesis1Quantities, uint128[] memory genesis2Quantities) = abi.decode(data, (address[], uint256[], uint128[], uint128[]));
+        (
+            address[] memory publisherTokenAddresses,
+            uint256[] memory publisherTokenIds,
+            uint128[] memory genesis1Quantities,
+            uint128[] memory genesis2Quantities
+        ) = abi.decode(data, (address[], uint256[], uint128[], uint128[]));
+
         if (publisherTokenAddresses.length != publisherTokenIds.length) {
             revert InconsistentArrayLengths();
         }

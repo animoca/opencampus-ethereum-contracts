@@ -36,7 +36,7 @@ contract EDuCoinMerkleClaim is Pause, ForwarderRegistryContext {
     /// @notice Emitted when a new merkle root is set.
     /// @param root The new merkle root.
     event MerkleRootSet(bytes32 root);
-    
+
     /// @notice Emitted when a new message signer is set.
     /// @param messageSigner The new message signer.
     event MessageSignerSet(address messageSigner);
