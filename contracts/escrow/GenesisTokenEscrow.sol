@@ -201,39 +201,39 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
             revert InconsistentArrayLengths();
         }
 
-        uint256 genesis1Total = 0;
-        uint256 genesis2Total = 0;
+        uint256 requiredGenesis1Quantity = 0;
+        uint256 requiredGenesis2Quantity = 0;
 
         for (uint256 i = 0; i < publisherTokenAddresses.length; i++) {
-            genesis1Total += genesis1Quantities[i];
-            genesis2Total += genesis2Quantities[i];
+            requiredGenesis1Quantity += genesis1Quantities[i];
+            requiredGenesis2Quantity += genesis2Quantities[i];
         }
 
         for (uint256 i = 0; i < ids.length; i++) {
             uint256 id = ids[i];
             if (id == 1) {
-                if (genesis1Total < quantities[i]) {
-                    revert InsufficientGenesisToken(1);
+                if (requiredGenesis1Quantity < quantities[i]) {
+                    revert ExcessiveGenesisToken(1);
                 }
 
-                genesis1Total -= quantities[i];
+                requiredGenesis1Quantity -= quantities[i];
             } else if (id == 2) {
-                if (genesis2Total < quantities[i]) {
-                    revert InsufficientGenesisToken(2);
+                if (requiredGenesis2Quantity < quantities[i]) {
+                    revert ExcessiveGenesisToken(2);
                 }
 
-                genesis2Total -= quantities[i];
+                requiredGenesis2Quantity -= quantities[i];
             } else {
                 revert UnsupportedGenesisTokenId(id);
             }
         }
 
-        if (genesis1Total != 0) {
-            revert ExcessiveGenesisToken(1);
+        if (requiredGenesis1Quantity != 0) {
+            revert InsufficientGenesisToken(1);
         }
 
-        if (genesis2Total != 0) {
-            revert ExcessiveGenesisToken(2);
+        if (requiredGenesis2Quantity != 0) {
+            revert InsufficientGenesisToken(2);
         }
     }
 }

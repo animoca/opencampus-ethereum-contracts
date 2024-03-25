@@ -77,18 +77,18 @@ describe('GenesisTokenEscrow', function () {
       await expect(await this.escrow1155.escrowed(deployer.address, this.erc721Address, 0)).to.deep.equals([0, 3n]);
     });
 
-    it('Deposit unknown Genesis token Id 0', async function () {
+    it('Deposit unknown Genesis token Id 0, amount 1', async function () {
       const data = ethers.AbiCoder.defaultAbiCoder().encode(['address', 'uint256'], [this.erc721Address, 1n]);
       await expect(
         this.erc1155['safeTransferFrom(address,address,uint256,uint256,bytes)'](deployer.address, this.erc1155EscrowAddress, 0, 1n, data)
-      ).to.be.revertedWithCustomError(this.escrow1155, 'InvalidInputParams');
+      ).to.be.revertedWithCustomError(this.escrow1155, 'UnsupportedGenesisTokenId').withArgs(0);
     });
 
     it('Deposit unknown Genesis token Id 3, amount 0', async function () {
       const data = ethers.AbiCoder.defaultAbiCoder().encode(['address', 'uint256'], [this.erc721Address, 1n]);
       await expect(
         this.erc1155['safeTransferFrom(address,address,uint256,uint256,bytes)'](deployer.address, this.erc1155EscrowAddress, 3n, 0, data)
-      ).to.be.revertedWithCustomError(this.escrow1155, 'InvalidInputParams');
+      ).to.be.revertedWithCustomError(this.escrow1155, 'UnsupportedGenesisTokenId').withArgs(3n);
     });
 
     it('Deposit an unsupported ERC1155 contract', async function () {
@@ -291,7 +291,7 @@ describe('GenesisTokenEscrow', function () {
           [1n],
           data
         )
-      ).to.be.revertedWithCustomError(this.escrow1155, 'InvalidInputParams');
+      ).to.be.revertedWithCustomError(this.escrow1155, 'UnsupportedGenesisTokenId').withArgs(3n);
     });
 
     it('Deposit 1 Golden and 1 Silver for pNFT #1, but the data claims it has 2 Golden and 1 Silver', async function () {
@@ -307,7 +307,7 @@ describe('GenesisTokenEscrow', function () {
           [1n, 1n],
           data
         )
-      ).to.be.revertedWithCustomError(this.escrow1155, 'InvalidInputParams');
+      ).to.be.revertedWithCustomError(this.escrow1155, 'InsufficientGenesisToken').withArgs(1n);
     });
 
     it('Deposit 1 Golden and 1 Silver for pNFT #1, but the data claims it has 1 Golden and 2 Silver', async function () {
@@ -323,7 +323,7 @@ describe('GenesisTokenEscrow', function () {
           [1n, 1n],
           data
         )
-      ).to.be.revertedWithCustomError(this.escrow1155, 'InvalidInputParams');
+      ).to.be.revertedWithCustomError(this.escrow1155, 'InsufficientGenesisToken').withArgs(2n);
     });
 
     it('Deposit some Genesis tokens, but the data contains inconsistent array lengths for pNFT address and pNFT tokenId', async function () {
@@ -387,7 +387,7 @@ describe('GenesisTokenEscrow', function () {
           [3n, 2n],
           data
         )
-      ).to.be.revertedWithCustomError(this.escrow1155, 'InvalidInputParams');
+      ).to.be.revertedWithCustomError(this.escrow1155, 'ExcessiveGenesisToken').withArgs(1n);
     });
 
     it('Deposit some Genesis tokens, but the actual transfer amount of Silver(3) is more than what described in data(2)', async function () {
@@ -403,7 +403,7 @@ describe('GenesisTokenEscrow', function () {
           [2n, 3n],
           data
         )
-      ).to.be.revertedWithCustomError(this.escrow1155, 'InvalidInputParams');
+      ).to.be.revertedWithCustomError(this.escrow1155, 'ExcessiveGenesisToken').withArgs(2n);
     });
   });
 
