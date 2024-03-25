@@ -119,7 +119,7 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
         Escrow[] memory escrows = new Escrow[](publisherTokenAddresses.length);
         address fromAddress = from;
         for (uint256 i = 0; i < publisherTokenAddresses.length; i++) {
-            Escrow storage escrow = escrowed[from][publisherTokenAddresses[i]][publisherTokenIds[i]];
+            Escrow storage escrow = escrowed[fromAddress][publisherTokenAddresses[i]][publisherTokenIds[i]];
             escrow.genesis1Quantity += genesis1Quantities[i];
             escrow.genesis2Quantity += genesis2Quantities[i];
             escrows[i] = escrow;
