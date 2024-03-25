@@ -28,7 +28,9 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
 
     /// Custom errors
     error InvalidInventory(address inventory);
-    error InvalidInputParams();
+    error UnsupportedGenesisTokenId(uint256 tokenId);
+    error InsufficientGenesisToken(uint256 tokenId);
+    error ExcessiveGenesisToken(uint256 tokenId);
     error NotEscrowed(address account, address publisherTokenAddress, uint256 publisherTokenId);
 
     IERC1155 public immutable GENESIS_TOKEN;
@@ -72,7 +74,7 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
         } else if (id == 2) {
             escrow.genesis2Quantity += uint128(quantity);
         } else {
-            revert InvalidInputParams();
+            revert UnsupportedGenesisTokenId(id);
         }
 
         address[] memory publisherTokenAddresses = new address[](1);
@@ -211,27 +213,27 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
             uint256 id = ids[i];
             if (id == 1) {
                 if (genesis1Total < quantities[i]) {
-                    revert InvalidInputParams();
+                    revert InsufficientGenesisToken(1);
                 }
 
                 genesis1Total -= quantities[i];
             } else if (id == 2) {
                 if (genesis2Total < quantities[i]) {
-                    revert InvalidInputParams();
+                    revert InsufficientGenesisToken(2);
                 }
 
                 genesis2Total -= quantities[i];
             } else {
-                revert InvalidInputParams();
+                revert UnsupportedGenesisTokenId(id);
             }
         }
 
         if (genesis1Total != 0) {
-            revert InvalidInputParams();
+            revert ExcessiveGenesisToken(1);
         }
 
         if (genesis2Total != 0) {
-            revert InvalidInputParams();
+            revert ExcessiveGenesisToken(2);
         }
     }
 }
