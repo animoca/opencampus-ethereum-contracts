@@ -93,8 +93,8 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
     /// @dev Updates the escrowed mapping.
     /// @dev Emits {Deposited} event.
     /// @param from The address which previously owned the token
-    /// @param ids An array containing ids of each token being transferred (corresponds to orbTypes)
-    /// @param quantities An array containing amounts of each token being transferred (corresponds to quantities)
+    /// @param ids An array containing ids of each token being transferred
+    /// @param quantities An array containing amounts of each token being transferred
     /// @param data A bytes array containing which 1155 tokens should escrowed into which publisher token addresses and ids.
     /// @return selector The function selector
     function onERC1155BatchReceived(
