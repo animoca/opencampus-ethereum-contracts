@@ -89,7 +89,7 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
     }
 
     /// @notice Handles the receipt of multiple types of tokens.
-    /// @dev Reverts if the sender is not in the inventory.
+    /// @dev Reverts if the sender is not the inventory.
     /// @dev Updates the escrowed mapping.
     /// @dev Emits {Deposited} event.
     /// @param from The address which previously owned the token
