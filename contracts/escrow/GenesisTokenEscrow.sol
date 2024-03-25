@@ -188,7 +188,7 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
         uint256[] memory publisherTokenIds,
         uint128[] memory genesis1Quantities,
         uint128[] memory genesis2Quantities
-    ) internal pure {
+    ) private pure {
         if (publisherTokenAddresses.length != publisherTokenIds.length) {
             revert InconsistentArrayLengths();
         }
