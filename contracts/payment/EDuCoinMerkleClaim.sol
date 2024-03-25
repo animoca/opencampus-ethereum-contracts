@@ -6,6 +6,7 @@ import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/ac
 import {PauseStorage} from "@animoca/ethereum-contracts/contracts/lifecycle/libraries/PauseStorage.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {Pause} from "@animoca/ethereum-contracts/contracts/lifecycle/Pause.sol";
+import {TokenRecovery} from "@animoca/ethereum-contracts/contracts/security/TokenRecovery.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IERC20SafeTransfers} from "@animoca/ethereum-contracts/contracts/token/ERC20/interfaces/IERC20SafeTransfers.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
@@ -20,7 +21,7 @@ import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/me
 /// @notice unclaimed payouts and the new payouts, per user. The new tree is set and replaces the previous one and the contract is unpaused.
 /// @notice A treeCounter is used for each new tree and is included in every leaf to prevent collisions with claims from previous trees.
 /// @notice A signature is used for real time KYC check.
-contract EDuCoinMerkleClaim is Pause, ForwarderRegistryContext {
+contract EDuCoinMerkleClaim is Pause, TokenRecovery, ForwarderRegistryContext {
     using ECDSA for bytes32;
     using MerkleProof for bytes32[];
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
