@@ -8,7 +8,7 @@ import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/Co
 import {Pause} from "@animoca/ethereum-contracts/contracts/lifecycle/Pause.sol";
 import {TokenRecovery} from "@animoca/ethereum-contracts/contracts/security/TokenRecovery.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {IERC20SafeTransfers} from "@animoca/ethereum-contracts/contracts/token/ERC20/interfaces/IERC20SafeTransfers.sol";
+import {IERC20} from "@animoca/ethereum-contracts/contracts/token/ERC20/interfaces/IERC20.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
@@ -27,7 +27,7 @@ contract EDuCoinMerkleClaim is Pause, TokenRecovery, ForwarderRegistryContext {
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
     using PauseStorage for PauseStorage.Layout;
 
-    IERC20SafeTransfers public immutable ERC20;
+    IERC20 public immutable ERC20;
 
     address public messageSigner;
     bytes32 public root;
@@ -75,7 +75,7 @@ contract EDuCoinMerkleClaim is Pause, TokenRecovery, ForwarderRegistryContext {
 
     /// @dev Emits a MessageSignerSet event.
     constructor(
-        IERC20SafeTransfers erc20_,
+        IERC20 erc20_,
         address messageSigner_,
         IForwarderRegistry forwarderRegistry_
     ) Pause(true) ContractOwnership(_msgSender()) ForwarderRegistryContext(forwarderRegistry_) {
@@ -144,7 +144,7 @@ contract EDuCoinMerkleClaim is Pause, TokenRecovery, ForwarderRegistryContext {
 
         emit PayoutClaimed(currentRoot, recipient, amount, currentTreeCounter);
 
-        ERC20.safeTransferFrom(owner(), recipient, amount, new bytes(0));
+        ERC20.transferFrom(owner(), recipient, amount);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
