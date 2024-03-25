@@ -39,10 +39,16 @@ contract PublisherNFTEscrow is TokenRecovery, ERC721Receiver, ForwarderRegistryC
     constructor(
         address[] memory supportedInventories_,
         IForwarderRegistry forwarderRegistry
-    ) ContractOwnership(_msgSender()) ForwarderRegistryContext(forwarderRegistry) {
+    ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
         uint256 length = supportedInventories_.length;
         for (uint256 i; i < length; ++i) {
-            addSupportedInventory(supportedInventories_[i]);
+            address inventory = supportedInventories_[i];
+            if (inventory == address(0)) {
+                revert UnsupportedInventory(inventory);
+            }
+
+            emit SupportedInventoryAdded(inventory);
+            supportedInventories[inventory] = inventory;
         }
     }
 
@@ -119,7 +125,7 @@ contract PublisherNFTEscrow is TokenRecovery, ERC721Receiver, ForwarderRegistryC
     /// @param id The token identifier.
     /// @return selector The function selector
     function onERC721Received(address, address from, uint256 id, bytes calldata) external returns (bytes4) {
-        address inventory = _msgSender();
+        address inventory = msg.sender;
         if (supportedInventories[inventory] == address(0)) {
             revert UnsupportedInventory(inventory);
         }
