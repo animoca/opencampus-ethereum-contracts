@@ -146,8 +146,8 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
         ids[0] = 1;
         ids[1] = 2;
 
-        uint256 id1Value = 0;
-        uint256 id2Value = 0;
+        uint128 id1Value = 0;
+        uint128 id2Value = 0;
         for (uint256 i = 0; i < publisherTokenAddresses.length; i++) {
             address publisherTokenAddress = publisherTokenAddresses[i];
             uint256 publisherTokenId = publisherTokenIds[i];
