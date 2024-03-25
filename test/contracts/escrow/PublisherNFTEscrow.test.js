@@ -143,6 +143,14 @@ describe('PublisherNFTEscrow', function () {
         .withArgs(erc721Address);
     });
 
+    it('revert if adding a new ERC721 to whitelist with a non-owner wallet', async function () {
+      const erc721Address = await this.erc721NonWhitelisted.getAddress();
+      await expect(this.escrow721.connect(wallet1).addSupportedInventory(erc721Address)).to.be.revertedWithCustomError(
+        this.escrow721,
+        'NotContractOwner'
+      );
+    });
+
     it('Add empty address as ERC721 to whitelist', async function () {
       await expect(this.escrow721.addSupportedInventory(ethers.ZeroAddress)).to.be.revertedWithCustomError(this.escrow721, 'UnsupportedInventory');
     });
@@ -157,6 +165,13 @@ describe('PublisherNFTEscrow', function () {
       await expect(
         this.erc721['safeTransferFrom(address,address,uint256)'](deployer.address, this.erc721EscrowAddress, '1')
       ).to.be.revertedWithCustomError(this.escrow721, 'UnsupportedInventory');
+    });
+
+    it('revert if removing a new ERC721 to whitelist with a non-owner wallet', async function () {
+      await expect(this.escrow721.connect(wallet1).removeSupportedInventory(this.erc721Address)).to.be.revertedWithCustomError(
+        this.escrow721,
+        'NotContractOwner'
+      );
     });
 
     it('Remove empty address as ERC721 to whitelist', async function () {
@@ -182,6 +197,14 @@ describe('PublisherNFTEscrow', function () {
     it('recover a non escrowed token', async function () {
       await this.erc721.transferFrom(deployer.address, this.erc721EscrowAddress, '1');
       await expect(this.escrow721.recoverERC721s([deployer.address], [this.erc721Address], [1]));
+    });
+
+    it('revert if it is not owner wallet', async function () {
+      await this.erc721.transferFrom(deployer.address, this.erc721EscrowAddress, '1');
+      await expect(this.escrow721.connect(wallet1).recoverERC721s([deployer.address], [this.erc721Address], [1])).to.be.revertedWithCustomError(
+        this.escrow721,
+        'NotContractOwner'
+      );
     });
 
     it('recover a non escrowed token but in the case of InconsistentArrayLengths', async function () {

@@ -19,35 +19,36 @@ describe('EDuCoinMerkleClaim', function () {
 
   beforeEach(async function () {
     await loadFixture(fixture, this);
+
+    this.nextTreeCounter = (await this.contract.treeCounter()) + 1n;
+
+    this.elements = [
+      {
+        claimer: claimer1.address,
+        amount: 1n,
+      },
+      {
+        claimer: claimer2.address,
+        amount: 2n,
+      },
+      {
+        claimer: claimer3.address,
+        amount: 3n,
+      },
+      {
+        claimer: claimer4.address,
+        amount: 4n,
+      },
+    ];
+    this.leaves = this.elements.map((el) => ethers.solidityPacked(['address', 'uint256', 'uint256'], [el.claimer, el.amount, this.nextTreeCounter]));
+    const sum = this.elements.reduce((acc, el) => acc + el.amount, 0n);
+    this.erc20.approve(this.contract.target, sum);
+    this.tree = new MerkleTree(this.leaves, keccak256, {hashLeaves: true, sortPairs: true});
+    this.root = this.tree.getHexRoot();
   });
 
   context('claimPayout(address,uint256,bytes32[])', function () {
     beforeEach(async function () {
-      this.nextTreeCounter = (await this.contract.treeCounter()) + 1n;
-
-      this.elements = [
-        {
-          claimer: claimer1.address,
-          amount: 1n,
-        },
-        {
-          claimer: claimer2.address,
-          amount: 2n,
-        },
-        {
-          claimer: claimer3.address,
-          amount: 3n,
-        },
-        {
-          claimer: claimer4.address,
-          amount: 4n,
-        },
-      ];
-      this.leaves = this.elements.map((el) => ethers.solidityPacked(['address', 'uint256', 'uint256'], [el.claimer, el.amount, this.nextTreeCounter]));
-      const sum = this.elements.reduce((acc, el) => acc + el.amount, 0n);
-      this.erc20.approve(this.contract.target, sum);
-      this.tree = new MerkleTree(this.leaves, keccak256, {hashLeaves: true, sortPairs: true});
-      this.root = this.tree.getHexRoot();
       await this.contract.setMerkleRoot(this.root);
     });
 
@@ -145,9 +146,27 @@ describe('EDuCoinMerkleClaim', function () {
     });
   });
 
+  context('setMerkleRoot(bytes32)', function () {
+    it('can successfully set Merkle root and emit event', async function () {
+      await expect(this.contract.setMerkleRoot(this.root)).to.emit(this.contract, 'MerkleRootSet').withArgs(this.root);
+      expect(await this.contract.root()).to.equal(this.root);
+    });
+
+    it('revert if it is not the owner', async function () {
+      await expect(this.contract.connect(claimer1).setMerkleRoot(this.root)).to.be.revertedWithCustomError(this.contract, 'NotContractOwner');
+    });
+  });
+
   context('setMessageSigner(address)', function () {
     it('can emit the MessageSignerSet event', async function () {
       await expect(this.contract.setMessageSigner(messageSigner2)).to.emit(this.contract, 'MessageSignerSet').withArgs(messageSigner2.address);
+    });
+
+    it('revert if it is not the owner', async function () {
+      await expect(this.contract.connect(messageSigner2).setMessageSigner(messageSigner2)).to.be.revertedWithCustomError(
+        this.contract,
+        'NotContractOwner'
+      );
     });
   });
 
