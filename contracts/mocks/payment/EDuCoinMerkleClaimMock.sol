@@ -11,8 +11,9 @@ contract EDuCoinMerkleClaimMock is EDuCoinMerkleClaim {
     constructor(
         IERC20 erc20_,
         address messageSigner_,
+        address tokenHolder_,
         IForwarderRegistry forwarderRegistry_
-    ) EDuCoinMerkleClaim(erc20_, messageSigner_, forwarderRegistry_) {}
+    ) EDuCoinMerkleClaim(erc20_, messageSigner_, tokenHolder_, forwarderRegistry_) {}
 
     function __msgData() external view returns (bytes calldata) {
         return _msgData();

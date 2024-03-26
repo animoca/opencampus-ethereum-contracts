@@ -8,13 +8,13 @@ const {getForwarderRegistryAddress} = require('@animoca/ethereum-contracts/test/
 
 describe('EDuCoinMerkleClaim', function () {
   before(async function () {
-    [deployer, messageSigner1, messageSigner2, claimer1, claimer2, claimer3, claimer4, other] = await ethers.getSigners();
+    [deployer, tokenHolder1, tokenHolder2, messageSigner1, messageSigner2, claimer1, claimer2, claimer3, claimer4, other] = await ethers.getSigners();
   });
 
   const fixture = async function () {
     const forwarderRegistryAddress = await getForwarderRegistryAddress();
-    this.erc20 = await deployContract('EDuCoin', 'EDU', 'EDU', 18, [deployer], [ethers.MaxInt256], forwarderRegistryAddress);
-    this.contract = await deployContract('EDuCoinMerkleClaimMock', this.erc20.target, messageSigner1, forwarderRegistryAddress);
+    this.erc20 = await deployContract('EDuCoin', 'EDU', 'EDU', 18, [tokenHolder1], [ethers.MaxInt256], forwarderRegistryAddress);
+    this.contract = await deployContract('EDuCoinMerkleClaimMock', this.erc20.target, messageSigner1, tokenHolder1, forwarderRegistryAddress);
   };
 
   beforeEach(async function () {
@@ -42,7 +42,7 @@ describe('EDuCoinMerkleClaim', function () {
     ];
     this.leaves = this.elements.map((el) => ethers.solidityPacked(['address', 'uint256', 'uint256'], [el.claimer, el.amount, this.nextTreeCounter]));
     const sum = this.elements.reduce((acc, el) => acc + el.amount, 0n);
-    this.erc20.approve(this.contract.target, sum);
+    this.erc20.connect(tokenHolder1).approve(this.contract.target, sum);
     this.tree = new MerkleTree(this.leaves, keccak256, {hashLeaves: true, sortPairs: true});
     this.root = this.tree.getHexRoot();
   });
@@ -67,7 +67,7 @@ describe('EDuCoinMerkleClaim', function () {
         )
       )
         .to.emit(this.erc20, 'Transfer')
-        .withArgs(deployer.address, this.elements[0].claimer, this.elements[0].amount)
+        .withArgs(tokenHolder1.address, this.elements[0].claimer, this.elements[0].amount)
         .to.emit(this.contract, 'PayoutClaimed')
         .withArgs(this.root, this.elements[0].claimer, this.elements[0].amount, this.nextTreeCounter);
     });
@@ -159,11 +159,26 @@ describe('EDuCoinMerkleClaim', function () {
 
   context('setMessageSigner(address)', function () {
     it('can emit the MessageSignerSet event', async function () {
-      await expect(this.contract.setMessageSigner(messageSigner2)).to.emit(this.contract, 'MessageSignerSet').withArgs(messageSigner2.address);
+      await expect(this.contract.setMessageSigner(messageSigner2.address)).to.emit(this.contract, 'MessageSignerSet').withArgs(messageSigner2.address);
+      expect(await this.contract.messageSigner()).to.equal(messageSigner2.address);
     });
 
     it('revert if it is not the owner', async function () {
-      await expect(this.contract.connect(messageSigner2).setMessageSigner(messageSigner2)).to.be.revertedWithCustomError(
+      await expect(this.contract.connect(messageSigner2).setMessageSigner(messageSigner2.address)).to.be.revertedWithCustomError(
+        this.contract,
+        'NotContractOwner'
+      );
+    });
+  });
+
+  context('setTokenHolder(address)', function () {
+    it('can emit the TokenHolder event', async function () {
+      await expect(this.contract.setTokenHolder(tokenHolder2.address)).to.emit(this.contract, 'TokenHolderSet').withArgs(tokenHolder2.address);
+      expect(await this.contract.tokenHolder()).to.equal(tokenHolder2.address);
+    });
+
+    it('revert if it is not the owner', async function () {
+      await expect(this.contract.connect(tokenHolder2).setTokenHolder(tokenHolder2.address)).to.be.revertedWithCustomError(
         this.contract,
         'NotContractOwner'
       );

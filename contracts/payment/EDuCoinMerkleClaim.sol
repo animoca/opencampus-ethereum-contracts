@@ -30,6 +30,7 @@ contract EDuCoinMerkleClaim is Pause, TokenRecovery, ForwarderRegistryContext {
     IERC20 public immutable ERC20;
 
     address public messageSigner;
+    address public tokenHolder;
     bytes32 public root;
     uint256 public treeCounter;
     mapping(bytes32 => bool) public claimed;
@@ -41,6 +42,10 @@ contract EDuCoinMerkleClaim is Pause, TokenRecovery, ForwarderRegistryContext {
     /// @notice Emitted when a new message signer is set.
     /// @param messageSigner The new message signer.
     event MessageSignerSet(address messageSigner);
+
+    /// @notice Emitted when a new token holder is set.
+    /// @param tokenHolder The new token holder.
+    event TokenHolderSet(address tokenHolder);
 
     /// @notice Emitted when a payout is claimed.
     /// @param root The merkle root on which the claim was made.
@@ -77,11 +82,14 @@ contract EDuCoinMerkleClaim is Pause, TokenRecovery, ForwarderRegistryContext {
     constructor(
         IERC20 erc20_,
         address messageSigner_,
+        address tokenHolder_,
         IForwarderRegistry forwarderRegistry_
     ) Pause(true) ContractOwnership(_msgSender()) ForwarderRegistryContext(forwarderRegistry_) {
         ERC20 = erc20_;
         messageSigner = messageSigner_;
         emit MessageSignerSet(messageSigner_);
+        tokenHolder = tokenHolder_;
+        emit TokenHolderSet(tokenHolder_);
     }
 
     /// @notice Sets the merkle root for a new claiming period and unpauses the contract.
@@ -108,6 +116,16 @@ contract EDuCoinMerkleClaim is Pause, TokenRecovery, ForwarderRegistryContext {
         ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
         messageSigner = messageSigner_;
         emit MessageSignerSet(messageSigner_);
+    }
+
+    /// @notice Sets the token holder for holding the token for claiming.
+    /// @dev Reverts with {NotContractOwner} if the sender is not the contract owner.
+    /// @dev Emits a {TokenHolderSet} event.
+    /// @param tokenHolder_ The token holder to set.
+    function setTokenHolder(address tokenHolder_) public {
+        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        tokenHolder = tokenHolder_;
+        emit TokenHolderSet(tokenHolder_);
     }
 
     /// @notice Executes the payout for a given user (anyone can call this function).
@@ -144,7 +162,7 @@ contract EDuCoinMerkleClaim is Pause, TokenRecovery, ForwarderRegistryContext {
 
         emit PayoutClaimed(currentRoot, recipient, amount, currentTreeCounter);
 
-        ERC20.transferFrom(owner(), recipient, amount);
+        ERC20.transferFrom(tokenHolder, recipient, amount);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
