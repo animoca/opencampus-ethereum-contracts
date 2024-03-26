@@ -159,7 +159,9 @@ describe('EDuCoinMerkleClaim', function () {
 
   context('setMessageSigner(address)', function () {
     it('can emit the MessageSignerSet event', async function () {
-      await expect(this.contract.setMessageSigner(messageSigner2.address)).to.emit(this.contract, 'MessageSignerSet').withArgs(messageSigner2.address);
+      await expect(this.contract.setMessageSigner(messageSigner2.address))
+        .to.emit(this.contract, 'MessageSignerSet')
+        .withArgs(messageSigner2.address);
       expect(await this.contract.messageSigner()).to.equal(messageSigner2.address);
     });
 
