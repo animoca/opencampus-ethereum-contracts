@@ -91,7 +91,7 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
     /// @notice Handles the receipt of multiple types of tokens.
     /// @dev Reverts if the sender is not the inventory.
     /// @dev Updates the escrowed mapping.
-    /// @dev Emits {Deposited} event.
+    /// @dev Emits a {Deposited} event.
     /// @param from The address which previously owned the token
     /// @param ids An array containing ids of each token being transferred
     /// @param quantities An array containing amounts of each token being transferred
@@ -116,7 +116,7 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
             uint128[] memory genesis2Quantities
         ) = abi.decode(data, (address[], uint256[], uint128[], uint128[]));
 
-        validateQunatities(ids, quantities, publisherTokenAddresses, publisherTokenIds, genesis1Quantities, genesis2Quantities);
+        validateQuantities(ids, quantities, publisherTokenAddresses, publisherTokenIds, genesis1Quantities, genesis2Quantities);
 
         Escrow[] memory escrows = new Escrow[](publisherTokenAddresses.length);
         address fromAddress = from;
@@ -181,14 +181,14 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
         return ForwarderRegistryContextBase._msgData();
     }
 
-    function validateQunatities(
+    function validateQuantities(
         uint256[] memory ids,
         uint256[] memory quantities,
         address[] memory publisherTokenAddresses,
         uint256[] memory publisherTokenIds,
         uint128[] memory genesis1Quantities,
         uint128[] memory genesis2Quantities
-    ) private pure {
+    ) internal pure {
         if (publisherTokenAddresses.length != publisherTokenIds.length) {
             revert InconsistentArrayLengths();
         }
