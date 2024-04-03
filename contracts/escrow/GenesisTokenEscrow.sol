@@ -153,11 +153,13 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
             uint256 publisherTokenId = publisherTokenIds[i];
 
             Escrow storage prevEscrow = escrowed[account][publisherTokenAddress][publisherTokenId];
-            if (prevEscrow.genesis1Quantity != 0 || prevEscrow.genesis2Quantity != 0) {
+            uint128 genesis1Quantity = prevEscrow.genesis1Quantity;
+            uint128 genesis2Quantity = prevEscrow.genesis2Quantity;
+            if (genesis1Quantity != 0 || genesis2Quantity != 0) {
                 escrowed[account][publisherTokenAddress][publisherTokenId] = Escrow(0, 0);
 
-                id1Value += prevEscrow.genesis1Quantity;
-                id2Value += prevEscrow.genesis2Quantity;
+                id1Value += genesis1Quantity;
+                id2Value += genesis2Quantity;
             } else {
                 revert NotEscrowed(account, publisherTokenAddress, publisherTokenId);
             }
@@ -182,8 +184,8 @@ contract GenesisTokenEscrow is TokenRecovery, ERC1155TokenReceiver, ForwarderReg
     }
 
     function validateQuantities(
-        uint256[] memory ids,
-        uint256[] memory quantities,
+        uint256[] calldata ids,
+        uint256[] calldata quantities,
         address[] memory publisherTokenAddresses,
         uint256[] memory publisherTokenIds,
         uint128[] memory genesis1Quantities,
