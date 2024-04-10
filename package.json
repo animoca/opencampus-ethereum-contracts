@@ -1,6 +1,6 @@
 {
   "name": "@animoca/opencampus-ethereum-contracts",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "OpenCampus contracts",
   "author": "Animoca Brands",
   "license": "MIT",
@@ -66,7 +66,6 @@
     "solhint": "^3.6.2",
     "solhint-plugin-prettier": "^0.0.5",
     "solidity-coverage": "^0.8.5",
-    "solidity-docgen": "^0.6.0-beta.36",
-    "opencampus-xyz/EDU-smart-contract": "opencampus-xyz/EDU-smart-contract#ef436f0cee1b71633aa2597b3272bd89559ccccd"
+    "solidity-docgen": "^0.6.0-beta.36"
   }
 }
