@@ -1,0 +1,417 @@
+const {ethers} = require('hardhat');
+const {expect} = require('chai');
+const {expectRevert} = require('@animoca/ethereum-contract-helpers/src/test/revert');
+const {deployContract} = require('@animoca/ethereum-contract-helpers/src/test/deploy');
+const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
+const {getForwarderRegistryAddress, getTokenMetadataResolverPerTokenAddress} = require('@animoca/ethereum-contracts/test/helpers/registries');
+const {time} = require('@nomicfoundation/hardhat-network-helpers');
+const keccak256 = require('keccak256');
+
+async function getBlockTimestamp(tx) {
+  const block = await ethers.provider.getBlock(tx.blockNumber);
+  return BigInt(block.timestamp);
+}
+
+const DEFAULT_GRACE_PERIOD = 5n;
+
+describe('EDUNodeKeyRental', function () {
+  before(async function () {
+    [deployer, user1, user2, user3, user4, other] = await ethers.getSigners();
+  });
+
+  const fixture = async function () {
+    const metadataResolverAddress = await getTokenMetadataResolverPerTokenAddress();
+    const forwarderRegistryAddress = await getForwarderRegistryAddress();
+
+    this.erc721 = await deployContract('EDUNodeKey', 'EDU Principal Node Key', 'EDUKey', metadataResolverAddress, forwarderRegistryAddress);
+    await this.erc721.grantRole(await this.erc721.MINTER_ROLE(), deployer.address);
+
+    this.rentalReasonCode = keccak256('NODE_KEY_RENTAL');
+
+    const erc721TotalSupply = 500;
+    const tokenIds = Array.from(Array(erc721TotalSupply).keys());
+
+    const initialOCPAmount = ethers.MaxUint256 / 2n;
+    this.ocp = await deployContract('OCPMock', [user1, user2, user3], [initialOCPAmount, initialOCPAmount, initialOCPAmount]);
+
+    this.rentalContract = await deployContract(
+      'EDUNodeKeyRentalMock',
+      this.erc721.target,
+      this.ocp.target,
+      1n,
+      DEFAULT_GRACE_PERIOD,
+      forwarderRegistryAddress
+    );
+    await this.erc721.grantRole(await this.erc721.OPERATOR_ROLE(), this.rentalContract.target);
+
+    await this.erc721.batchMint(this.rentalContract, tokenIds);
+
+    await this.rentalContract.connect(user1).batchRent(user1, [400n, 401n], [10n, 10n]);
+    await this.rentalContract.connect(user2).batchRent(user2, [402n, 403n], [10n, 10n]);
+  };
+
+  beforeEach(async function () {
+    await loadFixture(fixture, this);
+  });
+
+  context('renterOf(uint256 tokenId) view public returns (address)', function () {
+    it('Node key never rented', async function () {
+      expect(await this.rentalContract.renterOf(0n)).to.be.equal(this.rentalContract);
+    });
+
+    it('Node key rented', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      expect(await this.rentalContract.renterOf(0n)).to.be.equal(user1);
+    });
+
+    it('Node key rented, expired and in grace period', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      await time.increase(10n);
+      expect(await this.rentalContract.renterOf(0n)).to.be.equal(this.rentalContract);
+    });
+
+    it('Node key rented, expired and grace period passed', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      await time.increase(10n + DEFAULT_GRACE_PERIOD);
+      expect(await this.rentalContract.renterOf(0n)).to.be.equal(this.rentalContract);
+    });
+
+    it('Node key rented twice by the same person after it get expired and during grace period', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      await time.increase(10n);
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      expect(await this.rentalContract.renterOf(0n)).to.be.equal(user1);
+    });
+
+    it('Node key rented twice by the same person after it get expired and grace period passed', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      await time.increase(10n + DEFAULT_GRACE_PERIOD);
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      expect(await this.rentalContract.renterOf(0n)).to.be.equal(user1);
+    });
+
+    it('Node key rented by user1 and grace period passed then rented by user2', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      await time.increase(10n + DEFAULT_GRACE_PERIOD);
+      await this.rentalContract.connect(user2).rent(user2, 0n, 10n);
+      expect(await this.rentalContract.renterOf(0n)).to.be.equal(user2);
+    });
+  });
+
+  context('estimateFee(address account, uint256 tokenId, uint256 duration) public view returns (uint256 fee)', function () {
+    it('Node key never rented', async function () {
+      expect(await this.rentalContract.estimateFee(user1, 0n, 10n)).to.be.equal(10n);
+    });
+
+    it('Node key rented, estimated by current renter', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      expect(await this.rentalContract.estimateFee(user1, 0n, 10n)).to.be.equal(10n);
+    });
+
+    it('Node key rented, estimated by current renter during grace period', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      await time.increase(10n);
+      expect(await this.rentalContract.estimateFee(user1, 0n, 10n)).to.be.equal(10n);
+    });
+
+    it('Node key rented, estimated by current renter after grace period', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      await time.increase(10n + DEFAULT_GRACE_PERIOD);
+      expect(await this.rentalContract.estimateFee(user1, 0n, 10n)).to.be.equal(10n);
+    });
+
+    it('Node key rented and not expired, estimated by another account', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      expectRevert(this.rentalContract.estimateFee(user2, 0n, 10n), this.rentalContract, 'NotRentable', 0n);
+    });
+
+    it('Node key rented, estimated by another account during grace period', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      await time.increase(10n);
+      expectRevert(this.rentalContract.estimateFee(user2, 0n, 10n), this.rentalContract, 'NotRentable', 0n);
+    });
+
+    it('Node key rented and global grace period duration configuration changed, estimated by another account during grace period.', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      const newGracePeriod = 1n;
+      await this.rentalContract.setGracePeriod(newGracePeriod);
+      await time.increase(10n + newGracePeriod);
+      expectRevert(this.rentalContract.estimateFee(user2, 0n, 10n), this.rentalContract, 'NotRentable', 0n);
+    });
+
+    it('Node key rented, estimated by another account after grace period', async function () {
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      await time.increase(10n + DEFAULT_GRACE_PERIOD);
+      expect(await this.rentalContract.estimateFee(user1, 0n, 10n)).to.be.equal(10n);
+    });
+  });
+
+  context('rent(address account, uint256 tokenId, uint256 duration)', function () {
+    it('successfully rent 1 node key', async function () {
+      const tx = await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
+      const blockTimestamp = await getBlockTimestamp(tx);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user1, this.rentalReasonCode, this.rentalContract, 10n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(user1, [0n], [[blockTimestamp + 10n, blockTimestamp + 10n + DEFAULT_GRACE_PERIOD, 1n]], [10n]);
+    });
+
+    it('rent a non-existence node key', async function () {
+      await expect(this.rentalContract.connect(user1).rent(user1, 500n, 10n))
+        .to.be.revertedWithCustomError(this.erc721, 'ERC721NonExistingToken')
+        .withArgs(500n);
+    });
+
+    it('rent a node key for 0 duration', async function () {
+      await expect(this.rentalContract.connect(user1).rent(user1, 0n, 0n)).to.be.revertedWithCustomError(this.rentalContract, 'ZeroRentalDuration');
+    });
+
+    it('rent a token however signer does not have enough balance to rent', async function () {
+      await expect(this.rentalContract.connect(user4).rent(user4, 0n, 10n))
+        .to.be.revertedWithCustomError(this.ocp, 'InsufficientBalance')
+        .withArgs(user4, 10n);
+    });
+
+    it('extend the rent on an non-expired node key. Fee per second did not change.', async function () {
+      await time.increase(5n);
+
+      const {expiryDate, feePerSecond} = await this.rentalContract.rentals(400n);
+
+      const tx = await this.rentalContract.connect(user1).rent(user1, 400n, 10n);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user1, this.rentalReasonCode, this.rentalContract, 10n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(user1, [400n], [[expiryDate + 10n, expiryDate + 10n + DEFAULT_GRACE_PERIOD, 1n]], [feePerSecond * 10n]);
+    });
+
+    it('extend the rent on an non-expired node key. Fee per second changed.', async function () {
+      await time.increase(5n);
+
+      const {expiryDate, feePerSecond} = await this.rentalContract.rentals(400n);
+
+      const newFeePerSecond = 2n;
+      await this.rentalContract.setFeePerSecond(newFeePerSecond);
+
+      const tx = await this.rentalContract.connect(user1).rent(user1, 400n, 10n);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user1, this.rentalReasonCode, this.rentalContract, 10n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(user1, [400n], [[expiryDate + 10n, expiryDate + 10n + DEFAULT_GRACE_PERIOD, 1n]], [feePerSecond * 10n]);
+    });
+
+    it('extend the rent on an expired node key, during grace period', async function () {
+      await time.increase(10n);
+
+      const tx = await this.rentalContract.connect(user1).rent(user1, 400n, 10n);
+      const blockTimestamp = await getBlockTimestamp(tx);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user1, this.rentalReasonCode, this.rentalContract, 10n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(user1, [400n], [[blockTimestamp + 10n, blockTimestamp + 10n + DEFAULT_GRACE_PERIOD, 1n]], [10n]);
+    });
+
+    it('rent non-expired node key from another wallet', async function () {
+      await expect(this.rentalContract.connect(user3).rent(user3, 400n, 10n))
+        .to.be.revertedWithCustomError(this.rentalContract, 'NotRentable')
+        .withArgs(400n);
+    });
+
+    it('rent an expired node key from another wallet, during grace period', async function () {
+      await time.increase(10n);
+      await expect(this.rentalContract.connect(user3).rent(user3, 400n, 10n))
+        .to.be.revertedWithCustomError(this.rentalContract, 'NotRentable')
+        .withArgs(400n);
+    });
+
+    it('rent an expired node key from another wallet, after grace period', async function () {
+      await time.increase(10n + DEFAULT_GRACE_PERIOD);
+
+      const tx = await this.rentalContract.connect(user3).rent(user3, 400n, 10n);
+      const blockTimestamp = await getBlockTimestamp(tx);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user3, this.rentalReasonCode, this.rentalContract, 10n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(user3, [400n], [[blockTimestamp + 10n, blockTimestamp + 10n + DEFAULT_GRACE_PERIOD, 1n]], [10n]);
+    });
+  });
+
+  context('batchRent(address account, uint256[] calldata tokenIds, uint256[] calldata durations)', function () {
+    it('successfully rent 1 node key', async function () {
+      const tx = await this.rentalContract.connect(user1).batchRent(user1, [0n], [10n]);
+      const blockTimestamp = await getBlockTimestamp(tx);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user1, this.rentalReasonCode, this.rentalContract, 10n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(user1, [0n], [[blockTimestamp + 10n, blockTimestamp + 10n + DEFAULT_GRACE_PERIOD, 1n]], [10n]);
+    });
+
+    it('successfully rent 2 node keys', async function () {
+      const tx = await this.rentalContract.connect(user1).batchRent(user1, [0n, 1n], [10n, 90n]);
+      const blockTimestamp = await getBlockTimestamp(tx);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user1, this.rentalReasonCode, this.rentalContract, 100n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(
+          user1,
+          [0n, 1n],
+          [
+            [blockTimestamp + 10n, blockTimestamp + 10n + DEFAULT_GRACE_PERIOD, 1n],
+            [blockTimestamp + 90n, blockTimestamp + 90n + DEFAULT_GRACE_PERIOD, 1n],
+          ],
+          [10n, 90n]
+        );
+    });
+
+    it('successfully rent 1 node key, but the same tokenId duplicated to 2 separated entries', async function () {
+      const tx = await this.rentalContract.connect(user1).batchRent(user1, [0n, 0n], [10n, 90n]);
+      const blockTimestamp = await getBlockTimestamp(tx);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user1, this.rentalReasonCode, this.rentalContract, 100n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(
+          user1,
+          [0n, 0n],
+          [
+            [blockTimestamp + 10n, blockTimestamp + 10n + DEFAULT_GRACE_PERIOD, 1n],
+            [blockTimestamp + 10n + 90n, blockTimestamp + 10n + 90n + DEFAULT_GRACE_PERIOD, 1n],
+          ],
+          [10n, 90n]
+        );
+    });
+
+    it('mismatched tokenIds and durations params length', async function () {
+      await expect(this.rentalContract.connect(user1).batchRent(user1, [0n], [10n, 90n])).to.be.revertedWithCustomError(
+        this.rentalContract,
+        'InconsistentArrayLengths'
+      );
+      await expect(this.rentalContract.connect(user1).batchRent(user1, [0n, 1n], [90n])).to.be.revertedWithCustomError(
+        this.rentalContract,
+        'InconsistentArrayLengths'
+      );
+    });
+
+    it('empty tokenIds params length', async function () {
+      await expect(this.rentalContract.connect(user1).batchRent(user1, [], [])).to.be.revertedWithCustomError(
+        this.rentalContract,
+        'InvalidTokenIdsParam'
+      );
+    });
+
+    it('rent a non-existence node key', async function () {
+      await expect(this.rentalContract.connect(user1).batchRent(user1, [500n], [10n]))
+        .to.be.revertedWithCustomError(this.erc721, 'ERC721NonExistingToken')
+        .withArgs(500n);
+    });
+
+    it('rent a node key for 0 duration', async function () {
+      await expect(this.rentalContract.connect(user1).batchRent(user1, [0n], [0n])).to.be.revertedWithCustomError(
+        this.rentalContract,
+        'ZeroRentalDuration'
+      );
+    });
+
+    it('rent a non-existence node key while another node key exists', async function () {
+      await expect(this.rentalContract.connect(user1).batchRent(user1, [0n, 500n], [10n, 10n]))
+        .to.be.revertedWithCustomError(this.erc721, 'ERC721NonExistingToken')
+        .withArgs(500n);
+    });
+
+    it('rent a token however signer does not have enough balance to rent', async function () {
+      await expect(this.rentalContract.connect(user4).batchRent(user4, [0n, 1n], [10n, 10n]))
+        .to.be.revertedWithCustomError(this.ocp, 'InsufficientBalance')
+        .withArgs(user4, 20n);
+    });
+
+    it('extend the rent on an non-expired node key. Fee per second did not change.', async function () {
+      await time.increase(5n);
+
+      const {expiryDate, feePerSecond} = await this.rentalContract.rentals(400n);
+
+      const tx = await this.rentalContract.connect(user1).batchRent(user1, [400n], [10n]);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user1, this.rentalReasonCode, this.rentalContract, 10n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(user1, [400n], [[expiryDate + 10n, expiryDate + 10n + DEFAULT_GRACE_PERIOD, 1n]], [feePerSecond * 10n]);
+    });
+
+    it('extend the rent on an non-expired node key. Fee per second changed.', async function () {
+      await time.increase(5n);
+
+      const {expiryDate, feePerSecond} = await this.rentalContract.rentals(400n);
+
+      const newFeePerSecond = 2n;
+      await this.rentalContract.setFeePerSecond(newFeePerSecond);
+
+      const tx = await this.rentalContract.connect(user1).batchRent(user1, [400n], [10n]);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user1, this.rentalReasonCode, this.rentalContract, 10n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(user1, [400n], [[expiryDate + 10n, expiryDate + 10n + DEFAULT_GRACE_PERIOD, 1n]], [feePerSecond * 10n]);
+    });
+
+    it('extend the rent on an expired node key, during grace period', async function () {
+      await time.increase(10n);
+
+      const tx = await this.rentalContract.connect(user1).batchRent(user1, [400n], [10n]);
+      const blockTimestamp = await getBlockTimestamp(tx);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user1, this.rentalReasonCode, this.rentalContract, 10n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(user1, [400n], [[blockTimestamp + 10n, blockTimestamp + 10n + DEFAULT_GRACE_PERIOD, 1n]], [10n]);
+    });
+
+    it('rent non-expired node key from another wallet', async function () {
+      await expect(this.rentalContract.connect(user3).batchRent(user3, [400n], [10n]))
+        .to.be.revertedWithCustomError(this.rentalContract, 'NotRentable')
+        .withArgs(400n);
+    });
+
+    it('rent an expired node key from another wallet, during grace period', async function () {
+      await time.increase(10n);
+      await expect(this.rentalContract.connect(user3).batchRent(user3, [400n], [10n]))
+        .to.be.revertedWithCustomError(this.rentalContract, 'NotRentable')
+        .withArgs(400n);
+    });
+
+    it('rent an expired node key from another wallet, after grace period', async function () {
+      await time.increase(10n + DEFAULT_GRACE_PERIOD);
+
+      const tx = await this.rentalContract.connect(user3).batchRent(user3, [400n], [10n]);
+      const blockTimestamp = await getBlockTimestamp(tx);
+
+      await expect(tx)
+        .to.emit(this.ocp, 'Consumed')
+        .withArgs(user3, this.rentalReasonCode, this.rentalContract, 10n)
+        .to.emit(this.rentalContract, 'Rental')
+        .withArgs(user3, [400n], [[blockTimestamp + 10n, blockTimestamp + 10n + DEFAULT_GRACE_PERIOD, 1n]], [10n]);
+    });
+  });
+
+  context('Meta transaction', function () {
+    it('returns the msg.data', async function () {
+      await this.rentalContract.__msgData();
+    });
+  });
+});
