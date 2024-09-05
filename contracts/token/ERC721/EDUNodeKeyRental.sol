@@ -34,8 +34,10 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
     event Rental(address indexed renter, uint256[] tokenIds, RentalInfo[] rentals, uint256[] fees);
 
     error InvalidTokenIdsParam();
-    error NotRentable(uint256 tokenId);
     error ZeroRentalDuration();
+    error NotRentable(uint256 tokenId);
+    error NotRented(uint256 tokenId);
+    error NotCollectable(uint256 tokenId);
 
     constructor(
         address inventoryAddress,
@@ -103,7 +105,7 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
         if (block.timestamp < rentals[tokenId].expiryDate) {
             return INVENTORY.ownerOf(tokenId);
         } else {
-            return address(this);
+            revert NotRented(tokenId);
         }
     }
 
@@ -115,6 +117,23 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
     function setGracePeriod(uint256 newGracePeriod) external {
         ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
         gracePeriod = newGracePeriod;
+    }
+
+    function collectIdledTokens(uint256[] calldata tokenIds) external {
+        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            uint256 tokenId = tokenIds[i];
+            address currentOwner = INVENTORY.ownerOf(tokenId);
+            if (currentOwner == address(this)) {
+                revert NotRented(tokenId);
+            }
+
+            if (block.timestamp < rentals[tokenId].gracePeriodEndDate) {
+                revert NotCollectable(tokenId);
+            }
+
+            INVENTORY.transferFrom(currentOwner, address(this), tokenId);
+        }
     }
 
     function _estimateFeePerSecond(
@@ -152,9 +171,9 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
         address currentNodeKeyOwner = INVENTORY.ownerOf(tokenId);
         uint256 decidedFeePerSecond = _estimateFeePerSecond(account, tokenId, currentTime, currentNodeKeyOwner, rental);
         fee = decidedFeePerSecond * duration;
-        
+
         uint256 currentExpiry = rental.expiryDate;
-        
+
         uint256 expiryDate = currentTime > currentExpiry ? currentTime + duration : currentExpiry + duration;
         uint256 gracePeriodEndDate = expiryDate + gracePeriod;
 

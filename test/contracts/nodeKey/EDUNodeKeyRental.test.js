@@ -23,31 +23,31 @@ describe('EDUNodeKeyRental', function () {
     const metadataResolverAddress = await getTokenMetadataResolverPerTokenAddress();
     const forwarderRegistryAddress = await getForwarderRegistryAddress();
 
-    this.erc721 = await deployContract('EDUNodeKey', 'EDU Principal Node Key', 'EDUKey', metadataResolverAddress, forwarderRegistryAddress);
-    await this.erc721.grantRole(await this.erc721.MINTER_ROLE(), deployer.address);
+    this.nodeKeyContract = await deployContract('EDUNodeKey', 'EDU Principal Node Key', 'EDUKey', metadataResolverAddress, forwarderRegistryAddress);
+    await this.nodeKeyContract.grantRole(await this.nodeKeyContract.MINTER_ROLE(), deployer.address);
 
     this.rentalReasonCode = keccak256('NODE_KEY_RENTAL');
 
-    const erc721TotalSupply = 500;
-    const tokenIds = Array.from(Array(erc721TotalSupply).keys());
+    const nodeKeyContractTotalSupply = 500;
+    const tokenIds = Array.from(Array(nodeKeyContractTotalSupply).keys());
 
     const initialOCPAmount = ethers.MaxUint256 / 2n;
     this.ocp = await deployContract('OCPMock', [user1, user2, user3], [initialOCPAmount, initialOCPAmount, initialOCPAmount]);
 
     this.rentalContract = await deployContract(
       'EDUNodeKeyRentalMock',
-      this.erc721.target,
+      this.nodeKeyContract.target,
       this.ocp.target,
       1n,
       DEFAULT_GRACE_PERIOD,
       forwarderRegistryAddress
     );
-    await this.erc721.grantRole(await this.erc721.OPERATOR_ROLE(), this.rentalContract.target);
+    await this.nodeKeyContract.grantRole(await this.nodeKeyContract.OPERATOR_ROLE(), this.rentalContract.target);
 
-    await this.erc721.batchMint(this.rentalContract, tokenIds);
+    await this.nodeKeyContract.batchMint(this.rentalContract, tokenIds);
 
     await this.rentalContract.connect(user1).batchRent(user1, [400n, 401n], [10n, 10n]);
-    await this.rentalContract.connect(user2).batchRent(user2, [402n, 403n], [10n, 10n]);
+    await this.rentalContract.connect(user2).batchRent(user2, [402n, 403n], [10n, 100n]);
   };
 
   beforeEach(async function () {
@@ -56,7 +56,7 @@ describe('EDUNodeKeyRental', function () {
 
   context('renterOf(uint256 tokenId) view public returns (address)', function () {
     it('Node key never rented', async function () {
-      expect(await this.rentalContract.renterOf(0n)).to.be.equal(this.rentalContract);
+      expectRevert(this.rentalContract.renterOf(0n), this.rentalContract, 'NotRented', 0n);
     });
 
     it('Node key rented', async function () {
@@ -67,13 +67,13 @@ describe('EDUNodeKeyRental', function () {
     it('Node key rented, expired and in grace period', async function () {
       await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
       await time.increase(10n);
-      expect(await this.rentalContract.renterOf(0n)).to.be.equal(this.rentalContract);
+      expectRevert(this.rentalContract.renterOf(0n), this.rentalContract, 'NotRented', 0n);
     });
 
     it('Node key rented, expired and grace period passed', async function () {
       await this.rentalContract.connect(user1).rent(user1, 0n, 10n);
       await time.increase(10n + DEFAULT_GRACE_PERIOD);
-      expect(await this.rentalContract.renterOf(0n)).to.be.equal(this.rentalContract);
+      expectRevert(this.rentalContract.renterOf(0n), this.rentalContract, 'NotRented', 0n);
     });
 
     it('Node key rented twice by the same person after it get expired and during grace period', async function () {
@@ -160,7 +160,7 @@ describe('EDUNodeKeyRental', function () {
 
     it('rent a non-existence node key', async function () {
       await expect(this.rentalContract.connect(user1).rent(user1, 500n, 10n))
-        .to.be.revertedWithCustomError(this.erc721, 'ERC721NonExistingToken')
+        .to.be.revertedWithCustomError(this.nodeKeyContract, 'ERC721NonExistingToken')
         .withArgs(500n);
     });
 
@@ -315,7 +315,7 @@ describe('EDUNodeKeyRental', function () {
 
     it('rent a non-existence node key', async function () {
       await expect(this.rentalContract.connect(user1).batchRent(user1, [500n], [10n]))
-        .to.be.revertedWithCustomError(this.erc721, 'ERC721NonExistingToken')
+        .to.be.revertedWithCustomError(this.nodeKeyContract, 'ERC721NonExistingToken')
         .withArgs(500n);
     });
 
@@ -328,7 +328,7 @@ describe('EDUNodeKeyRental', function () {
 
     it('rent a non-existence node key while another node key exists', async function () {
       await expect(this.rentalContract.connect(user1).batchRent(user1, [0n, 500n], [10n, 10n]))
-        .to.be.revertedWithCustomError(this.erc721, 'ERC721NonExistingToken')
+        .to.be.revertedWithCustomError(this.nodeKeyContract, 'ERC721NonExistingToken')
         .withArgs(500n);
     });
 
@@ -406,6 +406,26 @@ describe('EDUNodeKeyRental', function () {
         .withArgs(user3, this.rentalReasonCode, this.rentalContract, 10n)
         .to.emit(this.rentalContract, 'Rental')
         .withArgs(user3, [400n], [[blockTimestamp + 10n, blockTimestamp + 10n + DEFAULT_GRACE_PERIOD, 1n]], [10n]);
+    });
+  });
+
+  context('collectIdledTokens(uint256[] calldata tokenIds) external', function () {
+    it('Successfully collect the idled tokens', async function () {
+      await time.increase(10n + DEFAULT_GRACE_PERIOD);
+      await expect(this.rentalContract.collectIdledTokens([400n, 401n, 402n]))
+        .to.emit(this.nodeKeyContract, 'Transfer').withArgs(user1, this.rentalContract, 400n)
+        .to.emit(this.nodeKeyContract, 'Transfer').withArgs(user1, this.rentalContract, 401n)
+        .to.emit(this.nodeKeyContract, 'Transfer').withArgs(user2, this.rentalContract, 402n)
+    });
+
+    it('Failed to collect tokens since some token is not idled ', async function () {
+      await time.increase(10n + DEFAULT_GRACE_PERIOD);
+      await expect(this.rentalContract.collectIdledTokens([401n, 403n])).to.be.revertedWithCustomError(this.rentalContract, 'NotCollectable').withArgs(403n);
+    });
+
+    it('Failed to collect tokens since some token is never rented ', async function () {
+      await time.increase(10n + DEFAULT_GRACE_PERIOD);
+      await expect(this.rentalContract.collectIdledTokens([400n, 10n])).to.be.revertedWithCustomError(this.rentalContract, 'NotRented').withArgs(10n);
     });
   });
 
