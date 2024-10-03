@@ -6,9 +6,9 @@
     {
       "inputs": [
         {
-          "internalType": "bytes32",
-          "name": "hashedDid",
-          "type": "bytes32"
+          "internalType": "string",
+          "name": "did",
+          "type": "string"
         },
         {
           "internalType": "address",
@@ -30,9 +30,9 @@
     {
       "inputs": [
         {
-          "internalType": "string",
-          "name": "did",
-          "type": "string"
+          "internalType": "bytes32",
+          "name": "hashedDid",
+          "type": "bytes32"
         },
         {
           "internalType": "address",
@@ -40,7 +40,7 @@
           "type": "address"
         }
       ],
-      "name": "isIssuerAllowedByDid",
+      "name": "issuers",
       "outputs": [
         {
           "internalType": "bool",

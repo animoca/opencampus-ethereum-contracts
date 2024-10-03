@@ -40,7 +40,7 @@ contract OpenCampusCertificateNFTMinter is AccessControl {
         address signer = ecrecover(keccak256(abi.encode(to, tokenId, metadata)), v, r, s);
         bytes32 hashedDid = keccak256(abi.encodePacked(metadata.issuerDid));
 
-        if (DID_REGISTRY.isIssuerAllowed(hashedDid, signer)) {
+        if (DID_REGISTRY.issuers(hashedDid, signer)) {
             NFT_V1.mint(to, tokenId, metadata);
         } else {
             revert IssuerNotAllowed();

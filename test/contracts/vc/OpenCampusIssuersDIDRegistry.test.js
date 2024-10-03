@@ -64,19 +64,14 @@ describe('OpenCampusIssuersDIDRegistry', function () {
         await this.didRegistry.grantRole(await this.didRegistry.OPERATOR_ROLE(), deployer);
       });
 
-      it('isIssuerAllowed(byte32, address)', async function () {
-        const allowed = await this.didRegistry.isIssuerAllowed(keccak256(toUtf8Bytes(ISSUER.did)), ISSUER.address);
-        expect(allowed).to.be.equal(false);
-      });
-
       it('isIssuerAllowedByDid(string, address)', async function () {
-        const allowed = await this.didRegistry.isIssuerAllowedByDid(ISSUER.did, ISSUER.address);
+        const allowed = await this.didRegistry.isIssuerAllowed(ISSUER.did, ISSUER.address);
         expect(allowed).to.be.equal(false);
       });
 
       it('addIssuer(string,address)', async function () {
         await this.didRegistry.connect(deployer).addIssuer(ISSUER.did, ISSUER.address);
-        const allowed = await this.didRegistry.isIssuerAllowed(keccak256(toUtf8Bytes(ISSUER.did)), ISSUER.address);
+        const allowed = await this.didRegistry.isIssuerAllowed(ISSUER.did, ISSUER.address);
         expect(allowed).to.be.equal(true);
       });
 
@@ -107,19 +102,14 @@ describe('OpenCampusIssuersDIDRegistry', function () {
         await this.didRegistry.connect(deployer).addIssuer(ISSUER.did, ISSUER.address);
       });
 
-      it('isIssuerAllowed(byte32, address)', async function () {
-        const allowed = await this.didRegistry.isIssuerAllowed(keccak256(toUtf8Bytes(ISSUER.did)), ISSUER.address);
-        expect(allowed).to.be.equal(true);
-      });
-
-      it('isIssuerAllowedByDid(string, address)', async function () {
-        const allowed = await this.didRegistry.isIssuerAllowedByDid(ISSUER.did, ISSUER.address);
+      it('isIssuerAllowed(string, address)', async function () {
+        const allowed = await this.didRegistry.isIssuerAllowed(ISSUER.did, ISSUER.address);
         expect(allowed).to.be.equal(true);
       });
 
       it('removeIssuer(string, address)', async function () {
         await this.didRegistry.connect(deployer).removeIssuer(ISSUER.did, ISSUER.address);
-        const allowed = await this.didRegistry.isIssuerAllowed(keccak256(toUtf8Bytes(ISSUER.did)), ISSUER.address);
+        const allowed = await this.didRegistry.issuers(keccak256(toUtf8Bytes(ISSUER.did)), ISSUER.address);
         expect(allowed).to.be.equal(false);
       });
 
@@ -127,6 +117,20 @@ describe('OpenCampusIssuersDIDRegistry', function () {
         await expect(this.didRegistry.connect(deployer).removeIssuer(ISSUER.did, ISSUER.address))
           .to.emit(this.didRegistry, 'IssuerRemoved')
           .withArgs(ISSUER.hashedDid, ISSUER.address, deployer.address);
+      });
+
+      it('expect error for IssuerRemove when issuer did does not exist', async function () {
+        await expect(this.didRegistry.connect(deployer).removeIssuer(ISSUER.did.replace('X', '1'), ISSUER.address)).to.be.revertedWithCustomError(
+          this.didRegistry,
+          'RelationshipDoesNotExist'
+        );
+      });
+
+      it('expect error for IssuerRemove when issuer address does not exist', async function () {
+        await expect(this.didRegistry.connect(deployer).removeIssuer(ISSUER.did, ISSUER.otherAddress)).to.be.revertedWithCustomError(
+          this.didRegistry,
+          'RelationshipDoesNotExist'
+        );
       });
     });
 
@@ -136,16 +140,11 @@ describe('OpenCampusIssuersDIDRegistry', function () {
         await this.didRegistry.connect(deployer).addIssuer(ISSUER.did, ISSUER.address);
       });
 
-      it('isIssuerAllowed(byte32, address) for other address', async function () {
-        const allowed = await this.didRegistry.isIssuerAllowed(keccak256(toUtf8Bytes(ISSUER.did)), ISSUER.otherAddress);
-        expect(allowed).to.be.equal(false);
-      });
-
       it('addIssuer(string,address)', async function () {
         await this.didRegistry.connect(deployer).addIssuer(ISSUER.did, ISSUER.otherAddress);
-        const allowed = await this.didRegistry.isIssuerAllowed(keccak256(toUtf8Bytes(ISSUER.did)), ISSUER.address);
+        const allowed = await this.didRegistry.issuers(keccak256(toUtf8Bytes(ISSUER.did)), ISSUER.address);
         expect(allowed).to.be.equal(true);
-        const OtherAllowed = await this.didRegistry.isIssuerAllowed(keccak256(toUtf8Bytes(ISSUER.did)), ISSUER.otherAddress);
+        const OtherAllowed = await this.didRegistry.issuers(keccak256(toUtf8Bytes(ISSUER.did)), ISSUER.otherAddress);
         expect(OtherAllowed).to.be.equal(true);
       });
 
@@ -163,18 +162,18 @@ describe('OpenCampusIssuersDIDRegistry', function () {
         await this.didRegistry.connect(deployer).addIssuer(ISSUER.did, ISSUER.otherAddress);
       });
 
-      it('isIssuerAllowed(byte32, address) for both', async function () {
-        const allowed = await this.didRegistry.isIssuerAllowed(ISSUER.hashedDid, ISSUER.address);
+      it('allowed for both', async function () {
+        const allowed = await this.didRegistry.issuers(ISSUER.hashedDid, ISSUER.address);
         expect(allowed).to.be.equal(true);
-        const OtherAllowed = await this.didRegistry.isIssuerAllowed(ISSUER.hashedDid, ISSUER.otherAddress);
+        const OtherAllowed = await this.didRegistry.issuers(ISSUER.hashedDid, ISSUER.otherAddress);
         expect(OtherAllowed).to.be.equal(true);
       });
 
       it('removeIssuer(string, address) for one address', async function () {
         await this.didRegistry.connect(deployer).removeIssuer(ISSUER.did, ISSUER.otherAddress);
-        const allowed = await this.didRegistry.isIssuerAllowed(ISSUER.hashedDid, ISSUER.address);
+        const allowed = await this.didRegistry.issuers(ISSUER.hashedDid, ISSUER.address);
         expect(allowed).to.be.equal(true);
-        const OtherAllowed = await this.didRegistry.isIssuerAllowed(ISSUER.hashedDid, ISSUER.otherAddress);
+        const OtherAllowed = await this.didRegistry.issuers(ISSUER.hashedDid, ISSUER.otherAddress);
         expect(OtherAllowed).to.be.equal(false);
       });
 

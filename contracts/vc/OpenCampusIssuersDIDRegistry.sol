@@ -18,6 +18,9 @@ contract OpenCampusIssuersDIDRegistry is AccessControl, IIssuersDIDRegistry {
     /// @notice Thrown when issuer input is invalid.
     error InvalidIssuer();
 
+    /// @notice Thrown when a given did and issuerAddress relationship does not exist.
+    error RelationshipDoesNotExist();
+
     constructor() ContractOwnership(msg.sender) {}
 
     /// @dev Reverts with `NotRoleHolder` if sender does not have `operator` role.
@@ -38,27 +41,26 @@ contract OpenCampusIssuersDIDRegistry is AccessControl, IIssuersDIDRegistry {
     }
 
     /// @dev Reverts with `NotRoleHolder` if sender does not have `operator` role.
+    /// @dev Reverts with `RelationshipDoesNotExist` if relationship does not exist between the given did and issuerAddress
     /// @dev Emits a {IssuerRemoved} event when an issuer is removed.
     /// @param did DID of the issuer to be removed.
     /// @param issuerAddress The Eth address of the issuer.
     function removeIssuer(string calldata did, address issuerAddress) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, msg.sender);
         bytes32 hashedDid = keccak256(abi.encodePacked(did));
+
+        if (!issuers[hashedDid][issuerAddress]) {
+            revert RelationshipDoesNotExist();
+        }
+
         delete issuers[hashedDid][issuerAddress];
         emit IssuerRemoved(hashedDid, issuerAddress, msg.sender);
-    }
-
-    /// @dev returns true if the issuer with given Eth Address and hashedDid association is included in this registry
-    /// @param hashedDid The hashed value of the issuerDid
-    /// @param issuerAddress The Eth address of the issuer
-    function isIssuerAllowed(bytes32 hashedDid, address issuerAddress) external view returns (bool allowed) {
-        return issuers[hashedDid][issuerAddress];
     }
 
     /// @dev returns true if the issuer with given Eth Address and did association is included in this registry
     /// @param did The hashed value of the issuerDid
     /// @param issuerAddress The Eth address of the issuer
-    function isIssuerAllowedByDid(string calldata did, address issuerAddress) external view returns (bool allowed) {
+    function isIssuerAllowed(string calldata did, address issuerAddress) external view returns (bool allowed) {
         bytes32 hashedDid = keccak256(abi.encodePacked(did));
         return issuers[hashedDid][issuerAddress];
     }
