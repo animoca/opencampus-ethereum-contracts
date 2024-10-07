@@ -1,5 +1,6 @@
 /* eslint-disable max-len */
 const {ethers} = require('hardhat');
+const {AbiCoder, SigningKey, keccak256, toUtf8Bytes, ZeroHash, getBytes} = require('ethers');
 const ethersjs = require('ethers');
 const {expect} = require('chai');
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
@@ -11,6 +12,25 @@ const ISSUER = {
   address: '0x58D027C315bAc47c60bD2491e2CBDce0977E3a37',
   name: 'test.edu',
   privateKey: '0x5a5c9a0954cc0a98584542c0fae233819133f8fc3ebafed632104bbe144ba2d7',
+};
+
+const makeRevokePayloadAndSignature = (issuerDid, tokenId, nonce) => {
+  const encoder = AbiCoder.defaultAbiCoder();
+  const hashedDid = keccak256(toUtf8Bytes(issuerDid));
+
+  let encodedParams;
+  encodedParams = encoder.encode(['bytes32', 'uint256', 'uint256'], [hashedDid, tokenId, nonce]);
+  const paramHash = keccak256(encodedParams);
+  const hashBytes = getBytes(paramHash);
+  const signingKey = new SigningKey(ISSUER.privateKey);
+  const rawSig = signingKey.sign(hashBytes);
+  const signature = getBytes(rawSig.serialized);
+  return {
+    hashedDid,
+    tokenId,
+    nonce,
+    signature,
+  };
 };
 
 describe('OpenCampusCertificateNFTMinter', function () {
@@ -32,7 +52,7 @@ describe('OpenCampusCertificateNFTMinter', function () {
 
   describe('mint(address, uint256, CertificateNFTv1MetaData.MetaData, bytes)', function () {
     beforeEach(async function () {
-      const encoder = ethersjs.AbiCoder.defaultAbiCoder();
+      const encoder = AbiCoder.defaultAbiCoder();
       const now = 1725268578828;
       tokenId = '0x3E68D6D114FC48F393517777295C8D64';
       holderAddress = user.address;
@@ -49,11 +69,11 @@ describe('OpenCampusCertificateNFTMinter', function () {
         ['address', 'uint256', 'tuple(uint16, uint16, uint64, uint64, uint64, string, string)'],
         [holderAddress, tokenId, Object.values(metaData)]
       );
-      const paramHash = ethersjs.keccak256(encodedParams);
-      hashBytes = ethersjs.getBytes(paramHash);
-      const signingKey = new ethersjs.SigningKey(ISSUER.privateKey);
+      const paramHash = keccak256(encodedParams);
+      hashBytes = getBytes(paramHash);
+      const signingKey = new SigningKey(ISSUER.privateKey);
       rawSig = signingKey.sign(hashBytes);
-      signatureBytes = ethersjs.getBytes(rawSig.serialized);
+      signatureBytes = getBytes(rawSig.serialized);
     });
 
     context('When issuer is not whitelisted', function () {
@@ -93,9 +113,9 @@ describe('OpenCampusCertificateNFTMinter', function () {
 
       it('when signature eth address does not match', async function () {
         const otherPrivateKey = '0x5a5c9a0954cc0a98584542c0fae233819133f8fc3ebafed632104bbe10000000';
-        const signingKey = new ethersjs.SigningKey(otherPrivateKey);
+        const signingKey = new SigningKey(otherPrivateKey);
         const rawSig = signingKey.sign(hashBytes);
-        const otherSig = ethersjs.getBytes(rawSig.serialized);
+        const otherSig = getBytes(rawSig.serialized);
         await expect(this.ocMinter.mint(holderAddress, tokenId, metaData, otherSig)).to.be.revertedWithCustomError(this.ocMinter, 'IssuerNotAllowed');
       });
 
@@ -111,8 +131,27 @@ describe('OpenCampusCertificateNFTMinter', function () {
 
       it('test invalid signature', async function () {
         // compact serialized signature is only 64 bytes instead of 65 bytes as expected
-        const otherSig = ethersjs.getBytes(rawSig.compactSerialized);
+        const otherSig = getBytes(rawSig.compactSerialized);
         await expect(this.ocMinter.mint(holderAddress, tokenId, metaData, otherSig)).to.be.revertedWithCustomError(this.ocMinter, 'InvalidSignature');
+      });
+    });
+
+    context('When RevocationRegistry is set', function () {
+      beforeEach(async function () {
+        await this.didRegistry.connect(deployer).addIssuer(ISSUER.did, ISSUER.address);
+        await this.ocMinter.connect(deployer).setRevocationRegistry(this.revocationRegistry);
+      });
+
+      it('when nothing is revoked, successful minting', async function () {
+        await this.ocMinter.mint(holderAddress, tokenId, metaData, signatureBytes);
+        expect(await this.ocNFT.balanceOf(user.address)).to.equal(1);
+      });
+
+      it('revert with VcRevoked when the tokenId has already been revoked', async function () {
+        const {hashedDid, nonce, signature} = makeRevokePayloadAndSignature(ISSUER.did, tokenId, 0n);
+        await this.revocationRegistry.revokeVC(hashedDid, tokenId, nonce, signature);
+        await expect(this.ocMinter.mint(holderAddress, tokenId, metaData, signatureBytes)).to.be.revertedWithCustomError(this.ocMinter, 'VcRevoked');
+        expect(await this.ocNFT.balanceOf(user.address)).to.equal(0);
       });
     });
   });

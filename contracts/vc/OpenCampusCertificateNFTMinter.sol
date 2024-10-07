@@ -3,22 +3,36 @@ pragma solidity ^0.8.22;
 
 import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
+import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
 import {IIssuersDIDRegistry} from "./interfaces/IIssuersDIDRegistry.sol";
+import {IRevocationRegistry} from "./interfaces/IRevocationRegistry.sol";
 import {CertificateNFTv1MetaData} from "./libraries/CertificateNFTv1MetaData.sol";
 import {OpenCampusCertificateNFTv1} from "./OpenCampusCertificateNFTv1.sol";
 
 contract OpenCampusCertificateNFTMinter is AccessControl {
+    using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
+
     IIssuersDIDRegistry internal immutable DID_REGISTRY;
     OpenCampusCertificateNFTv1 internal immutable NFT_V1;
+
+    IRevocationRegistry internal revocationRegistry;
     /// @notice Thrown when the signature is invalid for the NFT payload.
     error InvalidSignature();
 
     /// @notice Thrown when the issuer is not one of the allowed issuers.
     error IssuerNotAllowed();
 
+    /// @notice Thrown when the VC has been revoked.
+    error VcRevoked();
+
     constructor(IIssuersDIDRegistry didRegistry, OpenCampusCertificateNFTv1 nftv1) ContractOwnership(msg.sender) {
         DID_REGISTRY = didRegistry;
         NFT_V1 = nftv1;
+    }
+
+    function setRevocationRegistry(IRevocationRegistry registry) external {
+        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        revocationRegistry = registry;
     }
 
     /// @dev signature is ECDSA signature for (to, tokenId, metadata)
@@ -41,6 +55,9 @@ contract OpenCampusCertificateNFTMinter is AccessControl {
         bytes32 hashedDid = keccak256(abi.encodePacked(metadata.issuerDid));
 
         if (DID_REGISTRY.issuers(hashedDid, signer)) {
+            if (revocationRegistry != IRevocationRegistry(address(0)) && revocationRegistry.isRevoked(hashedDid, tokenId)) {
+                revert VcRevoked();
+            }
             NFT_V1.mint(to, tokenId, metadata);
         } else {
             revert IssuerNotAllowed();

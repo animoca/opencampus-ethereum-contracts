@@ -1,0 +1,104 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "IRevocationRegistry",
+  "sourceName": "contracts/vc/interfaces/IRevocationRegistry.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "hashedIssuerDid",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "vcIds",
+          "type": "uint256[]"
+        },
+        {
+          "internalType": "uint256",
+          "name": "nonce",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "signature",
+          "type": "bytes"
+        }
+      ],
+      "name": "batchRevokeVCs",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "currentNonce",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "nonce",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "hashedIssuerDid",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "vcId",
+          "type": "uint256"
+        }
+      ],
+      "name": "isRevoked",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "revoked",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "hashedIssuerDid",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "vcId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "nonce",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "signature",
+          "type": "bytes"
+        }
+      ],
+      "name": "revokeVC",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}
