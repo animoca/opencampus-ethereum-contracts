@@ -17,14 +17,18 @@ contract OpenCampusCertificateRevocationRegistry is IRevocationRegistry, Contrac
     /// @notice Thrown when the signature is invalid for the NFT payload.
     error InvalidSignature();
 
+    /// @notice Thrown when the nonce given is invalid.
     error InvalidNonce();
 
+    /// @notice Thrown when the recovered issuer and the passed in issuerDid is not allowed in the DIDRegistry
     error InvalidIssuer();
 
     constructor(IIssuersDIDRegistry didRegistry) ContractOwnership(msg.sender) {
         DID_REGISTRY = didRegistry;
     }
 
+    /// @param hashedIssuerDid keccak256 hashed issuer Did.
+    /// @param vcId the VC ID to be revoked.
     function isRevoked(bytes32 hashedIssuerDid, uint256 vcId) external view returns (bool revoked) {
         // Use-Cases
         // 1. issuer addr/did valid & revoked => revoker valid address, DIDRegistry allowed => returns true
@@ -34,6 +38,13 @@ contract OpenCampusCertificateRevocationRegistry is IRevocationRegistry, Contrac
         return DID_REGISTRY.issuers(hashedIssuerDid, revoker);
     }
 
+    /// @dev Reverts with `InvalidNonce` when the given nonce is invalid.
+    /// @dev Reverts with `InvalidIssuer` when the recovered issuer is invalid.
+    /// @dev Emits a `VcRevoked` event when a vc is revoked
+    /// @param hashedIssuerDid keccak256 hashed issuer Did.
+    /// @param vcId the VC ID to be revoked.
+    /// @param nonce the nonce that should match `currentNonce` in order to be valid.
+    /// @param signature ECDSA signature of the combined value (`hashedIssuerDid`, `vcId`, `nonce`).
     function revokeVC(bytes32 hashedIssuerDid, uint256 vcId, uint256 nonce, bytes calldata signature) external {
         if (nonce != currentNonce) {
             revert InvalidNonce();
@@ -61,6 +72,13 @@ contract OpenCampusCertificateRevocationRegistry is IRevocationRegistry, Contrac
         }
     }
 
+    /// @dev Reverts with `InvalidNonce` when the given nonce is invalid.
+    /// @dev Reverts with `InvalidIssuer` when the recovered issuer is invalid.
+    /// @dev Emits a `VcRevoked` event when a vc is revoked
+    /// @param hashedIssuerDid keccak256 hashed issuer Did.
+    /// @param vcIds the list of VC IDs to be revoked.
+    /// @param nonce the nonce that should match `currentNonce` in order to be valid.
+    /// @param signature ECDSA signature of the combined value (`hashedIssuerDid`, `vcId`, `nonce`).
     function batchRevokeVCs(bytes32 hashedIssuerDid, uint256[] calldata vcIds, uint256 nonce, bytes calldata signature) external {
         if (nonce != currentNonce) {
             revert InvalidNonce();

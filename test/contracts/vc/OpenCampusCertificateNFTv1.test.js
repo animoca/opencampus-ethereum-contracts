@@ -119,18 +119,6 @@ describe('OpenCampusCertificateNFTv1', function () {
       await expect(this.ocNFT.connect(other).mint(user.address, tokenId, metaData)).to.be.revertedWithCustomError(this.ocNFT, 'NotRoleHolder');
     });
 
-    context('When revocation registry is not set', function () {
-      beforeEach(async function () {
-        await this.ocNFT.mint(user.address, tokenId, metaData);
-      });
-
-      it('revert with RevocationRegistryNotSet when revocationRegistry is not set', async function () {
-        const beforeBalance = await this.ocNFT.balanceOf(user.address);
-        await expect(this.ocNFT.burn(tokenId)).to.be.revertedWithCustomError(this.ocNFT, 'RevocationRegistryNotSet');
-        assert(beforeBalance === (await this.ocNFT.balanceOf(user.address)));
-      });
-    });
-
     context('When revocation registry is set', function () {
       beforeEach(async function () {
         await this.didRegistry.connect(deployer).addIssuer(ISSUER.did, ISSUER.address);
@@ -150,6 +138,14 @@ describe('OpenCampusCertificateNFTv1', function () {
         await this.revocationRegistry.revokeVC(hashedDid, tokenId, nonce, signature);
         await this.ocNFT.burn(tokenId);
         assert(beforeBalance - 1n === (await this.ocNFT.balanceOf(user.address)));
+      });
+
+      it('when a token is burnt twice, revert with ERC721NonExistingToken error', async function () {
+        const beforeBalance = await this.ocNFT.balanceOf(user.address);
+        const {hashedDid, nonce, signature} = makePayloadAndSignature(ISSUER.did, tokenId, 0n);
+        await this.revocationRegistry.revokeVC(hashedDid, tokenId, nonce, signature);
+        await this.ocNFT.burn(tokenId);
+        await expect(this.ocNFT.burn(tokenId)).to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonExistingToken');
       });
     });
   });

@@ -112,7 +112,7 @@ async function setupOpenCampusCertificateNFTv1(deployer, user, payoutWallet) {
   this.didRegistry = await deployContract('OpenCampusIssuersDIDRegistry');
   await this.didRegistry.grantRole(await this.didRegistry.OPERATOR_ROLE(), deployer);
   this.revocationRegistry = await deployContract('OpenCampusCertificateRevocationRegistry', this.didRegistry.getAddress());
-  this.ocNFT = await deployContract('OpenCampusCertificateNFTv1', '', '', ethers.ZeroAddress);
+  this.ocNFT = await deployContract('OpenCampusCertificateNFTv1', '', '', ethers.ZeroAddress, this.revocationRegistry.getAddress());
   await this.ocNFT.grantRole(await this.ocNFT.MINTER_ROLE(), deployer);
 }
 
@@ -120,8 +120,13 @@ async function setupOpenCampusCertificateNFTMinter(deployer, user, payoutWallet)
   await setupEDUCreditsManager.call(this, deployer, user, payoutWallet);
   this.didRegistry = await deployContract('OpenCampusIssuersDIDRegistry');
   this.revocationRegistry = await deployContract('OpenCampusCertificateRevocationRegistry', this.didRegistry.getAddress());
-  this.ocNFT = await deployContract('OpenCampusCertificateNFTv1', '', '', ethers.ZeroAddress);
-  this.ocMinter = await deployContract('OpenCampusCertificateNFTMinter', this.didRegistry.getAddress(), this.ocNFT.getAddress());
+  this.ocNFT = await deployContract('OpenCampusCertificateNFTv1', '', '', ethers.ZeroAddress, this.revocationRegistry.getAddress());
+  this.ocMinter = await deployContract(
+    'OpenCampusCertificateNFTMinter',
+    this.didRegistry.getAddress(),
+    this.ocNFT.getAddress(),
+    this.revocationRegistry.getAddress()
+  );
   await this.didRegistry.grantRole(await this.didRegistry.OPERATOR_ROLE(), deployer);
   await this.ocNFT.grantRole(await this.ocNFT.MINTER_ROLE(), this.ocMinter);
 }

@@ -19,7 +19,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl {
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
     using CertificateNFTv1MetaData for CertificateNFTv1MetaData.MetaData;
 
-    IRevocationRegistry internal revocationRegistry;
+    IRevocationRegistry internal _revocationRegistry;
 
     bytes32 public constant MINTER_ROLE = "minter";
     mapping(uint256 => CertificateNFTv1MetaData.MetaData) public vcData;
@@ -30,21 +30,23 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl {
     /// @notice Thrown when any operator related methods are called.
     error NoOperatorAllowed();
 
-    error RevocationRegistryNotSet();
-
+    /// @notice Thrown when burn operation cannot be executed.
     error InvalidBurn();
 
     constructor(
         string memory tokenName,
         string memory tokenSymbol,
-        ITokenMetadataResolver metadataResolver
+        ITokenMetadataResolver metadataResolver,
+        IRevocationRegistry revocationRegistry
     ) ContractOwnership(msg.sender) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) {
         ERC721Storage.initERC721Mintable();
+        _revocationRegistry = revocationRegistry;
     }
 
-    function setRevocationRegistry(IRevocationRegistry registry) external {
+    /// @param revocationRegistry The address of the Revocation Registry contract.
+    function setRevocationRegistry(IRevocationRegistry revocationRegistry) external {
         ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
-        revocationRegistry = registry;
+        _revocationRegistry = revocationRegistry;
     }
 
     /// @dev Reverts with `NotRoleHolder` if the sender does not have the 'minter' role.
@@ -55,13 +57,13 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl {
         vcData[tokenId] = metadata;
     }
 
+    /// @dev Reverts with `InvalidBurn` if the tokenId has not been invalidated.
+    /// @dev Emit a `Transfer` event to address 0 when the token has been burnt.
+    /// @param tokenId The Token Id to be burnt.
+    /// Burn tokenId only if tokenId has been legitimately revoked in Revocation Registry.
     function burn(uint256 tokenId) external {
-        if (revocationRegistry == IRevocationRegistry(address(0))) {
-            revert RevocationRegistryNotSet();
-        }
-
         bytes32 hashedDid = keccak256(abi.encodePacked(vcData[tokenId].issuerDid));
-        if (revocationRegistry.isRevoked(hashedDid, tokenId)) {
+        if (_revocationRegistry.isRevoked(hashedDid, tokenId)) {
             address owner = ERC721Storage.layout().ownerOf(tokenId);
             ERC721Storage.layout().owners[tokenId] = ERC721Storage.BURNT_TOKEN_OWNER_VALUE;
 

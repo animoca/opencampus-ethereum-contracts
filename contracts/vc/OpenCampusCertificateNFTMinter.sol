@@ -15,7 +15,7 @@ contract OpenCampusCertificateNFTMinter is AccessControl {
     IIssuersDIDRegistry internal immutable DID_REGISTRY;
     OpenCampusCertificateNFTv1 internal immutable NFT_V1;
 
-    IRevocationRegistry internal revocationRegistry;
+    IRevocationRegistry internal _revocationRegistry;
     /// @notice Thrown when the signature is invalid for the NFT payload.
     error InvalidSignature();
 
@@ -25,18 +25,25 @@ contract OpenCampusCertificateNFTMinter is AccessControl {
     /// @notice Thrown when the VC has been revoked.
     error VcRevoked();
 
-    constructor(IIssuersDIDRegistry didRegistry, OpenCampusCertificateNFTv1 nftv1) ContractOwnership(msg.sender) {
+    constructor(
+        IIssuersDIDRegistry didRegistry,
+        OpenCampusCertificateNFTv1 nftv1,
+        IRevocationRegistry revocationRegistry
+    ) ContractOwnership(msg.sender) {
         DID_REGISTRY = didRegistry;
         NFT_V1 = nftv1;
+        _revocationRegistry = revocationRegistry;
     }
 
-    function setRevocationRegistry(IRevocationRegistry registry) external {
+    /// @param revocationRegistry The address of the Revocation Registry contract.
+    function setRevocationRegistry(IRevocationRegistry revocationRegistry) external {
         ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
-        revocationRegistry = registry;
+        _revocationRegistry = revocationRegistry;
     }
 
-    /// @dev signature is ECDSA signature for (to, tokenId, metadata)
-    /// @dev signature is a 65 bytes raw signature without compacting
+    /// @dev Reverts with `VcRevoked` error if the token being minted has been revoked.
+    /// @dev signature is ECDSA signature for (to, tokenId, metadata).
+    /// @dev signature is a 65 bytes raw signature without compacting.
     function mint(address to, uint256 tokenId, CertificateNFTv1MetaData.MetaData calldata metadata, bytes calldata signature) external {
         // recover the signer
         if (signature.length != 65) revert InvalidSignature();
@@ -55,7 +62,7 @@ contract OpenCampusCertificateNFTMinter is AccessControl {
         bytes32 hashedDid = keccak256(abi.encodePacked(metadata.issuerDid));
 
         if (DID_REGISTRY.issuers(hashedDid, signer)) {
-            if (revocationRegistry != IRevocationRegistry(address(0)) && revocationRegistry.isRevoked(hashedDid, tokenId)) {
+            if (_revocationRegistry.isRevoked(hashedDid, tokenId)) {
                 revert VcRevoked();
             }
             NFT_V1.mint(to, tokenId, metadata);
