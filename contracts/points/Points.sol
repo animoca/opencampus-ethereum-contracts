@@ -1,30 +1,33 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
-import {AccessControlBase} from "@animoca/ethereum-contracts/contracts/access/base/AccessControlBase.sol";
+import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
+import {IPoints} from "./interface/IPoints.sol";
 
 /// @title Points
 /// @notice This contract is designed for managing the point balances of Anichess Game.
-contract Points is AccessControlBase, ContractOwnership, ForwarderRegistryContext {
+contract Points is AccessControl, ForwarderRegistryContext, EIP712, IPoints {
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
     using AccessControlStorage for AccessControlStorage.Layout;
+
+    bytes32 private constant CONSUME_TYPEHASH =
+        keccak256("Consume(address holder,address spender,uint256 amount,bytes32 reasonCode,uint256 deadline,uint256 nonce)");
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant SPENDER_ROLE = keccak256("SPENDER_ROLE");
     bytes32 public constant DEPOSITOR_ROLE = keccak256("DEPOSITOR_ROLE");
 
-    mapping(address => uint256) public balances; // holder address => balance
-
-    mapping(bytes32 => uint256) public nonces; // hash(holder, spender) => nonce
-
+    mapping(address holder => uint256 balance) public balances;
+    mapping(bytes32 hashHolderSpender => uint256 nonce) public nonces;
     mapping(bytes32 => bool) public allowedConsumeReasonCodes;
 
     /// @notice Emitted when one or more reason code(s) are added to the comsume reason code mapping.
@@ -77,11 +80,10 @@ contract Points is AccessControlBase, ContractOwnership, ForwarderRegistryContex
     /// @notice Thrown when the signature is expired.
     error ExpiredSignature();
 
-    /// @notice Thrown when the msg sender address is not appointed by signer.
-    error SenderIsNotAppointedSpender();
-
     /// @dev Reverts if the given address is invalid (equal to ZeroAddress).
-    constructor(IForwarderRegistry forwarderRegistry_) ForwarderRegistryContext(forwarderRegistry_) ContractOwnership(_msgSender()) {
+    constructor(
+        IForwarderRegistry forwarderRegistry_
+    ) ForwarderRegistryContext(forwarderRegistry_) ContractOwnership(_msgSender()) EIP712("Points", "1.0") {
         if (address(forwarderRegistry_) == address(0)) {
             revert InvalidForwarderRegistry();
         }
@@ -139,7 +141,7 @@ contract Points is AccessControlBase, ContractOwnership, ForwarderRegistryContex
         emit ConsumeReasonCodesRemoved(reasonCodes);
     }
 
-    /// @notice Called by a depoistor to increase the balance of a holder.
+    /// @notice Called by a depositor to increase the balance of a holder.
     /// @dev Reverts if sender does not have Depositor role.
     /// @dev Reverts if deposit amount is zero.
     /// @dev Emits a {Deposited} event if amount has been successfully added to the holder's balance
@@ -147,7 +149,8 @@ contract Points is AccessControlBase, ContractOwnership, ForwarderRegistryContex
     /// @param amount The amount to deposit.
     /// @param depositReasonCode The reason code of the deposit.
     function deposit(address holder, uint256 amount, bytes32 depositReasonCode) external {
-        AccessControlStorage.layout().enforceHasRole(DEPOSITOR_ROLE, _msgSender());
+        address depositor = _msgSender();
+        AccessControlStorage.layout().enforceHasRole(DEPOSITOR_ROLE, depositor);
 
         if (amount == 0) {
             revert DepositZeroAmount();
@@ -155,17 +158,18 @@ contract Points is AccessControlBase, ContractOwnership, ForwarderRegistryContex
 
         balances[holder] += amount;
 
-        emit Deposited(_msgSender(), depositReasonCode, holder, amount);
+        emit Deposited(depositor, depositReasonCode, holder, amount);
     }
 
     /// @notice Called by other public functions to consume a given amount from the balance of the specified holder.
     /// @dev Reverts if balance is insufficient.
     /// @dev Reverts if the consume reason code is not allowed.
     /// @dev Emits a {Consumed} event if the consumption is successful.
+    /// @param operator The operator address.
     /// @param holder The balance holder address to deposit to.
     /// @param amount The amount to consume.
     /// @param consumeReasonCode The reason code of the consumption.
-    function _consume(address holder, uint256 amount, bytes32 consumeReasonCode) internal {
+    function _consume(address operator, address holder, uint256 amount, bytes32 consumeReasonCode) internal {
         uint256 balance = balances[holder];
         if (balance < amount) {
             revert InsufficientBalance(holder, amount);
@@ -176,7 +180,7 @@ contract Points is AccessControlBase, ContractOwnership, ForwarderRegistryContex
 
         balances[holder] = balance - amount;
 
-        emit Consumed(_msgSender(), consumeReasonCode, holder, amount);
+        emit Consumed(operator, consumeReasonCode, holder, amount);
     }
 
     /// @notice Called with a signature by an appointed spender to consume a given amount from the balance of a given holder address.
@@ -190,38 +194,22 @@ contract Points is AccessControlBase, ContractOwnership, ForwarderRegistryContex
     /// @param amount The amount to consume.
     /// @param consumeReasonCode The reason code of the consumption.
     /// @param deadline The deadline of the signature.
-    /// @param spender The sender address approved and expected to be included in the signature.
-    /// @param v v value of the signature.
-    /// @param r r value of the signature.
-    /// @param s s value of the signature.
-    function consume(
-        address holder,
-        uint256 amount,
-        bytes32 consumeReasonCode,
-        uint256 deadline,
-        address spender,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external {
+    /// @param signature The signature from the holder
+    function consume(address holder, uint256 amount, bytes32 consumeReasonCode, uint256 deadline, bytes calldata signature) external {
         if (block.timestamp > deadline) {
             revert ExpiredSignature();
         }
-        if (spender != _msgSender()) {
-            revert SenderIsNotAppointedSpender();
-        }
+        address spender = _msgSender();
         bytes32 nonceKey = keccak256(abi.encodePacked(holder, spender));
         uint256 nonce = nonces[nonceKey];
-        bytes32 messageHash = _preparePayload(holder, spender, amount, consumeReasonCode, deadline, nonce);
-        bytes32 messageDigest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
 
-        bytes memory signature = abi.encodePacked(r, s, v);
-        bool isValid = SignatureChecker.isValidSignatureNow(holder, messageDigest, signature);
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(CONSUME_TYPEHASH, holder, spender, amount, consumeReasonCode, deadline, nonce)));
+        bool isValid = SignatureChecker.isValidSignatureNow(holder, digest, signature);
         if (!isValid) {
             revert InvalidSignature();
         }
 
-        _consume(holder, amount, consumeReasonCode);
+        _consume(spender, holder, amount, consumeReasonCode);
         nonces[nonceKey] = nonce + 1;
     }
 
@@ -232,7 +220,8 @@ contract Points is AccessControlBase, ContractOwnership, ForwarderRegistryContex
     /// @param amount The amount to consume.
     /// @param consumeReasonCode The reason code of the consumption.
     function consume(uint256 amount, bytes32 consumeReasonCode) external {
-        _consume(_msgSender(), amount, consumeReasonCode);
+        address sender = _msgSender();
+        _consume(sender, sender, amount, consumeReasonCode);
     }
 
     /// @notice Called by the spender to consume a given amount from a holder's balance.
@@ -244,37 +233,8 @@ contract Points is AccessControlBase, ContractOwnership, ForwarderRegistryContex
     /// @param amount The amount to consume.
     /// @param consumeReasonCode The reason code of the consumption.
     function consume(address holder, uint256 amount, bytes32 consumeReasonCode) external {
-        AccessControlStorage.layout().enforceHasRole(SPENDER_ROLE, _msgSender());
-        _consume(holder, amount, consumeReasonCode);
-    }
-
-    /// @notice Returns a payload generated from the arguments.
-    /// @param holder The holder address.
-    /// @param spender The spender address.
-    /// @param amount The amount.
-    /// @param reasonCode The reason code.
-    /// @param deadline The deadline of the payload.
-    /// @param nonce The nonce.
-    /// @return The payload.
-    function _preparePayload(
-        address holder,
-        address spender,
-        uint256 amount,
-        bytes32 reasonCode,
-        uint256 deadline,
-        uint256 nonce
-    ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(holder, spender, amount, reasonCode, deadline, nonce));
-    }
-
-    /// @notice Returns a payload generated from the arguments, current nonce and the given holder address.
-    /// @param holder The holder address.
-    /// @param spender The spender address.
-    /// @param amount The amount.
-    /// @param reasonCode The reason code.
-    /// @param deadline The deadline of the payload
-    /// @return The payload.
-    function preparePayload(address holder, address spender, uint256 amount, bytes32 reasonCode, uint256 deadline) external view returns (bytes32) {
-        return _preparePayload(holder, spender, amount, reasonCode, deadline, nonces[keccak256(abi.encodePacked(holder, spender))]);
+        address spender = _msgSender();
+        AccessControlStorage.layout().enforceHasRole(SPENDER_ROLE, spender);
+        _consume(spender, holder, amount, consumeReasonCode);
     }
 }

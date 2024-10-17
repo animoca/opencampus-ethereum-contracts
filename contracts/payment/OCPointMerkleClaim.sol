@@ -14,7 +14,7 @@ import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contract
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
 import {AccessControlBase} from "@animoca/ethereum-contracts/contracts/access/base/AccessControlBase.sol";
 import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
-import {IOCPoint} from "./interface/IOCPoint.sol";
+import {IPoints} from "../points/interface/IPoints.sol";
 
 /// @title OCPointMerkleClaim
 /// @notice This contract is designed for claiming OCPoint payouts which will cumulate over time.
@@ -49,7 +49,7 @@ contract OCPointMerkleClaim is AccessControlBase, ContractOwnership, TokenRecove
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     /// @notice a reference to OCPoint contract
-    IOCPoint public immutable OCPoint;
+    IPoints public immutable OCPoint;
 
     /// @notice Store the merkle root for claiming
     bytes32 public root;
@@ -84,7 +84,7 @@ contract OCPointMerkleClaim is AccessControlBase, ContractOwnership, TokenRecove
         if (ocPointContractAddress == address(0)) {
             revert InvalidOCPointContractAddress(ocPointContractAddress);
         }
-        OCPoint = IOCPoint(ocPointContractAddress);
+        OCPoint = IPoints(ocPointContractAddress);
         PauseStorage.layout().constructorInit(true);
     }
 
