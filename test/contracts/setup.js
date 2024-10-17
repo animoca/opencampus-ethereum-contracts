@@ -95,8 +95,17 @@ async function setupPublisherNFTMinter(deployer, user, payoutWallet, other, gene
   await this.publisherNFT.grantRole(await this.publisherNFT.MINTER_ROLE(), this.minter.getAddress());
 }
 
+async function setupOCPointMerkleClaimMock(deployer, operator) {
+  this.OCPoint = await deployContract('Points', await getForwarderRegistryAddress());
+  this.OCPointMerkleClaim = await deployContract('OCPointMerkleClaimMock', await this.OCPoint.getAddress(), await getForwarderRegistryAddress());
+
+  await this.OCPointMerkleClaim.grantRole(await this.OCPointMerkleClaim.OPERATOR_ROLE(), operator.address);
+  await this.OCPoint.grantRole(await this.OCPoint.DEPOSITOR_ROLE(), await this.OCPointMerkleClaim.getAddress());
+}
+
 module.exports = {
   setupEDUCreditsManager,
   setupPublisherNFTSale,
   setupPublisherNFTMinter,
+  setupOCPointMerkleClaimMock,
 };
