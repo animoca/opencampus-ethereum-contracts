@@ -31,8 +31,8 @@ describe('OCPointMerkleClaim', function () {
       },
       {
         claimer: claimer2.address,
-        amounts: Array.from({length: 5}).map((_, i) => i + 1),
-        depositReasonCodes: Array.from({length: 5}).map((_, i) => ethers.encodeBytes32String(`SEASON1_DAPP${i + 1}`)),
+        amounts: [1n, 2n],
+        depositReasonCodes: [ethers.encodeBytes32String('SEASON1_DAPP1'), ethers.encodeBytes32String('SEASON1_DAPP2')],
       },
       {
         // inconsistent amounts and depositReasonCodes
@@ -121,7 +121,25 @@ describe('OCPointMerkleClaim', function () {
         .withArgs(claimData.claimer, claimData.amounts, claimData.depositReasonCodes, this.nextTreeCounter);
     });
 
-    context('when successful', function () {
+    context('when successful (single payout)', function () {
+      it('calls OCPoint.deposit(address,uint256,bytes32) with correct arguments', async function () {
+        const claimData = this.payouts[0];
+        const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
+        await expect(this.OCPointMerkleClaim.claimPayout(claimData.claimer, claimData.amounts, claimData.depositReasonCodes, proof))
+          .to.emit(this.OCPoint, 'Deposited')
+          .withArgs(await this.OCPointMerkleClaim.getAddress(), claimData.depositReasonCodes[0], claimData.claimer, claimData.amounts[0]);
+      });
+
+      it('emits a {PayoutClaimed} event', async function () {
+        const claimData = this.payouts[0];
+        const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
+        await expect(this.OCPointMerkleClaim.claimPayout(claimData.claimer, claimData.amounts, claimData.depositReasonCodes, proof))
+          .to.emit(this.OCPointMerkleClaim, 'PayoutClaimed')
+          .withArgs(this.root, claimData.claimer, claimData.amounts, claimData.depositReasonCodes, this.nextTreeCounter);
+      });
+    });
+
+    context('when successful (multiple payouts)', function () {
       it('calls OCPoint.deposit(address,uint256,bytes32) with correct arguments', async function () {
         const claimData = this.payouts[1];
         const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[1]));
