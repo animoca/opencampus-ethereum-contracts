@@ -12,6 +12,11 @@
   resolved "https://registry.yarnpkg.com/@adraffy/ens-normalize/-/ens-normalize-1.10.0.tgz#d2a39395c587e092d77cbbc80acf956a54f38bf7"
   integrity sha512-nA9XHtlAkYfJxY7bce8DcN7eKxWWCWkU+1GR9d+U6MbNpfwQp8TI7vqOsBsMcHoT4mBu2kypKoSKnghEzOOq5Q==
 
+"@animoca/anichess-ethereum-contracts-2.2.3@npm:@animoca/anichess-ethereum-contracts@2.2.3":
+  version "2.2.3"
+  resolved "https://nexus3.animocabrands.com/repository/npm-group/@animoca/anichess-ethereum-contracts/-/anichess-ethereum-contracts-2.2.3.tgz#28a88816937d6272eeff442c24f84416c459d101"
+  integrity sha512-lDXrx/JCv8/1Ipnpu7TFu4i544X85dV3CjN1xjqF0cs8VgGhT/ceTF58Kntetj+YA4evSgEg8F7iOQfUTXIMZA==
+
 "@animoca/ethereum-contract-helpers@^1.0.2":
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/@animoca/ethereum-contract-helpers/-/ethereum-contract-helpers-1.0.2.tgz#34db3b78cc45fc6686cefcdb4bf40f6ef70712ce"

@@ -13,7 +13,7 @@ import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contract
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
 import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
 import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
-import {IPoints} from "../points/interface/IPoints.sol";
+import {IPoints} from "@animoca/anichess-ethereum-contracts-2.2.3/contracts/points/interface/IPoints.sol";
 
 /// @title OCPointMerkleClaim
 /// @notice This contract is designed for claiming OCPoint payouts which will cumulate over time.
