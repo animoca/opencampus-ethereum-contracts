@@ -135,7 +135,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
 
     /// @notice after using `_isSenderOperatable` to validate sender's ability to be a valid operator, perform standard ERC721 transferFrom
     /// @inheritdoc IERC721
-    function transferFrom(address from, address to, uint256 tokenId) public {
+    function transferFrom(address from, address to, uint256 tokenId) external {
         address sender = _msgSender();
         _isSenderOperatable(sender, tokenId);
         ERC721Storage.layout().transferFrom(sender, from, to, tokenId);
