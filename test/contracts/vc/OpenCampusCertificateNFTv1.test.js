@@ -60,6 +60,12 @@ describe('OpenCampusCertificateNFTv1', function () {
     await loadFixture(fixture, this);
   });
 
+  describe('_msgData()', function () {
+    it('returns the msg.data', async function () {
+      await this.ocNFT.__msgData();
+    });
+  });
+
   describe('mint(address, uint256, CertificateNFTv1MetaData.MetaData)', function () {
     beforeEach(async function () {
       const now = 1725268578828;
@@ -176,128 +182,239 @@ describe('OpenCampusCertificateNFTv1', function () {
       await this.ocNFT.mint(user.address, tokenId, metaData);
     });
 
-    context('allowTransfer(address, uint256)', function () {
-      it('test failing when msg sender does not have operator role', async function () {
-        await expect(this.ocNFT.connect(other).allowTransfer(newWallet, tokenId)).to.be.revertedWithCustomError(this.ocNFT, 'NotRoleHolder');
-      });
-
-      it('test successful approval by operator', async function () {
-        await expect(this.ocNFT.connect(deployer).allowTransfer(newWallet, tokenId))
-          .to.emit(this.ocNFT, 'TransferAllowed')
-          .withArgs(newWallet, tokenId, deployer.address);
-      });
-
-      it('test successful approval by issuer', async function () {
-        await expect(this.ocNFT.connect(issuerSigner).allowTransfer(newWallet, tokenId))
-          .to.emit(this.ocNFT, 'TransferAllowed')
-          .withArgs(newWallet, tokenId, ISSUER.address);
-      });
-
-      it('test reverting when token is invalid', async function () {
-        await expect(this.ocNFT.connect(deployer).allowTransfer(newWallet, fakeTokenId)).to.be.revertedWithCustomError(
+    context('test no approvals at all', function () {
+      it('user triggered transfer should revert with NotRoleHolder', async function () {
+        // owner would fail
+        await expect(this.ocNFT.connect(user).transferFrom(user.address, newWallet, tokenId)).to.be.revertedWithCustomError(
           this.ocNFT,
-          'ERC721NonExistingToken'
+          'NotRoleHolder'
         );
+        await expect(this.ocNFT.connect(user).safeTransferFrom(user.address, newWallet, tokenId)).to.be.revertedWithCustomError(
+          this.ocNFT,
+          'NotRoleHolder'
+        );
+        await expect(
+          this.ocNFT.connect(user)['safeTransferFrom(address,address,uint256,bytes)'](user.address, newWallet, tokenId, '0x1111')
+        ).to.be.revertedWithCustomError(this.ocNFT, 'NotRoleHolder');
       });
 
-      it('test reverting when token owner is same as newwallet', async function () {
-        await expect(this.ocNFT.connect(deployer).allowTransfer(user.address, tokenId))
-          .to.be.revertedWithCustomError(this.ocNFT, 'RedundantAllowedTransfer')
-          .withArgs(user.address);
+      it('issuer triggered transfer should revert with ERC721NonApprovedForTransfer', async function () {
+        await expect(this.ocNFT.connect(issuerSigner).transferFrom(user.address, newWallet, tokenId))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(issuerSigner.address, user.address, tokenId);
+
+        await expect(this.ocNFT.connect(issuerSigner).safeTransferFrom(user.address, newWallet, tokenId))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(issuerSigner.address, user.address, tokenId);
+
+        await expect(this.ocNFT.connect(issuerSigner)['safeTransferFrom(address,address,uint256,bytes)'](user.address, newWallet, tokenId, '0x1111'))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(issuerSigner.address, user.address, tokenId);
+      });
+
+      it('operator triggered transfer should revert with ERC721NonApprovedForTransfer', async function () {
+        await expect(this.ocNFT.connect(deployer).transferFrom(user.address, newWallet, tokenId))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(deployer.address, user.address, tokenId);
+
+        await expect(this.ocNFT.connect(deployer).safeTransferFrom(user.address, newWallet, tokenId))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(deployer.address, user.address, tokenId);
+
+        await expect(this.ocNFT.connect(deployer)['safeTransferFrom(address,address,uint256,bytes)'](user.address, newWallet, tokenId, '0x1111'))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(deployer.address, user.address, tokenId);
       });
     });
 
-    context('removeAllowedTransfer(uint256)', function () {
+    context('test approving non issuer and non operator', function () {
       beforeEach(async function () {
-        await this.ocNFT.connect(deployer).allowTransfer(newWallet, tokenId);
+        await this.ocNFT.connect(user).approve(other.address, tokenId);
+        await this.ocNFT.connect(user).setApprovalForAll(other.address, true);
       });
 
-      it('test failing when msg sender does not have operator role', async function () {
-        await expect(this.ocNFT.connect(other).removeAllowedTransfer(tokenId)).to.be.revertedWithCustomError(this.ocNFT, 'NotRoleHolder');
+      it('user triggered transfer should revert with NotRoleHolder', async function () {
+        await expect(this.ocNFT.connect(user).transferFrom(user.address, newWallet, tokenId)).to.be.revertedWithCustomError(
+          this.ocNFT,
+          'NotRoleHolder'
+        );
+        await expect(this.ocNFT.connect(user).safeTransferFrom(user.address, newWallet, tokenId)).to.be.revertedWithCustomError(
+          this.ocNFT,
+          'NotRoleHolder'
+        );
+        await expect(
+          this.ocNFT.connect(user)['safeTransferFrom(address,address,uint256,bytes)'](user.address, newWallet, tokenId, '0x1111')
+        ).to.be.revertedWithCustomError(this.ocNFT, 'NotRoleHolder');
       });
 
-      it('test successful approval by operator', async function () {
-        await expect(this.ocNFT.connect(deployer).removeAllowedTransfer(tokenId))
-          .to.emit(this.ocNFT, 'AllowedTransferRemoved')
-          .withArgs(newWallet, tokenId, deployer.address);
+      it('issuer triggered transfer should revert with ERC721NonApprovedForTransfer', async function () {
+        await expect(this.ocNFT.connect(issuerSigner).transferFrom(user.address, newWallet, tokenId))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(issuerSigner.address, user.address, tokenId);
+
+        await expect(this.ocNFT.connect(issuerSigner).safeTransferFrom(user.address, newWallet, tokenId))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(issuerSigner.address, user.address, tokenId);
+
+        await expect(this.ocNFT.connect(issuerSigner)['safeTransferFrom(address,address,uint256,bytes)'](user.address, newWallet, tokenId, '0x1111'))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(issuerSigner.address, user.address, tokenId);
       });
 
-      it('test successful approval by issuer', async function () {
-        await expect(this.ocNFT.connect(issuerSigner).removeAllowedTransfer(tokenId))
-          .to.emit(this.ocNFT, 'AllowedTransferRemoved')
-          .withArgs(newWallet, tokenId, ISSUER.address);
-      });
+      it('operator triggered transfer should revert with ERC721NonApprovedForTransfer', async function () {
+        await expect(this.ocNFT.connect(deployer).transferFrom(user.address, newWallet, tokenId))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(deployer.address, user.address, tokenId);
 
-      it('test reverting when the allowedTransfer is invalid', async function () {
-        await expect(this.ocNFT.connect(deployer).removeAllowedTransfer(fakeTokenId))
-          .to.be.revertedWithCustomError(this.ocNFT, 'NonExistingAllowedTransfer')
-          .withArgs(fakeTokenId);
+        await expect(this.ocNFT.connect(deployer).safeTransferFrom(user.address, newWallet, tokenId))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(deployer.address, user.address, tokenId);
+
+        await expect(this.ocNFT.connect(deployer)['safeTransferFrom(address,address,uint256,bytes)'](user.address, newWallet, tokenId, '0x1111'))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(deployer.address, user.address, tokenId);
       });
     });
 
-    context('transferFrom(address from, address to, uint256 tokenId)', function () {
+    context('test approving issuer and trigger failing cases', function () {
       beforeEach(async function () {
-        await this.ocNFT.connect(deployer).allowTransfer(newWallet, tokenId);
+        await this.ocNFT.connect(user).approve(issuerSigner.address, tokenId);
+        await this.ocNFT.connect(user).setApprovalForAll(issuerSigner.address, true);
       });
 
-      it('test reverting when token is invalid', async function () {
-        await expect(this.ocNFT.connect(user).transferFrom(user.address, newWallet, fakeTokenId)).to.be.revertedWithCustomError(
+      it('user triggered transfer should revert with NotRoleHolder', async function () {
+        await expect(this.ocNFT.connect(user).transferFrom(user.address, newWallet, tokenId)).to.be.revertedWithCustomError(
           this.ocNFT,
-          'ERC721NonExistingToken'
+          'NotRoleHolder'
         );
+        await expect(this.ocNFT.connect(user).safeTransferFrom(user.address, newWallet, tokenId)).to.be.revertedWithCustomError(
+          this.ocNFT,
+          'NotRoleHolder'
+        );
+        await expect(
+          this.ocNFT.connect(user)['safeTransferFrom(address,address,uint256,bytes)'](user.address, newWallet, tokenId, '0x1111')
+        ).to.be.revertedWithCustomError(this.ocNFT, 'NotRoleHolder');
       });
 
-      it('test reverting when caller is not the token owner', async function () {
-        await expect(this.ocNFT.connect(other).transferFrom(user.address, newWallet, tokenId))
-          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonOwnedToken')
-          .withArgs(other.address, tokenId);
-      });
-
-      it('test reverting when from is not owner address', async function () {
-        await expect(this.ocNFT.connect(user).transferFrom(other.address, newWallet, tokenId))
+      it('operator triggered transfer should revert with ERC721NonApprovedForTransfer', async function () {
+        await expect(this.ocNFT.connect(deployer).transferFrom(user.address, newWallet, tokenId))
           .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
-          .withArgs(other.address, user.address, tokenId);
-      });
+          .withArgs(deployer.address, user.address, tokenId);
 
-      it('test reverting when there is no active allowedTransfer', async function () {
-        await this.ocNFT.connect(deployer).removeAllowedTransfer(tokenId);
-        await expect(this.ocNFT.connect(user).transferFrom(user.address, newWallet, tokenId))
+        await expect(this.ocNFT.connect(deployer).safeTransferFrom(user.address, newWallet, tokenId))
           .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
-          .withArgs(user.address, user.address, tokenId);
+          .withArgs(deployer.address, user.address, tokenId);
+
+        await expect(this.ocNFT.connect(deployer)['safeTransferFrom(address,address,uint256,bytes)'](user.address, newWallet, tokenId, '0x1111'))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(deployer.address, user.address, tokenId);
+      });
+    });
+
+    context('test approving operator and trigger failing cases from user and issuer', function () {
+      beforeEach(async function () {
+        await this.ocNFT.connect(user).approve(deployer.address, tokenId);
+        await this.ocNFT.connect(user).setApprovalForAll(deployer.address, true);
       });
 
-      it('test successful transfer', async function () {
-        await expect(this.ocNFT.connect(user).transferFrom(user.address, newWallet, tokenId))
-          .to.emit(this.ocNFT, 'Transfer')
-          .withArgs(user.address, newWallet, tokenId);
+      it('user triggered transfer should revert with NotRoleHolder', async function () {
+        await expect(this.ocNFT.connect(user).transferFrom(user.address, newWallet, tokenId)).to.be.revertedWithCustomError(
+          this.ocNFT,
+          'NotRoleHolder'
+        );
+        await expect(this.ocNFT.connect(user).safeTransferFrom(user.address, newWallet, tokenId)).to.be.revertedWithCustomError(
+          this.ocNFT,
+          'NotRoleHolder'
+        );
+        await expect(
+          this.ocNFT.connect(user)['safeTransferFrom(address,address,uint256,bytes)'](user.address, newWallet, tokenId, '0x1111')
+        ).to.be.revertedWithCustomError(this.ocNFT, 'NotRoleHolder');
+      });
+
+      it('issuer triggered transfer should revert with ERC721NonApprovedForTransfer', async function () {
+        await expect(this.ocNFT.connect(issuerSigner).transferFrom(user.address, newWallet, tokenId))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(issuerSigner.address, user.address, tokenId);
+
+        await expect(this.ocNFT.connect(issuerSigner).safeTransferFrom(user.address, newWallet, tokenId))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(issuerSigner.address, user.address, tokenId);
+
+        await expect(this.ocNFT.connect(issuerSigner)['safeTransferFrom(address,address,uint256,bytes)'](user.address, newWallet, tokenId, '0x1111'))
+          .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonApprovedForTransfer')
+          .withArgs(issuerSigner.address, user.address, tokenId);
+      });
+    });
+
+    context('approve(address to, uint256 tokenId)', function () {
+      it('basical approval and flags', async function () {
+        await this.ocNFT.connect(user).approve(deployer.address, tokenId);
+        expect(await this.ocNFT.getApproved(tokenId)).to.be.equal(deployer.address);
+      });
+
+      it('An issuer being approved and transfer succeeded', async function () {
+        await this.ocNFT.connect(user).approve(ISSUER.address, tokenId);
+        await this.ocNFT.connect(issuerSigner).transferFrom(user.address, newWallet, tokenId);
         // owner has been updated to new owner
         expect(await this.ocNFT.ownerOf(tokenId)).to.equal(newWallet);
         // balance accounting is correct
         expect(await this.ocNFT.balanceOf(user.address)).to.equal(0);
         expect(await this.ocNFT.balanceOf(newWallet)).to.equal(1);
-        // prior allowedTransfers have been cleared
-        expect(await this.ocNFT.allowedTransfers(tokenId)).to.equal(ethers.ZeroAddress);
+      });
+
+      it('An operator being approved and transfer succeeded', async function () {
+        await this.ocNFT.connect(user).approve(deployer.address, tokenId);
+        await this.ocNFT.connect(deployer).transferFrom(user.address, newWallet, tokenId);
+        // owner has been updated to new owner
+        expect(await this.ocNFT.ownerOf(tokenId)).to.equal(newWallet);
+        // balance accounting is correct
+        expect(await this.ocNFT.balanceOf(user.address)).to.equal(0);
+        expect(await this.ocNFT.balanceOf(newWallet)).to.equal(1);
+      });
+    });
+
+    context('setApprovalForAll(address operator, bool approved)', function () {
+      it('basical approve for all and flags', async function () {
+        await this.ocNFT.connect(user).setApprovalForAll(deployer.address, true);
+        expect(await this.ocNFT.isApprovedForAll(user.address, deployer.address)).to.be.equal(true);
+      });
+
+      it('An issuer being approved and transfer succeeded', async function () {
+        await this.ocNFT.connect(user).setApprovalForAll(ISSUER.address, true);
+        await this.ocNFT.connect(issuerSigner).transferFrom(user.address, newWallet, tokenId);
+        // owner has been updated to new owner
+        expect(await this.ocNFT.ownerOf(tokenId)).to.equal(newWallet);
+        // balance accounting is correct
+        expect(await this.ocNFT.balanceOf(user.address)).to.equal(0);
+        expect(await this.ocNFT.balanceOf(newWallet)).to.equal(1);
+      });
+
+      it('An operator being approved and transfer succeeded', async function () {
+        await this.ocNFT.connect(user).setApprovalForAll(deployer.address, true);
+        await this.ocNFT.connect(deployer).transferFrom(user.address, newWallet, tokenId);
+        // owner has been updated to new owner
+        expect(await this.ocNFT.ownerOf(tokenId)).to.equal(newWallet);
+        // balance accounting is correct
+        expect(await this.ocNFT.balanceOf(user.address)).to.equal(0);
+        expect(await this.ocNFT.balanceOf(newWallet)).to.equal(1);
       });
     });
 
     context('safeTransferFrom(address from, address to, uint256 tokenId)', function () {
-      it('test successful transfer', async function () {
-        const receiverAddr = this.erc721ReceiverAccept.getAddress();
-        await this.ocNFT.connect(deployer).allowTransfer(receiverAddr, tokenId);
-        await expect(this.ocNFT.connect(user).safeTransferFrom(user.address, receiverAddr, tokenId))
-          .to.emit(this.erc721ReceiverAccept, 'ERC721Received')
-          .withArgs(user.address, user.address, tokenId, '0x');
+      beforeEach(async function () {
+        await this.ocNFT.connect(user).approve(deployer, tokenId);
       });
 
-      it('test successful transfer and receipient is not a contract', async function () {
-        await this.ocNFT.connect(deployer).allowTransfer(newWallet, tokenId);
-        await this.ocNFT.connect(user).safeTransferFrom(user.address, newWallet, tokenId);
+      it('A successful transfer that successfully call onReceive function', async function () {
+        const receiverAddr = this.erc721ReceiverAccept.getAddress();
+        await expect(this.ocNFT.connect(deployer).safeTransferFrom(user.address, receiverAddr, tokenId))
+          .to.emit(this.erc721ReceiverAccept, 'ERC721Received')
+          .withArgs(deployer.address, user.address, tokenId, '0x');
       });
 
       it('test reverting when receiver contract failed to receive', async function () {
         const receiverAddr = this.erc721ReceiverReject.getAddress();
-        await this.ocNFT.connect(deployer).allowTransfer(receiverAddr, tokenId);
-        await expect(this.ocNFT.connect(user).safeTransferFrom(user.address, receiverAddr, tokenId)).to.be.revertedWithCustomError(
+        await expect(this.ocNFT.connect(deployer).safeTransferFrom(user.address, receiverAddr, tokenId)).to.be.revertedWithCustomError(
           this.ocNFT,
           'ERC721SafeTransferRejected'
         );
@@ -305,56 +422,23 @@ describe('OpenCampusCertificateNFTv1', function () {
     });
 
     context('safeTransferFrom(address from, address to, uint256 tokenId, bytes calldata data)', function () {
-      it('test successful transfer', async function () {
-        const receiverAddr = this.erc721ReceiverAccept.getAddress();
-        await this.ocNFT.connect(deployer).allowTransfer(receiverAddr, tokenId);
-        await expect(this.ocNFT.connect(user)['safeTransferFrom(address,address,uint256,bytes)'](user.address, receiverAddr, tokenId, '0x1111'))
-          .to.emit(this.erc721ReceiverAccept, 'ERC721Received')
-          .withArgs(user.address, user.address, tokenId, '0x1111');
+      beforeEach(async function () {
+        await this.ocNFT.connect(user).approve(deployer, tokenId);
       });
 
-      it('test successful transfer and receipient is not a contract', async function () {
-        await this.ocNFT.connect(deployer).allowTransfer(newWallet, tokenId);
-        await this.ocNFT.connect(user)['safeTransferFrom(address,address,uint256,bytes)'](user.address, newWallet, tokenId, '0x1111');
+      it('A successful transfer that successfully call onReceive function', async function () {
+        const receiverAddr = this.erc721ReceiverAccept.getAddress();
+        await expect(this.ocNFT.connect(deployer)['safeTransferFrom(address,address,uint256,bytes)'](user.address, receiverAddr, tokenId, '0x1111'))
+          .to.emit(this.erc721ReceiverAccept, 'ERC721Received')
+          .withArgs(deployer.address, user.address, tokenId, '0x1111');
       });
 
       it('test reverting when receiver contract failed to receive', async function () {
         const receiverAddr = this.erc721ReceiverReject.getAddress();
-        await this.ocNFT.connect(deployer).allowTransfer(receiverAddr, tokenId);
         await expect(
-          this.ocNFT.connect(user)['safeTransferFrom(address,address,uint256,bytes)'](user.address, receiverAddr, tokenId, '0x1111')
+          this.ocNFT.connect(deployer)['safeTransferFrom(address,address,uint256,bytes)'](user.address, receiverAddr, tokenId, '0x1111')
         ).to.be.revertedWithCustomError(this.ocNFT, 'ERC721SafeTransferRejected');
       });
-    });
-  });
-
-  describe('getApproved(uint256)', function () {
-    it('revert when attempting to call the function', async function () {
-      await expect(this.ocNFT.getApproved(1)).to.be.revertedWithCustomError(this.ocNFT, 'NoOperatorAllowed');
-    });
-  });
-
-  describe('approve(address,uint256)', function () {
-    it('revert when attempting to call the function', async function () {
-      await expect(this.ocNFT.approve(other.address, 1)).to.be.revertedWithCustomError(this.ocNFT, 'TransferNotAllowed');
-    });
-  });
-
-  describe('setApprovalForAll(address,bool)', function () {
-    it('revert when attempting to call the function', async function () {
-      await expect(this.ocNFT.setApprovalForAll(other.address, 1)).to.be.revertedWithCustomError(this.ocNFT, 'NoOperatorAllowed');
-    });
-  });
-
-  describe('isApprovedForAll(address,address)', function () {
-    it('revert when attempting to call the function', async function () {
-      await expect(this.ocNFT.isApprovedForAll(deployer.address, other.address)).to.be.revertedWithCustomError(this.ocNFT, 'NoOperatorAllowed');
-    });
-  });
-
-  describe('balanceOf(address)', function () {
-    it('Zero balance when nothing is minted', async function () {
-      expect(await this.ocNFT.balanceOf(user.address)).to.equal(0);
     });
   });
 });

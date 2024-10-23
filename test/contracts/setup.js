@@ -113,9 +113,10 @@ async function setupOpenCampusCertificateNFTv1(deployer, user, payoutWallet) {
   await this.didRegistry.grantRole(await this.didRegistry.OPERATOR_ROLE(), deployer);
   this.revocationRegistry = await deployContract('OpenCampusCertificateRevocationRegistry', this.didRegistry.getAddress());
   this.ocNFT = await deployContract(
-    'OpenCampusCertificateNFTv1',
+    'OpenCampusCertificateNFTv1Mock',
     '',
     '',
+    ethers.ZeroAddress,
     ethers.ZeroAddress,
     this.revocationRegistry.getAddress(),
     this.didRegistry.getAddress()
@@ -134,6 +135,7 @@ async function setupOpenCampusCertificateNFTMinter(deployer, user, payoutWallet)
     'OpenCampusCertificateNFTv1',
     '',
     '',
+    ethers.ZeroAddress,
     ethers.ZeroAddress,
     this.revocationRegistry.getAddress(),
     this.didRegistry.getAddress()
