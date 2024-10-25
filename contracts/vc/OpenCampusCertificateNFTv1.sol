@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-// othernal imports
+// other imports
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 // access control imports
@@ -63,6 +63,9 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
     }
 
     /// @dev Reverts with `NotRoleHolder` if the sender does not have the 'minter' role.
+    /// @param to The owner of `tokenId`
+    /// @param tokenId The id of the VC NFT to be minted
+    /// @param metadata Metadata for `tokenId`
     function mint(address to, uint256 tokenId, CertificateNFTv1MetaData.MetaData calldata metadata) external {
         AccessControlStorage.layout().enforceHasRole(MINTER_ROLE, msg.sender);
 

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
 import {IIssuersDIDRegistry} from "./interfaces/IIssuersDIDRegistry.sol";
@@ -9,7 +8,7 @@ import {IRevocationRegistry} from "./interfaces/IRevocationRegistry.sol";
 import {CertificateNFTv1MetaData} from "./libraries/CertificateNFTv1MetaData.sol";
 import {OpenCampusCertificateNFTv1} from "./OpenCampusCertificateNFTv1.sol";
 
-contract OpenCampusCertificateNFTMinter is AccessControl {
+contract OpenCampusCertificateNFTMinter is ContractOwnership {
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
 
     IIssuersDIDRegistry internal immutable DID_REGISTRY;
@@ -42,8 +41,14 @@ contract OpenCampusCertificateNFTMinter is AccessControl {
     }
 
     /// @dev Reverts with `VcRevoked` error if the token being minted has been revoked.
+    /// @dev Reverts with `IssuerNotAllowed` error if recovered issuer is not valid in the DIDRegistry.
+    /// @dev Reverts with `InvalidSignature` error if the signature is not 65 bytes in length.
     /// @dev signature is ECDSA signature for (to, tokenId, metadata).
     /// @dev signature is a 65 bytes raw signature without compacting.
+    /// @param to The address to which `tokenId` would be minted to.
+    /// @param tokenId The id of the token to be minted.
+    /// @param metadata On-chain metadata for the NFT.
+    /// @param signature The ECDSA signature for the payload (`to`,`tokenId`,`metadata`).
     function mint(address to, uint256 tokenId, CertificateNFTv1MetaData.MetaData calldata metadata, bytes calldata signature) external {
         // recover the signer
         if (signature.length != 65) revert InvalidSignature();

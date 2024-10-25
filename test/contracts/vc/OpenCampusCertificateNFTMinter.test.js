@@ -1,9 +1,10 @@
 /* eslint-disable max-len */
 const {ethers} = require('hardhat');
-const {AbiCoder, SigningKey, keccak256, toUtf8Bytes, ZeroHash, getBytes} = require('ethers');
+const {AbiCoder, SigningKey, keccak256, getBytes} = require('ethers');
 const ethersjs = require('ethers');
 const {expect} = require('chai');
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
+const {RevocationUtil} = require('./utils/revocation');
 
 const {setupOpenCampusCertificateNFTMinter} = require('../setup');
 
@@ -12,25 +13,6 @@ const ISSUER = {
   address: '0x58D027C315bAc47c60bD2491e2CBDce0977E3a37',
   name: 'test.edu',
   privateKey: '0x5a5c9a0954cc0a98584542c0fae233819133f8fc3ebafed632104bbe144ba2d7',
-};
-
-const makeRevokePayloadAndSignature = (issuerDid, tokenId, nonce) => {
-  const encoder = AbiCoder.defaultAbiCoder();
-  const hashedDid = keccak256(toUtf8Bytes(issuerDid));
-
-  let encodedParams;
-  encodedParams = encoder.encode(['bytes32', 'uint256', 'uint256'], [hashedDid, tokenId, nonce]);
-  const paramHash = keccak256(encodedParams);
-  const hashBytes = getBytes(paramHash);
-  const signingKey = new SigningKey(ISSUER.privateKey);
-  const rawSig = signingKey.sign(hashBytes);
-  const signature = getBytes(rawSig.serialized);
-  return {
-    hashedDid,
-    tokenId,
-    nonce,
-    signature,
-  };
 };
 
 describe('OpenCampusCertificateNFTMinter', function () {
@@ -140,6 +122,7 @@ describe('OpenCampusCertificateNFTMinter', function () {
       beforeEach(async function () {
         await this.didRegistry.connect(deployer).addIssuer(ISSUER.did, ISSUER.address);
         await this.ocMinter.connect(deployer).setRevocationRegistry(this.revocationRegistry);
+        ru = new RevocationUtil(ISSUER.privateKey, await this.revocationRegistry.getAddress());
       });
 
       it('when nothing is revoked, successful minting', async function () {
@@ -148,8 +131,8 @@ describe('OpenCampusCertificateNFTMinter', function () {
       });
 
       it('revert with VcRevoked when the tokenId has already been revoked', async function () {
-        const {hashedDid, nonce, signature} = makeRevokePayloadAndSignature(ISSUER.did, tokenId, 0n);
-        await this.revocationRegistry.revokeVC(hashedDid, tokenId, nonce, signature);
+        const {hashedDid, signature} = await ru.makePayloadAndSignature(ISSUER.did, tokenId);
+        await this.revocationRegistry.revokeVC(hashedDid, tokenId, signature);
         await expect(this.ocMinter.mint(holderAddress, tokenId, metaData, signatureBytes)).to.be.revertedWithCustomError(this.ocMinter, 'VcRevoked');
         expect(await this.ocNFT.balanceOf(user.address)).to.equal(0);
       });

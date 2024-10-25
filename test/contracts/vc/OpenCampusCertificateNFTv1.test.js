@@ -1,9 +1,10 @@
 /* eslint-disable max-len */
 const {ethers} = require('hardhat');
-const {AbiCoder, SigningKey, keccak256, toUtf8Bytes, ZeroHash, getBytes, parseUnits} = require('ethers');
+const {parseUnits} = require('ethers');
 const {expect} = require('chai');
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
 
+const {RevocationUtil} = require('./utils/revocation');
 const {setupOpenCampusCertificateNFTv1} = require('../setup');
 
 const ISSUER = {
@@ -11,29 +12,6 @@ const ISSUER = {
   address: '0x58D027C315bAc47c60bD2491e2CBDce0977E3a37',
   name: 'test.edu',
   privateKey: '0x5a5c9a0954cc0a98584542c0fae233819133f8fc3ebafed632104bbe144ba2d7',
-};
-
-const makePayloadAndSignature = (issuerDid, tokenId, nonce, privateKey) => {
-  const encoder = AbiCoder.defaultAbiCoder();
-  const hashedDid = keccak256(toUtf8Bytes(issuerDid));
-
-  let encodedParams;
-  if (Array.isArray(tokenId)) {
-    encodedParams = encoder.encode(['bytes32', 'uint256[]', 'uint256'], [hashedDid, tokenId, nonce]);
-  } else {
-    encodedParams = encoder.encode(['bytes32', 'uint256', 'uint256'], [hashedDid, tokenId, nonce]);
-  }
-  const paramHash = keccak256(encodedParams);
-  hashBytes = getBytes(paramHash);
-  const signingKey = new SigningKey(privateKey || ISSUER.privateKey);
-  rawSig = signingKey.sign(hashBytes);
-  signatureBytes = getBytes(rawSig.serialized);
-  return {
-    hashedDid,
-    tokenId,
-    nonce,
-    signature: signatureBytes,
-  };
 };
 
 describe('OpenCampusCertificateNFTv1', function () {
@@ -137,6 +115,7 @@ describe('OpenCampusCertificateNFTv1', function () {
         await this.didRegistry.connect(deployer).addIssuer(ISSUER.did, ISSUER.address);
         await this.ocNFT.connect(deployer).setRevocationRegistry(this.revocationRegistry);
         await this.ocNFT.mint(user.address, tokenId, metaData);
+        ru = new RevocationUtil(ISSUER.privateKey, await this.revocationRegistry.getAddress());
       });
 
       it('revert with InvalidBurn when Token was not revoked', async function () {
@@ -147,16 +126,16 @@ describe('OpenCampusCertificateNFTv1', function () {
 
       it('successful burn when Token is revoked', async function () {
         const beforeBalance = await this.ocNFT.balanceOf(user.address);
-        const {hashedDid, nonce, signature} = makePayloadAndSignature(ISSUER.did, tokenId, 0n);
-        await this.revocationRegistry.revokeVC(hashedDid, tokenId, nonce, signature);
+        const {hashedDid, signature} = await ru.makePayloadAndSignature(ISSUER.did, tokenId);
+        await this.revocationRegistry.revokeVC(hashedDid, tokenId, signature);
         await this.ocNFT.burn(tokenId);
         assert(beforeBalance - 1n === (await this.ocNFT.balanceOf(user.address)));
       });
 
       it('when a token is burnt twice, revert with ERC721NonExistingToken error', async function () {
         const beforeBalance = await this.ocNFT.balanceOf(user.address);
-        const {hashedDid, nonce, signature} = makePayloadAndSignature(ISSUER.did, tokenId, 0n);
-        await this.revocationRegistry.revokeVC(hashedDid, tokenId, nonce, signature);
+        const {hashedDid, signature} = await ru.makePayloadAndSignature(ISSUER.did, tokenId);
+        await this.revocationRegistry.revokeVC(hashedDid, tokenId, signature);
         await this.ocNFT.burn(tokenId);
         await expect(this.ocNFT.burn(tokenId)).to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonExistingToken');
       });

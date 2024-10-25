@@ -16,11 +16,6 @@
           "type": "uint256[]"
         },
         {
-          "internalType": "uint256",
-          "name": "nonce",
-          "type": "uint256"
-        },
-        {
           "internalType": "bytes",
           "name": "signature",
           "type": "bytes"
@@ -29,19 +24,6 @@
       "name": "batchRevokeVCs",
       "outputs": [],
       "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "currentNonce",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "nonce",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -78,11 +60,6 @@
         {
           "internalType": "uint256",
           "name": "vcId",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "nonce",
           "type": "uint256"
         },
         {

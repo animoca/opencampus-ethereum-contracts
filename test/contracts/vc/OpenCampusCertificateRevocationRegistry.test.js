@@ -1,8 +1,9 @@
 /* eslint-disable max-len */
 const {ethers} = require('hardhat');
-const {AbiCoder, SigningKey, keccak256, toUtf8Bytes, ZeroHash, getBytes} = require('ethers');
+const {keccak256, toUtf8Bytes} = require('ethers');
 const {expect} = require('chai');
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
+const {RevocationUtil} = require('./utils/revocation');
 
 const {setupOpenCampusRevocationRegistry} = require('../setup');
 
@@ -21,29 +22,6 @@ const ISSUER = {
 const TOKEN_ID = '0x3E68D6D114FC48F393517777295C8D64';
 const TOKEN_IDS = ['0x3E68D6D114FC48F393517777295C8D64', '0x3E68D6D114FC48F393517777295C8D65', '0x3E68D6D114FC48F393517777295C8D66'];
 
-const makePayloadAndSignature = (issuerDid, tokenId, nonce, privateKey) => {
-  const encoder = AbiCoder.defaultAbiCoder();
-  const hashedDid = keccak256(toUtf8Bytes(issuerDid));
-
-  let encodedParams;
-  if (Array.isArray(tokenId)) {
-    encodedParams = encoder.encode(['bytes32', 'uint256[]', 'uint256'], [hashedDid, tokenId, nonce]);
-  } else {
-    encodedParams = encoder.encode(['bytes32', 'uint256', 'uint256'], [hashedDid, tokenId, nonce]);
-  }
-  const paramHash = keccak256(encodedParams);
-  hashBytes = getBytes(paramHash);
-  const signingKey = new SigningKey(privateKey || ISSUER.privateKey);
-  rawSig = signingKey.sign(hashBytes);
-  signatureBytes = getBytes(rawSig.serialized);
-  return {
-    hashedDid,
-    tokenId,
-    nonce,
-    signature: signatureBytes,
-  };
-};
-
 describe('OpenCampusCertificateRevocationRegistry', function () {
   let accounts;
   let deployer, user, payoutWallet, other;
@@ -59,36 +37,25 @@ describe('OpenCampusCertificateRevocationRegistry', function () {
 
   beforeEach(async function () {
     await loadFixture(fixture, this);
+    ru = new RevocationUtil(ISSUER.privateKey, await this.revocationRegistry.getAddress());
   });
 
   describe('Test for invalid issuer not in DIDRegistry', function () {
     context('Test for rejections', function () {
-      beforeEach(async function () {
-        currentNonce = await this.revocationRegistry.currentNonce();
-      });
-
       it('revokeVC should revert with InvalidIssuer', async function () {
-        const prevNonce = currentNonce;
-        const {hashedDid, tokenId, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_ID, currentNonce);
-        await expect(this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, nonce, signature)).to.be.revertedWithCustomError(
+        const {hashedDid, tokenId, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_ID);
+        await expect(this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, signature)).to.be.revertedWithCustomError(
           this.revocationRegistry,
           'InvalidIssuer'
         );
-        // nonce should be the same
-        const newNonce = await this.revocationRegistry.currentNonce();
-        assert(prevNonce === newNonce);
       });
 
       it('batchRevokeVCs should revert with InvalidIssuer', async function () {
-        const prevNonce = currentNonce;
-        const {hashedDid, tokenId: tokenIds, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_IDS, currentNonce);
-        await expect(this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, nonce, signature)).to.be.revertedWithCustomError(
+        const {hashedDid, tokenId: tokenIds, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_IDS);
+        await expect(this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, signature)).to.be.revertedWithCustomError(
           this.revocationRegistry,
           'InvalidIssuer'
         );
-        // nonce should be the same
-        const newNonce = await this.revocationRegistry.currentNonce();
-        assert(prevNonce === newNonce);
       });
 
       it('isRevoked should return false for anything', async function () {
@@ -104,23 +71,15 @@ describe('OpenCampusCertificateRevocationRegistry', function () {
         await this.didRegistry.connect(deployer).addIssuer(ISSUER.did, ISSUER.address);
       });
 
-      it('revokeVC(bytes32 hashedIssuerDid, uint256 vcId, uint256 nonce, bytes calldata signature)', async function () {
-        const currentNonce = await this.revocationRegistry.currentNonce();
-        const {hashedDid, tokenId, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_ID, currentNonce);
-        await this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, nonce, signature);
-        // nonce should have been moved
-        const newNonce = await this.revocationRegistry.currentNonce();
-        assert(currentNonce + 1n === newNonce);
+      it('revokeVC(bytes32 hashedIssuerDid, uint256 vcId, bytes calldata signature)', async function () {
+        const {hashedDid, tokenId, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_ID);
+        await this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, signature);
         assert(true === (await this.revocationRegistry.isRevoked(ISSUER.hashedDid, TOKEN_ID)));
       });
 
-      it('batchRevokeVCs(bytes32 hashedIssuerDid, uint256[] calldata vcIds, uint256 nonce, bytes calldata signature)', async function () {
-        const currentNonce = await this.revocationRegistry.currentNonce();
-        const {hashedDid, tokenId: tokenIds, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_IDS, currentNonce);
-        await this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, nonce, signature);
-        // nonce should have been moved
-        const newNonce = await this.revocationRegistry.currentNonce();
-        assert(currentNonce + 1n === newNonce);
+      it('batchRevokeVCs(bytes32 hashedIssuerDid, uint256[] calldata vcIds, bytes calldata signature)', async function () {
+        const {hashedDid, tokenId: tokenIds, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_IDS);
+        await this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, signature);
         assert(true === (await this.revocationRegistry.isRevoked(ISSUER.hashedDid, TOKEN_IDS[0])));
         assert(true === (await this.revocationRegistry.isRevoked(ISSUER.hashedDid, TOKEN_IDS[1])));
         assert(true === (await this.revocationRegistry.isRevoked(ISSUER.hashedDid, TOKEN_IDS[2])));
@@ -134,10 +93,9 @@ describe('OpenCampusCertificateRevocationRegistry', function () {
 
       it('revokeVC reverted when signature is invalid for the whitelisted addresses', async function () {
         const otherPrivateKey = '0x5a5c9a0954cc0a98584542c0fae233819133f8fc3ebafed632104bbe10000000';
-        const currentNonce = await this.revocationRegistry.currentNonce();
 
-        const {hashedDid, tokenId, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_ID, currentNonce, otherPrivateKey);
-        await expect(this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, nonce, signature)).to.be.revertedWithCustomError(
+        const {hashedDid, tokenId, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_ID, otherPrivateKey);
+        await expect(this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, signature)).to.be.revertedWithCustomError(
           this.revocationRegistry,
           'InvalidIssuer'
         );
@@ -145,56 +103,25 @@ describe('OpenCampusCertificateRevocationRegistry', function () {
 
       it('batchRevokeVCs reverted when signature is invalid for the whitelisted addresses', async function () {
         const otherPrivateKey = '0x5a5c9a0954cc0a98584542c0fae233819133f8fc3ebafed632104bbe10000000';
-        const currentNonce = await this.revocationRegistry.currentNonce();
-        const {hashedDid, tokenId: tokenIds, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_IDS, currentNonce, otherPrivateKey);
-        await expect(this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, nonce, signature)).to.be.revertedWithCustomError(
+        const {hashedDid, tokenId: tokenIds, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_IDS, otherPrivateKey);
+        await expect(this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, signature)).to.be.revertedWithCustomError(
           this.revocationRegistry,
           'InvalidIssuer'
         );
       });
 
-      it('Test for failed replay attack on revokeVC', async function () {
-        const currentNonce = await this.revocationRegistry.currentNonce();
-        const {hashedDid, tokenId, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_ID, currentNonce);
-        await this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, nonce, signature);
-        // nonce should have been moved
-        const newNonce = await this.revocationRegistry.currentNonce();
-        assert(currentNonce + 1n === newNonce);
-        assert(true === (await this.revocationRegistry.isRevoked(ISSUER.hashedDid, TOKEN_ID)));
-        await expect(this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, nonce, signature)).to.be.revertedWithCustomError(
-          this.revocationRegistry,
-          'InvalidNonce'
-        );
-      });
-
-      it('Test for failed replay attack on batchRevokeVCs', async function () {
-        const currentNonce = await this.revocationRegistry.currentNonce();
-        const {hashedDid, tokenId: tokenIds, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_IDS, currentNonce);
-        await this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, nonce, signature);
-        // nonce should have been moved
-        const newNonce = await this.revocationRegistry.currentNonce();
-        assert(currentNonce + 1n === newNonce);
-        await expect(this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, nonce, signature)).to.be.revertedWithCustomError(
-          this.revocationRegistry,
-          'InvalidNonce'
-        );
-      });
-
       it('test bad signature check for revokeVC', async function () {
-        const currentNonce = await this.revocationRegistry.currentNonce();
-        const {hashedDid, tokenId, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_ID, currentNonce);
-        await expect(this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, nonce, signature.slice(1))).to.be.revertedWithCustomError(
-          this.revocationRegistry,
-          'InvalidSignature'
+        const {hashedDid, tokenId, nonce, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_ID);
+        await expect(this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, signature.slice(1))).to.be.revertedWith(
+          'ECDSA: invalid signature length'
         );
       });
 
       it('btest bad signature check for batchRevokeVCs', async function () {
-        const currentNonce = await this.revocationRegistry.currentNonce();
-        const {hashedDid, tokenId: tokenIds, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_IDS, currentNonce);
-        await expect(
-          this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, nonce, signature.slice(1))
-        ).to.be.revertedWithCustomError(this.revocationRegistry, 'InvalidSignature');
+        const {hashedDid, tokenId: tokenIds, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_IDS);
+        await expect(this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, signature.slice(1))).to.be.revertedWith(
+          'ECDSA: invalid signature length'
+        );
       });
     });
   });
@@ -207,9 +134,8 @@ describe('OpenCampusCertificateRevocationRegistry', function () {
       });
 
       it('revokeVC success then fail on checkIfRevoked after removal of issuer', async function () {
-        const currentNonce = await this.revocationRegistry.currentNonce();
-        const {hashedDid, tokenId, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_ID, currentNonce);
-        await this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, nonce, signature);
+        const {hashedDid, tokenId, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_ID);
+        await this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, signature);
         assert(true === (await this.revocationRegistry.isRevoked(ISSUER.hashedDid, TOKEN_ID)));
 
         // remove issuer
@@ -218,9 +144,8 @@ describe('OpenCampusCertificateRevocationRegistry', function () {
       });
 
       it('batchRevokeVCs success then fail on checkIfRevoked after removal of issuer', async function () {
-        const currentNonce = await this.revocationRegistry.currentNonce();
-        const {hashedDid, tokenId: tokenIds, nonce, signature} = makePayloadAndSignature(ISSUER.did, TOKEN_IDS, currentNonce);
-        await this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, nonce, signature);
+        const {hashedDid, tokenId: tokenIds, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_IDS);
+        await this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, signature);
         assert(true === (await this.revocationRegistry.isRevoked(ISSUER.hashedDid, TOKEN_IDS[0])));
         assert(true === (await this.revocationRegistry.isRevoked(ISSUER.hashedDid, TOKEN_IDS[1])));
         assert(true === (await this.revocationRegistry.isRevoked(ISSUER.hashedDid, TOKEN_IDS[2])));
