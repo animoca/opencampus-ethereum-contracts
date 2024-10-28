@@ -74,7 +74,7 @@ contract OCPointMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryCo
     /// @param ocPointContractAddress The address of the OCPoint contract.
     /// @param forwarderRegistry The address of the forwarder registry.
     /// @dev Reverts with {InvalidOCPointContractAddress} if the OCPoint contract address is the zero address.
-    /// @dev Emits a {Pause} event if `isPaused` is true.
+    /// @dev Emits a {Pause} event.
     constructor(
         address ocPointContractAddress,
         IForwarderRegistry forwarderRegistry
@@ -140,7 +140,7 @@ contract OCPointMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryCo
         PauseStorage.layout().unpause();
     }
 
-    /// @notice Sets the new merkle root for claiming, unpauses if already paused and increments the treeCounter.
+    /// @notice Sets the new merkle root for claiming, unpauses the contract and increments the treeCounter.
     /// @dev Reverts with {NotRoleHolder} if the sender is not the contract operator.
     /// @dev Reverts with {NotPaused} if the contract is not paused.
     /// @dev Emits a {Unpause} event.
