@@ -47,7 +47,7 @@ contract OCPointMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryCo
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     /// @notice a reference to OCPoint contract
-    IPoints public immutable OCPoint;
+    IPoints public immutable OC_POINT;
 
     /// @notice Store the merkle root for claiming
     bytes32 public root;
@@ -82,7 +82,7 @@ contract OCPointMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryCo
         if (ocPointContractAddress == address(0)) {
             revert InvalidOCPointContractAddress(ocPointContractAddress);
         }
-        OCPoint = IPoints(ocPointContractAddress);
+        OC_POINT = IPoints(ocPointContractAddress);
         PauseStorage.layout().constructorInit(true);
     }
 
@@ -116,7 +116,7 @@ contract OCPointMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryCo
 
         claimed[leaf] = true;
         for (uint256 i; i < amounts.length; ++i) {
-            OCPoint.deposit(recipient, amounts[i], depositReasonCodes[i]);
+            OC_POINT.deposit(recipient, amounts[i], depositReasonCodes[i]);
         }
 
         emit PayoutClaimed(currentRoot, recipient, amounts, depositReasonCodes, currentTreeCounter);
