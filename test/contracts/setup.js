@@ -150,6 +150,14 @@ async function setupOpenCampusCertificateNFTMinter(deployer, user, payoutWallet)
   await this.ocNFT.grantRole(await this.ocNFT.MINTER_ROLE(), this.ocMinter);
 }
 
+async function setupOCPointMerkleClaimMock(deployer, operator) {
+  this.OCPoint = await deployContract('Points', await getForwarderRegistryAddress());
+  this.OCPointMerkleClaim = await deployContract('OCPointMerkleClaimMock', await this.OCPoint.getAddress(), await getForwarderRegistryAddress());
+
+  await this.OCPointMerkleClaim.grantRole(await this.OCPointMerkleClaim.OPERATOR_ROLE(), operator.address);
+  await this.OCPoint.grantRole(await this.OCPoint.DEPOSITOR_ROLE(), await this.OCPointMerkleClaim.getAddress());
+}
+
 module.exports = {
   setupEDUCreditsManager,
   setupPublisherNFTSale,
@@ -158,4 +166,5 @@ module.exports = {
   setupOpenCampusCertificateNFTv1,
   setupOpenCampusCertificateNFTMinter,
   setupOpenCampusRevocationRegistry,
+  setupOCPointMerkleClaimMock,
 };
