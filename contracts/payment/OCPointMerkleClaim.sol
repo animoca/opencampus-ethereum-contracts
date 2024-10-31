@@ -47,7 +47,7 @@ contract OCPointMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryCo
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     /// @notice a reference to OCPoint contract
-    IPoints public immutable OCPoint;
+    IPoints public immutable OC_POINT;
 
     /// @notice Store the merkle root for claiming
     bytes32 public root;
@@ -74,7 +74,7 @@ contract OCPointMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryCo
     /// @param ocPointContractAddress The address of the OCPoint contract.
     /// @param forwarderRegistry The address of the forwarder registry.
     /// @dev Reverts with {InvalidOCPointContractAddress} if the OCPoint contract address is the zero address.
-    /// @dev Emits a {Pause} event if `isPaused` is true.
+    /// @dev Emits a {Pause} event.
     constructor(
         address ocPointContractAddress,
         IForwarderRegistry forwarderRegistry
@@ -82,7 +82,7 @@ contract OCPointMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryCo
         if (ocPointContractAddress == address(0)) {
             revert InvalidOCPointContractAddress(ocPointContractAddress);
         }
-        OCPoint = IPoints(ocPointContractAddress);
+        OC_POINT = IPoints(ocPointContractAddress);
         PauseStorage.layout().constructorInit(true);
     }
 
@@ -116,7 +116,7 @@ contract OCPointMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryCo
 
         claimed[leaf] = true;
         for (uint256 i; i < amounts.length; ++i) {
-            OCPoint.deposit(recipient, amounts[i], depositReasonCodes[i]);
+            OC_POINT.deposit(recipient, amounts[i], depositReasonCodes[i]);
         }
 
         emit PayoutClaimed(currentRoot, recipient, amounts, depositReasonCodes, currentTreeCounter);
@@ -140,7 +140,7 @@ contract OCPointMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryCo
         PauseStorage.layout().unpause();
     }
 
-    /// @notice Sets the new merkle root for claiming, unpauses if already paused and increments the treeCounter.
+    /// @notice Sets the new merkle root for claiming, unpauses the contract and increments the treeCounter.
     /// @dev Reverts with {NotRoleHolder} if the sender is not the contract operator.
     /// @dev Reverts with {NotPaused} if the contract is not paused.
     /// @dev Emits a {Unpause} event.

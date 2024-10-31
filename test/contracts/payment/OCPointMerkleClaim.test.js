@@ -62,7 +62,7 @@ describe('OCPointMerkleClaim', function () {
       });
 
       it('sets the OCPoint address', async function () {
-        expect(await this.OCPointMerkleClaim.OCPoint()).to.be.equal(await this.OCPoint.getAddress());
+        expect(await this.OCPointMerkleClaim.OC_POINT()).to.be.equal(await this.OCPoint.getAddress());
       });
 
       it('contract is paused', async function () {
