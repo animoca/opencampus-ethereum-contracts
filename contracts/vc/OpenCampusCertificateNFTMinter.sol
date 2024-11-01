@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
+// other imports
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
 import {IIssuersDIDRegistry} from "./interfaces/IIssuersDIDRegistry.sol";
@@ -10,6 +12,7 @@ import {OpenCampusCertificateNFTv1} from "./OpenCampusCertificateNFTv1.sol";
 
 contract OpenCampusCertificateNFTMinter is ContractOwnership {
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
+    using ECDSA for bytes32;
 
     IIssuersDIDRegistry internal immutable DID_REGISTRY;
     OpenCampusCertificateNFTv1 internal immutable NFT_V1;
@@ -50,20 +53,22 @@ contract OpenCampusCertificateNFTMinter is ContractOwnership {
     /// @param metadata On-chain metadata for the NFT.
     /// @param signature The ECDSA signature for the payload (`to`,`tokenId`,`metadata`).
     function mint(address to, uint256 tokenId, CertificateNFTv1MetaData.MetaData calldata metadata, bytes calldata signature) external {
-        // recover the signer
-        if (signature.length != 65) revert InvalidSignature();
+        // // recover the signer
+        // if (signature.length != 65) revert InvalidSignature();
 
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
-        assembly {
-            r := calldataload(signature.offset)
-            s := calldataload(add(signature.offset, 0x20))
-            v := calldataload(add(signature.offset, 0x21))
-        }
+        // uint8 v;
+        // bytes32 r;
+        // bytes32 s;
+        // assembly {
+        //     r := calldataload(signature.offset)
+        //     s := calldataload(add(signature.offset, 0x20))
+        //     v := calldataload(add(signature.offset, 0x21))
+        // }
 
-        // Use the native ecrecover provided by the EVM
-        address signer = ecrecover(keccak256(abi.encode(to, tokenId, metadata)), v, r, s);
+        // // Use the native ecrecover provided by the EVM
+        // address signer = ecrecover(keccak256(abi.encode(to, tokenId, metadata)), v, r, s);
+        address signer = keccak256(abi.encode(to, tokenId, metadata)).recover(signature);
+
         bytes32 hashedDid = keccak256(abi.encodePacked(metadata.issuerDid));
 
         if (DID_REGISTRY.issuers(hashedDid, signer)) {

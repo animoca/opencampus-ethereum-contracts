@@ -51,7 +51,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
         IRevocationRegistry revocationRegistry,
         IIssuersDIDRegistry didRegistry
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) {
-        ERC721Storage.initERC721Mintable();
+        ERC721Storage.init();
         DID_REGISTRY = didRegistry;
         _revocationRegistry = revocationRegistry;
     }

@@ -117,6 +117,13 @@ describe('OpenCampusCertificateRevocationRegistry', function () {
         );
       });
 
+      it('test bad signature (0) check for revokeVC', async function () {
+        const {hashedDid, tokenId, nonce, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_ID);
+        await expect(this.revocationRegistry.connect(deployer).revokeVC(hashedDid, tokenId, '0x000000')).to.be.revertedWith(
+          'ECDSA: invalid signature length'
+        );
+      });
+
       it('btest bad signature check for batchRevokeVCs', async function () {
         const {hashedDid, tokenId: tokenIds, signature} = await ru.makePayloadAndSignature(ISSUER.did, TOKEN_IDS);
         await expect(this.revocationRegistry.connect(deployer).batchRevokeVCs(hashedDid, tokenIds, signature.slice(1))).to.be.revertedWith(
