@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
+pragma solidity 0.8.22;
 
-/// @notice Emitted when `caller` attempts to revoke `vcId`.
+/// @notice Emitted when `caller` successfully revokes `vcId`.
 /// @param hashedIssuerDid the hashed Did for the issuer
 /// @param caller address of caller that invoked the revocation.
 /// @param vcId The Id for the VC revoked.
