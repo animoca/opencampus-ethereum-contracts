@@ -10,10 +10,9 @@ contract EDUNodeKeyRentalMock is EDUNodeKeyRental {
     constructor(
         address inventoryAddress,
         address ocpAddress,
-        uint256 totalSupply,
         uint256 monthlyMaintenceFee_,
         IForwarderRegistry forwarderRegistry
-    ) EDUNodeKeyRental(inventoryAddress, ocpAddress, totalSupply, monthlyMaintenceFee_, forwarderRegistry) {
+    ) EDUNodeKeyRental(inventoryAddress, ocpAddress, monthlyMaintenceFee_, forwarderRegistry) {
     }
 
     function __msgData() external view returns (bytes calldata) {

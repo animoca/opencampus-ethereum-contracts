@@ -39,7 +39,6 @@ describe('EDUNodeKeyRental', function () {
       'EDUNodeKeyRentalMock',
       this.nodeKeyContract.target,
       this.ocp.target,
-      BigInt(nodeKeyContractTotalSupply),
       this.monthlyMaintenanceFee,
       forwarderRegistryAddress,
     );
