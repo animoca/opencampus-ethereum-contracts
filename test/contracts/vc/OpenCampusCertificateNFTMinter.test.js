@@ -15,6 +15,9 @@ const ISSUER = {
   privateKey: '0x5a5c9a0954cc0a98584542c0fae233819133f8fc3ebafed632104bbe144ba2d7',
 };
 
+const signatureWithoutVersion =
+  '0x5d99b6f7f6d1f73d1a26497f2b1c89b24c0993913f86e9a2d02cd69887d9c94f3c880358579d811b21dd1b7fd9bb01c1d81d10e69f0384e675c32b39643be892';
+
 describe('OpenCampusCertificateNFTMinter', function () {
   let accounts;
   let deployer, user, payoutWallet, other;
@@ -114,7 +117,7 @@ describe('OpenCampusCertificateNFTMinter', function () {
       it('test invalid signature', async function () {
         // compact serialized signature is only 64 bytes instead of 65 bytes as expected
         const otherSig = getBytes(rawSig.compactSerialized);
-        await expect(this.ocMinter.mint(holderAddress, tokenId, metaData, otherSig)).to.be.revertedWithCustomError(this.ocMinter, 'InvalidSignature');
+        await expect(this.ocMinter.mint(holderAddress, tokenId, metaData, otherSig)).to.be.revertedWith('ECDSA: invalid signature length');
       });
     });
 
