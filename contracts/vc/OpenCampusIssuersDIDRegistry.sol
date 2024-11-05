@@ -35,7 +35,7 @@ contract OpenCampusIssuersDIDRegistry is AccessControl, IIssuersDIDRegistry {
             revert InvalidIssuer();
         }
 
-        bytes32 hashedDid = keccak256(abi.encodePacked(did));
+        bytes32 hashedDid = keccak256(bytes(did));
         issuers[hashedDid][issuerAddress] = true;
         emit IssuerAdded(hashedDid, issuerAddress, msg.sender);
     }

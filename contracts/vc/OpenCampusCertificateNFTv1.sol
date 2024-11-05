@@ -36,7 +36,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
     mapping(uint256 => CertificateNFTv1MetaData.MetaData) public vcData;
 
     /// @notice Thrown when burn operation cannot be executed.
-    error InvalidBurn(bytes32 hashedDid, uint256 tokenId);
+    error VcNotRevoked(bytes32 hashedDid, uint256 tokenId);
 
     constructor(
         string memory tokenName,
@@ -45,7 +45,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
         ITokenMetadataResolver metadataResolver,
         IRevocationRegistry revocationRegistry,
         IIssuersDIDRegistry didRegistry
-    ) ContractOwnership(_msgSender()) ForwarderRegistryContext(forwarderRegistry) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) {
+    ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) {
         ERC721Storage.init();
         DID_REGISTRY = didRegistry;
         _revocationRegistry = revocationRegistry;
@@ -68,13 +68,13 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
         vcData[tokenId] = metadata;
     }
 
-    /// @dev Reverts with `InvalidBurn` if the tokenId has not been invalidated.
+    /// @dev Reverts with `VcNotRevoked` if the tokenId has not been invalidated.
     /// @dev Emit a `Transfer` event to address 0 when the token has been burnt.
     /// @param tokenId The Token Id to be burnt.
     /// Burn tokenId only if tokenId has been legitimately revoked in Revocation Registry.
     function burn(uint256 tokenId) external {
-        bytes32 hashedDid = keccak256(bytes(vcData[tokenId].issuerDid));
         address owner = ERC721Storage.layout().ownerOf(tokenId);
+        bytes32 hashedDid = keccak256(bytes(vcData[tokenId].issuerDid));
         if (_revocationRegistry.isRevoked(hashedDid, tokenId)) {
             ERC721Storage.layout().owners[tokenId] = ERC721Storage.BURNT_TOKEN_OWNER_VALUE;
 
@@ -84,7 +84,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
             }
             emit Transfer(owner, address(0), tokenId);
         } else {
-            revert InvalidBurn(hashedDid, tokenId);
+            revert VcNotRevoked(hashedDid, tokenId);
         }
     }
 

@@ -118,9 +118,9 @@ describe('OpenCampusCertificateNFTv1', function () {
         ru = new RevocationUtil(ISSUER.privateKey, await this.revocationRegistry.getAddress());
       });
 
-      it('revert with InvalidBurn when Token was not revoked', async function () {
+      it('revert with VcNotRevoked when Token was not revoked', async function () {
         const beforeBalance = await this.ocNFT.balanceOf(user.address);
-        await expect(this.ocNFT.burn(tokenId)).to.be.revertedWithCustomError(this.ocNFT, 'InvalidBurn');
+        await expect(this.ocNFT.burn(tokenId)).to.be.revertedWithCustomError(this.ocNFT, 'VcNotRevoked');
         assert(beforeBalance === (await this.ocNFT.balanceOf(user.address)));
       });
 
