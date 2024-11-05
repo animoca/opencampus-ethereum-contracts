@@ -81,25 +81,12 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
 
         uint256 currentTime = block.timestamp;
         uint256 finishedRentalTime = _collectExpiredTokens(expiredNodeKeyIds, currentTime);
-        RentalInfo storage oldRental = rentals[tokenId];
 
-        // Count the elasped time if it hasn't.
-        address currentNodeKeyOwner = INVENTORY.ownerOf(tokenId);
-        if (address(this) != currentNodeKeyOwner) {
-            if (currentTime >= oldRental.endDate) {
-                finishedRentalTime += oldRental.endDate - oldRental.beginDate;
-            } else if (account == currentNodeKeyOwner) {
-                finishedRentalTime += currentTime - oldRental.beginDate;
-            } else {
-                revert NotRentable(tokenId);
-            }
-        }
-
-        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - finishedRentalTime;
+        (RentalInfo memory rental, uint256 maintenanceFee, uint256 elaspedTime) = processRent(account, tokenId, duration, block.timestamp);
+        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - finishedRentalTime - elaspedTime;
+        uint256 nodeKeyPrice = _estimateNodeKeyPrice(preEffectiveRentalTime);
         totalEffectiveRentalTime = preEffectiveRentalTime + duration;
 
-        uint256 nodeKeyPrice = _estimateNodeKeyPrice(preEffectiveRentalTime);
-        (RentalInfo memory rental, uint256 maintenanceFee) = processRent(account, tokenId, duration, block.timestamp);
         uint256 fee = nodeKeyPrice + maintenanceFee;
         POINTS.consume(_msgSender(), fee, RENTAL_CONSUME_CODE);
         emit Rental(account, tokenId, rental, fee);
@@ -118,48 +105,49 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
         uint256 currentTime = block.timestamp;
         uint256 finishedRentalTime = _collectExpiredTokens(expiredNodeKeyIds_, currentTime);
 
-        for (uint256 i = 0; i < tokenIds_.length; i++) {
-            uint256 tokenId = tokenIds_[i];
-            RentalInfo storage oldRental = rentals[tokenId];
-            address currentNodeKeyOwner = INVENTORY.ownerOf(tokenId);
-            if (address(this) != currentNodeKeyOwner) {
-                if (currentTime >= oldRental.endDate) {
-                    finishedRentalTime += oldRental.endDate - oldRental.beginDate;
-                } else if (account_ == currentNodeKeyOwner) {
-                    finishedRentalTime += currentTime - oldRental.beginDate;
-                } else {
-                    revert NotRentable(tokenId);
-                }
-            }
-        }
-
-        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - finishedRentalTime;
-        totalEffectiveRentalTime = preEffectiveRentalTime;
-
-        uint256 nodeKeyPrice = _estimateNodeKeyPrice(preEffectiveRentalTime);
-
         RentalInfo[] memory rentalInfos;
         uint256[] memory fees;
         uint256 totalFee;
         for (uint256 i = 0; i < tokenIds_.length; i++) {
-            (RentalInfo memory rental, uint256 maintenanceFee) = processRent(account_, tokenIds_[i], durations_[i], currentTime);
+            uint256 tokenId = tokenIds_[i];
+            (RentalInfo memory rental, uint256 maintenanceFee, uint256 elaspedTime) = processRent(account_, tokenId, durations_[i], currentTime);
+            finishedRentalTime += elaspedTime;
             rentalInfos[i] = rental;
-            fees[i] = nodeKeyPrice + maintenanceFee;
-            totalFee += fees[i];
+            fees[i] = maintenanceFee;
+            totalFee += maintenanceFee;
+        }
+
+        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - finishedRentalTime;
+        uint256 nodeKeyPrice = _estimateNodeKeyPrice(preEffectiveRentalTime);
+        totalEffectiveRentalTime = preEffectiveRentalTime;
+        totalFee += nodeKeyPrice * tokenIds_.length;
+        for (uint256 i = 0; i < fees.length; i++) {
+            fees[i] += nodeKeyPrice;
         }
 
         POINTS.consume(_msgSender(), totalFee, RENTAL_CONSUME_CODE);
         emit BatchRental(account_, tokenIds_, rentalInfos, fees);
     }
 
-    function processRent(address account, uint256 tokenId, uint256 duration, uint256 currentTime) internal returns (RentalInfo memory, uint256) {
+    function processRent(address account, uint256 tokenId, uint256 duration, uint256 currentTime) internal returns (RentalInfo memory, uint256, uint256 elaspedRentalTime) {
         RentalInfo storage rental = rentals[tokenId];
+        address currentNodeKeyOwner = INVENTORY.ownerOf(tokenId);
+
+        if (address(this) != currentNodeKeyOwner) {
+            if (currentTime >= rental.endDate) {
+                elaspedRentalTime = rental.endDate - rental.beginDate;
+            } else if (account == currentNodeKeyOwner) {
+                elaspedRentalTime = currentTime - rental.beginDate;
+            } else {
+                revert NotRentable(tokenId);
+            }
+        }
+
         uint256 currentExpiry = rental.endDate;
         if (currentTime >= currentExpiry) {
             // New period
             rental.beginDate = currentTime;
             rental.endDate = currentTime + duration;
-            address currentNodeKeyOwner = INVENTORY.ownerOf(tokenId);
             INVENTORY.safeTransferFrom(currentNodeKeyOwner, account, tokenId);
         } else {
             // Extend the period
@@ -167,7 +155,7 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
             rental.endDate = currentExpiry + duration;
         }
 
-        return (rental, monthlyMaintenanceFee * duration);
+        return (rental, monthlyMaintenanceFee * duration, elaspedRentalTime);
     }
 
     function renterOf(uint256 tokenId) public view returns (address) {
