@@ -40,7 +40,7 @@ describe('EDUNodeKeyRental', function () {
       this.nodeKeyContract.target,
       this.ocp.target,
       this.monthlyMaintenanceFee,
-      forwarderRegistryAddress,
+      forwarderRegistryAddress
     );
     await this.nodeKeyContract.grantRole(await this.nodeKeyContract.OPERATOR_ROLE(), this.rentalContract.target);
 
@@ -115,7 +115,10 @@ describe('EDUNodeKeyRental', function () {
     });
 
     it('rent a node key for 0 duration', async function () {
-      await expect(this.rentalContract.connect(user1).rent(user1, 0n, 0n, [])).to.be.revertedWithCustomError(this.rentalContract, 'ZeroRentalDuration');
+      await expect(this.rentalContract.connect(user1).rent(user1, 0n, 0n, [])).to.be.revertedWithCustomError(
+        this.rentalContract,
+        'ZeroRentalDuration'
+      );
     });
 
     it('rent a token however signer does not have enough balance to rent', async function () {
@@ -171,19 +174,26 @@ describe('EDUNodeKeyRental', function () {
     it('Successfully collect the idled tokens', async function () {
       await time.increase(10n + DEFAULT_GRACE_PERIOD);
       await expect(this.rentalContract.collectIdledTokens([400n, 401n, 402n]))
-        .to.emit(this.nodeKeyContract, 'Transfer').withArgs(user1, this.rentalContract, 400n)
-        .to.emit(this.nodeKeyContract, 'Transfer').withArgs(user1, this.rentalContract, 401n)
-        .to.emit(this.nodeKeyContract, 'Transfer').withArgs(user2, this.rentalContract, 402n)
+        .to.emit(this.nodeKeyContract, 'Transfer')
+        .withArgs(user1, this.rentalContract, 400n)
+        .to.emit(this.nodeKeyContract, 'Transfer')
+        .withArgs(user1, this.rentalContract, 401n)
+        .to.emit(this.nodeKeyContract, 'Transfer')
+        .withArgs(user2, this.rentalContract, 402n);
     });
 
     it('Failed to collect tokens since some token is not idled ', async function () {
       await time.increase(10n + DEFAULT_GRACE_PERIOD);
-      await expect(this.rentalContract.collectIdledTokens([401n, 403n])).to.be.revertedWithCustomError(this.rentalContract, 'NotCollectable').withArgs(403n);
+      await expect(this.rentalContract.collectIdledTokens([401n, 403n]))
+        .to.be.revertedWithCustomError(this.rentalContract, 'NotCollectable')
+        .withArgs(403n);
     });
 
     it('Failed to collect tokens since some token is never rented ', async function () {
       await time.increase(10n + DEFAULT_GRACE_PERIOD);
-      await expect(this.rentalContract.collectIdledTokens([400n, 10n])).to.be.revertedWithCustomError(this.rentalContract, 'NotRented').withArgs(10n);
+      await expect(this.rentalContract.collectIdledTokens([400n, 10n]))
+        .to.be.revertedWithCustomError(this.rentalContract, 'NotRented')
+        .withArgs(10n);
     });
   });
 

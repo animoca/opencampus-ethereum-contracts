@@ -3,7 +3,6 @@ pragma solidity 0.8.22;
 
 import {IERC721} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721.sol";
 import {IERC721Receiver} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721Receiver.sol";
-import {IERC721BatchTransfer} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721BatchTransfer.sol";
 import {ERC721TransferToAddressZero, ERC721NonExistingToken, ERC721NonOwnedToken, ERC721SafeTransferRejected} from "@animoca/ethereum-contracts/contracts/token/ERC721/errors/ERC721Errors.sol";
 import {Transfer} from "@animoca/ethereum-contracts/contracts/token/ERC721/events/ERC721Events.sol";
 import {ERC721Storage} from "@animoca/ethereum-contracts/contracts/token/ERC721/libraries/ERC721Storage.sol";
@@ -13,7 +12,7 @@ import {ERC721Deliverable} from "@animoca/ethereum-contracts/contracts/token/ERC
 import {TokenRecovery} from "@animoca/ethereum-contracts/contracts/security/TokenRecovery.sol";
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
 import {ITokenMetadataResolver} from "@animoca/ethereum-contracts/contracts/token/metadata/interfaces/ITokenMetadataResolver.sol";
-import {ForwarderRegistryContext}  from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
+import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
@@ -21,14 +20,7 @@ import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
 
-contract EDUNodeKey is
-    IERC721,
-    ERC721Metadata,
-    ERC721Mintable,
-    ERC721Deliverable,
-    TokenRecovery,
-    ForwarderRegistryContext
-{
+contract EDUNodeKey is IERC721, ERC721Metadata, ERC721Mintable, ERC721Deliverable, TokenRecovery, ForwarderRegistryContext {
     using Address for address;
     using ERC721Storage for ERC721Storage.Layout;
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
@@ -41,11 +33,7 @@ contract EDUNodeKey is
         string memory tokenSymbol,
         ITokenMetadataResolver metadataResolver,
         IForwarderRegistry forwarderRegistry
-    )
-        ContractOwnership(msg.sender)
-        ERC721Metadata(tokenName, tokenSymbol, metadataResolver)
-        ForwarderRegistryContext(forwarderRegistry)
-    {}
+    ) ContractOwnership(msg.sender) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) ForwarderRegistryContext(forwarderRegistry) {}
 
     /// @inheritdoc IERC721
     function approve(address to, uint256 tokenId) external virtual {

@@ -14,8 +14,7 @@ contract EDUNodeKeyRentalMock is EDUNodeKeyRental {
         uint256 maxRentalDuration_,
         uint256 maxRentalCountPerCall_,
         IForwarderRegistry forwarderRegistry
-    ) EDUNodeKeyRental(nodeKeyAddress, pointsAddress, monthlyMaintenceFee_, maxRentalDuration_, maxRentalCountPerCall_, forwarderRegistry) {
-    }
+    ) EDUNodeKeyRental(nodeKeyAddress, pointsAddress, monthlyMaintenceFee_, maxRentalDuration_, maxRentalCountPerCall_, forwarderRegistry) {}
 
     function __msgData() external view returns (bytes calldata) {
         return _msgData();

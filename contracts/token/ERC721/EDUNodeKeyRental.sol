@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
-import {IERC20} from "@animoca/ethereum-contracts/contracts/token/ERC20/interfaces/IERC20.sol";
 import {IERC721} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721.sol";
 import {Points} from "@animoca/anichess-ethereum-contracts-2.2.3/contracts/points/Points.sol";
 import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
@@ -9,7 +8,7 @@ import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/Co
 import {TokenRecovery} from "@animoca/ethereum-contracts/contracts/security/TokenRecovery.sol";
 import {InconsistentArrayLengths} from "@animoca/ethereum-contracts/contracts/CommonErrors.sol";
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
-import {ForwarderRegistryContext}  from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
+import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 
@@ -105,7 +104,6 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
         if (tokenIds.length >= maxRentalCountPerCall) {
             revert RentalCountPerCallLimitExceeded();
         }
-        
         if (tokenIds.length != durations.length) {
             revert InconsistentArrayLengths();
         }
@@ -143,7 +141,12 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
         emit BatchRental(account_, tokenIds_, rentalInfos, fees);
     }
 
-    function processRent(address account, uint256 tokenId, uint256 duration, uint256 currentTime) internal returns (RentalInfo memory, uint256, uint256 elaspedRentalTime) {
+    function processRent(
+        address account,
+        uint256 tokenId,
+        uint256 duration,
+        uint256 currentTime
+    ) internal returns (RentalInfo memory, uint256, uint256 elaspedRentalTime) {
         if (duration == 0) {
             revert ZeroRentalDuration();
         }
@@ -211,7 +214,7 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
         totalEffectiveRentalTime -= finishedRentalTime;
     }
 
-    function _collectExpiredTokens(uint256[] memory tokenIds, uint256 blockTime) internal returns (uint256 finishedRentalTime){
+    function _collectExpiredTokens(uint256[] memory tokenIds, uint256 blockTime) internal returns (uint256 finishedRentalTime) {
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
             address currentOwner = NODE_KEY.ownerOf(tokenId);
