@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
+pragma solidity 0.8.22;
 
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
@@ -11,18 +11,18 @@ import {OpenCampusCertificateNFTv1} from "./OpenCampusCertificateNFTv1.sol";
 contract OpenCampusCertificateNFTMinter is ContractOwnership {
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
 
-    IIssuersDIDRegistry internal immutable DID_REGISTRY;
-    OpenCampusCertificateNFTv1 internal immutable NFT_V1;
+    IIssuersDIDRegistry public immutable DID_REGISTRY;
+    OpenCampusCertificateNFTv1 public immutable NFT_V1;
 
-    IRevocationRegistry internal _revocationRegistry;
+    IRevocationRegistry public _revocationRegistry;
     /// @notice Thrown when the signature is invalid for the NFT payload.
     error InvalidSignature();
 
     /// @notice Thrown when the issuer is not one of the allowed issuers.
-    error IssuerNotAllowed();
+    error IssuerNotAllowed(bytes32 hashedDid, address signer);
 
     /// @notice Thrown when the VC has been revoked.
-    error VcRevoked();
+    error VcRevoked(bytes32 hashedDid, uint256 tokenId);
 
     constructor(
         IIssuersDIDRegistry didRegistry,
@@ -64,15 +64,15 @@ contract OpenCampusCertificateNFTMinter is ContractOwnership {
 
         // Use the native ecrecover provided by the EVM
         address signer = ecrecover(keccak256(abi.encode(to, tokenId, metadata)), v, r, s);
-        bytes32 hashedDid = keccak256(abi.encodePacked(metadata.issuerDid));
+        bytes32 hashedDid = keccak256(bytes(metadata.issuerDid));
 
         if (DID_REGISTRY.issuers(hashedDid, signer)) {
             if (_revocationRegistry.isRevoked(hashedDid, tokenId)) {
-                revert VcRevoked();
+                revert VcRevoked(hashedDid, tokenId);
             }
             NFT_V1.mint(to, tokenId, metadata);
         } else {
-            revert IssuerNotAllowed();
+            revert IssuerNotAllowed(hashedDid, signer);
         }
     }
 }

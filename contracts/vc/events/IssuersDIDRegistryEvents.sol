@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
+pragma solidity 0.8.22;
 
 /// @notice Emitted when `hashedDid` is added to the registry by `operator`.
 /// @param hashedDid The keccak256 hashed did for issuer that was added.

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
+pragma solidity 0.8.22;
 
 // other imports
-import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 // access control imports
 import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
@@ -11,7 +10,6 @@ import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/Co
 import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
 // ERC721 imports
 import {IERC721} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721.sol";
-import {IERC721Receiver} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721Receiver.sol";
 import {ERC721Metadata} from "@animoca/ethereum-contracts/contracts/token/ERC721/ERC721Metadata.sol";
 import {Transfer} from "@animoca/ethereum-contracts/contracts/token/ERC721/events/ERC721Events.sol";
 import {ERC721Storage} from "@animoca/ethereum-contracts/contracts/token/ERC721/libraries/ERC721Storage.sol";
@@ -26,22 +24,19 @@ import {IRevocationRegistry} from "./interfaces/IRevocationRegistry.sol";
 import {CertificateNFTv1MetaData} from "./libraries/CertificateNFTv1MetaData.sol";
 
 contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, ForwarderRegistryContext {
-    using Address for address;
     using ERC721Storage for ERC721Storage.Layout;
     using AccessControlStorage for AccessControlStorage.Layout;
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
-    using CertificateNFTv1MetaData for CertificateNFTv1MetaData.MetaData;
 
-    IIssuersDIDRegistry internal immutable DID_REGISTRY;
-    IRevocationRegistry internal _revocationRegistry;
+    IIssuersDIDRegistry public immutable DID_REGISTRY;
+    IRevocationRegistry public _revocationRegistry;
 
-    bytes4 internal constant ERC721_RECEIVED = IERC721Receiver.onERC721Received.selector;
     bytes32 public constant MINTER_ROLE = "minter";
     bytes32 public constant OPERATOR_ROLE = "operator";
     mapping(uint256 => CertificateNFTv1MetaData.MetaData) public vcData;
 
     /// @notice Thrown when burn operation cannot be executed.
-    error InvalidBurn();
+    error InvalidBurn(bytes32 hashedDid, uint256 tokenId);
 
     constructor(
         string memory tokenName,
@@ -50,7 +45,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
         ITokenMetadataResolver metadataResolver,
         IRevocationRegistry revocationRegistry,
         IIssuersDIDRegistry didRegistry
-    ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) {
+    ) ContractOwnership(_msgSender()) ForwarderRegistryContext(forwarderRegistry) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) {
         ERC721Storage.initERC721Mintable();
         DID_REGISTRY = didRegistry;
         _revocationRegistry = revocationRegistry;
@@ -67,7 +62,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
     /// @param tokenId The id of the VC NFT to be minted
     /// @param metadata Metadata for `tokenId`
     function mint(address to, uint256 tokenId, CertificateNFTv1MetaData.MetaData calldata metadata) external {
-        AccessControlStorage.layout().enforceHasRole(MINTER_ROLE, msg.sender);
+        AccessControlStorage.layout().enforceHasRole(MINTER_ROLE, _msgSender());
 
         ERC721Storage.layout().mint(to, tokenId);
         vcData[tokenId] = metadata;
@@ -78,9 +73,9 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
     /// @param tokenId The Token Id to be burnt.
     /// Burn tokenId only if tokenId has been legitimately revoked in Revocation Registry.
     function burn(uint256 tokenId) external {
-        bytes32 hashedDid = keccak256(abi.encodePacked(vcData[tokenId].issuerDid));
+        bytes32 hashedDid = keccak256(bytes(vcData[tokenId].issuerDid));
+        address owner = ERC721Storage.layout().ownerOf(tokenId);
         if (_revocationRegistry.isRevoked(hashedDid, tokenId)) {
-            address owner = ERC721Storage.layout().ownerOf(tokenId);
             ERC721Storage.layout().owners[tokenId] = ERC721Storage.BURNT_TOKEN_OWNER_VALUE;
 
             unchecked {
@@ -89,7 +84,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
             }
             emit Transfer(owner, address(0), tokenId);
         } else {
-            revert InvalidBurn();
+            revert InvalidBurn(hashedDid, tokenId);
         }
     }
 
@@ -128,7 +123,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
     /// @param sender The sender that trigger the contract.
     /// @param tokenId The identifier of the token to transfer.
     function _isSenderOperatable(address sender, uint256 tokenId) internal view {
-        bytes32 hashedDid = keccak256(abi.encodePacked(vcData[tokenId].issuerDid));
+        bytes32 hashedDid = keccak256(bytes(vcData[tokenId].issuerDid));
         // either the sender is allowed to operate on behalf of the issuer
         // or sender has operator role for this NFT
         if (!DID_REGISTRY.issuers(hashedDid, sender)) {

@@ -139,6 +139,14 @@ describe('OpenCampusCertificateNFTv1', function () {
         await this.ocNFT.burn(tokenId);
         await expect(this.ocNFT.burn(tokenId)).to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonExistingToken');
       });
+
+      it('when a token is burnt ownerOf should revert with ERC721NonExistingToken error', async function () {
+        const beforeBalance = await this.ocNFT.balanceOf(user.address);
+        const {hashedDid, signature} = await ru.makePayloadAndSignature(ISSUER.did, tokenId);
+        await this.revocationRegistry.revokeVC(hashedDid, tokenId, signature);
+        await this.ocNFT.burn(tokenId);
+        await expect(this.ocNFT.ownerOf(tokenId)).to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonExistingToken');
+      });
     });
   });
 

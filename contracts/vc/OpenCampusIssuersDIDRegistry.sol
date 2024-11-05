@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
+pragma solidity 0.8.22;
 
 import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
@@ -19,7 +19,7 @@ contract OpenCampusIssuersDIDRegistry is AccessControl, IIssuersDIDRegistry {
     error InvalidIssuer();
 
     /// @notice Thrown when a given did and issuerAddress relationship does not exist.
-    error RelationshipDoesNotExist();
+    error RelationshipDoesNotExist(bytes32 hashedDid, address issuer);
 
     constructor() ContractOwnership(msg.sender) {}
 
@@ -47,10 +47,10 @@ contract OpenCampusIssuersDIDRegistry is AccessControl, IIssuersDIDRegistry {
     /// @param issuerAddress The Eth address of the issuer.
     function removeIssuer(string calldata did, address issuerAddress) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, msg.sender);
-        bytes32 hashedDid = keccak256(abi.encodePacked(did));
+        bytes32 hashedDid = keccak256(bytes(did));
 
         if (!issuers[hashedDid][issuerAddress]) {
-            revert RelationshipDoesNotExist();
+            revert RelationshipDoesNotExist(hashedDid, issuerAddress);
         }
 
         delete issuers[hashedDid][issuerAddress];
@@ -61,7 +61,7 @@ contract OpenCampusIssuersDIDRegistry is AccessControl, IIssuersDIDRegistry {
     /// @param did The hashed value of the issuerDid
     /// @param issuerAddress The Eth address of the issuer
     function isIssuerAllowed(string calldata did, address issuerAddress) external view returns (bool allowed) {
-        bytes32 hashedDid = keccak256(abi.encodePacked(did));
+        bytes32 hashedDid = keccak256(bytes(did));
         return issuers[hashedDid][issuerAddress];
     }
 }

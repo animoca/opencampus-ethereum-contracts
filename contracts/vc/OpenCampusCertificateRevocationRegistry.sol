@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
+pragma solidity 0.8.22;
 
 // other imports
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -18,13 +18,13 @@ contract OpenCampusCertificateRevocationRegistry is IRevocationRegistry, Contrac
     bytes32 private constant REVOKE_TYPEHASH = keccak256("revokeVC(bytes32 hashedIssuerDid,uint256 vcId)");
     bytes32 private constant BATCH_REVOKE_TYPEHASH = keccak256("batchRevokeVCs(bytes32 hashedIssuerDid,uint256[] vcIds)");
 
-    IIssuersDIDRegistry internal immutable DID_REGISTRY;
+    IIssuersDIDRegistry public immutable DID_REGISTRY;
     bytes32 private immutable DOMAIN_SEPARATOR;
 
     mapping(bytes32 => mapping(uint256 => address)) public revocations;
 
     /// @notice Thrown when the recovered issuer and the passed in issuerDid is not allowed in the DIDRegistry
-    error InvalidIssuer();
+    error InvalidIssuer(bytes32 hashedDid, address signer);
 
     constructor(IIssuersDIDRegistry didRegistry) ContractOwnership(msg.sender) {
         uint256 chainId;
@@ -62,7 +62,7 @@ contract OpenCampusCertificateRevocationRegistry is IRevocationRegistry, Contrac
             revocations[hashedIssuerDid][vcId] = signer;
             emit VcRevoked(hashedIssuerDid, signer, vcId);
         } else {
-            revert InvalidIssuer();
+            revert InvalidIssuer(hashedIssuerDid, signer);
         }
     }
 
@@ -88,7 +88,7 @@ contract OpenCampusCertificateRevocationRegistry is IRevocationRegistry, Contrac
                 emit VcRevoked(hashedIssuerDid, signer, vcIds[i]);
             }
         } else {
-            revert InvalidIssuer();
+            revert InvalidIssuer(hashedIssuerDid, signer);
         }
     }
 }

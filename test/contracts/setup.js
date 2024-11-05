@@ -116,7 +116,7 @@ async function setupOpenCampusCertificateNFTv1(deployer, user, payoutWallet) {
     'OpenCampusCertificateNFTv1Mock',
     '',
     '',
-    ethers.ZeroAddress,
+    await getForwarderRegistryAddress(),
     ethers.ZeroAddress,
     this.revocationRegistry.getAddress(),
     this.didRegistry.getAddress()
@@ -135,7 +135,7 @@ async function setupOpenCampusCertificateNFTMinter(deployer, user, payoutWallet)
     'OpenCampusCertificateNFTv1',
     '',
     '',
-    ethers.ZeroAddress,
+    await getForwarderRegistryAddress(),
     ethers.ZeroAddress,
     this.revocationRegistry.getAddress(),
     this.didRegistry.getAddress()
