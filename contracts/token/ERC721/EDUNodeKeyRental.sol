@@ -24,10 +24,11 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
     bytes32 public constant RENTAL_CONSUME_CODE = keccak256("NODE_KEY_RENTAL");
 
     Points public immutable POINTS;
-    IERC721 public immutable INVENTORY;
-    uint256 public immutable INITIAL_TIME;
+    IERC721 public immutable NODE_KEY;
 
     uint256 public monthlyMaintenanceFee;
+    uint256 public maxRentalDuration;
+    uint256 public maxRentalCountPerCall;
 
     mapping(uint256 => RentalInfo) public rentals;
 
@@ -35,30 +36,38 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
 
     event Rental(address indexed renter, uint256 tokenId, RentalInfo rental, uint256 fee);
     event BatchRental(address indexed renter, uint256[] tokenIds, RentalInfo[] rentals, uint256[] fees);
+    event MonthlyMaintenanceFeeUpdated(uint256 newMonthlyMaintenanceFee);
+    event MaxRentalDurationUpdated(uint256 newMaxRentalDuration);
+    event MaxRentalCountPerCallUpdated(uint256 newMaxRentalCountPerCall);
 
     error InvalidTokenIdsParam();
     error ZeroRentalDuration();
+    error RentalDurationLimitExceeded(uint256 tokenId, uint256 duration);
+    error RentalCountPerCallLimitExceeded();
     error NotRentable(uint256 tokenId);
     error NotRented(uint256 tokenId);
     error NotCollectable(uint256 tokenId);
 
     constructor(
-        address inventoryAddress,
-        address ocpAddress,
+        address nodeKeyAddress,
+        address pointsAddress,
         uint256 monthlyMaintenanceFee_,
+        uint256 maxRentalDuration_,
+        uint256 maxRentalCountPerCall_,
         IForwarderRegistry forwarderRegistry
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
-        INVENTORY = IERC721(inventoryAddress);
-        POINTS = Points(ocpAddress);
+        NODE_KEY = IERC721(nodeKeyAddress);
+        POINTS = Points(pointsAddress);
         monthlyMaintenanceFee = monthlyMaintenanceFee_;
-        INITIAL_TIME = block.timestamp;
+        maxRentalDuration = maxRentalDuration_;
+        maxRentalCountPerCall = maxRentalCountPerCall_;
     }
 
-    function estimateFee(uint256 duration, uint256[] calldata expiredNodeKeyIds) public view returns (uint256 fee) {
+    function estimateNodeKeyPrice(uint256 duration, uint256[] calldata expiredNodeKeyIds) public view returns (uint256 fee) {
         uint256 finishedRentalTime = 0;
         for (uint256 i = 0; i < expiredNodeKeyIds.length; i++) {
             uint256 tokenId = expiredNodeKeyIds[i];
-            address currentOwner = INVENTORY.ownerOf(tokenId);
+            address currentOwner = NODE_KEY.ownerOf(tokenId);
             if (currentOwner == address(this)) {
                 revert NotRented(tokenId);
             }
@@ -75,10 +84,6 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
     }
 
     function rent(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredNodeKeyIds) public {
-        if (duration == 0) {
-            revert ZeroRentalDuration();
-        }
-
         uint256 currentTime = block.timestamp;
         uint256 finishedRentalTime = _collectExpiredTokens(expiredNodeKeyIds, currentTime);
 
@@ -93,6 +98,10 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
     }
 
     function batchRent(address account, uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredNodeKeyIds) public {
+        if (tokenIds.length >= maxRentalCountPerCall) {
+            revert RentalCountPerCallLimitExceeded();
+        }
+        
         if (tokenIds.length != durations.length) {
             revert InconsistentArrayLengths();
         }
@@ -120,6 +129,7 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
         uint256 preEffectiveRentalTime = totalEffectiveRentalTime - finishedRentalTime;
         uint256 nodeKeyPrice = _estimateNodeKeyPrice(preEffectiveRentalTime);
         totalEffectiveRentalTime = preEffectiveRentalTime;
+
         totalFee += nodeKeyPrice * tokenIds_.length;
         for (uint256 i = 0; i < fees.length; i++) {
             fees[i] += nodeKeyPrice;
@@ -130,8 +140,16 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
     }
 
     function processRent(address account, uint256 tokenId, uint256 duration, uint256 currentTime) internal returns (RentalInfo memory, uint256, uint256 elaspedRentalTime) {
+        if (duration == 0) {
+            revert ZeroRentalDuration();
+        }
+
+        if (duration >= maxRentalDuration) {
+            revert RentalDurationLimitExceeded(tokenId, duration);
+        }
+
         RentalInfo storage rental = rentals[tokenId];
-        address currentNodeKeyOwner = INVENTORY.ownerOf(tokenId);
+        address currentNodeKeyOwner = NODE_KEY.ownerOf(tokenId);
 
         if (address(this) != currentNodeKeyOwner) {
             if (currentTime >= rental.endDate) {
@@ -148,7 +166,7 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
             // New period
             rental.beginDate = currentTime;
             rental.endDate = currentTime + duration;
-            INVENTORY.safeTransferFrom(currentNodeKeyOwner, account, tokenId);
+            NODE_KEY.safeTransferFrom(currentNodeKeyOwner, account, tokenId);
         } else {
             // Extend the period
             rental.beginDate = currentExpiry;
@@ -160,15 +178,28 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
 
     function renterOf(uint256 tokenId) public view returns (address) {
         if (block.timestamp < rentals[tokenId].endDate) {
-            return INVENTORY.ownerOf(tokenId);
+            return NODE_KEY.ownerOf(tokenId);
         } else {
             revert NotRented(tokenId);
         }
     }
 
-    function setMonthlyMaintenanceFee(uint256 monthlyMaintenanceFee_) external {
+    function setMonthlyMaintenanceFee(uint256 newMonthlyMaintenanceFee) external {
         ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
-        monthlyMaintenanceFee = monthlyMaintenanceFee_;
+        monthlyMaintenanceFee = newMonthlyMaintenanceFee;
+        emit MonthlyMaintenanceFeeUpdated(newMonthlyMaintenanceFee);
+    }
+
+    function setMaxRentalDuration(uint256 newMaxRentalDuration) external {
+        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        maxRentalDuration = newMaxRentalDuration;
+        emit MaxRentalDurationUpdated(newMaxRentalDuration);
+    }
+
+    function setMaxRentalCountPerCall(uint256 newRentalCountPerCall) external {
+        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        maxRentalCountPerCall = newRentalCountPerCall;
+        emit MaxRentalCountPerCallUpdated(newRentalCountPerCall);
     }
 
     function collectExpiredTokens(uint256[] calldata tokenIds) public {
@@ -179,7 +210,7 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
     function _collectExpiredTokens(uint256[] memory tokenIds, uint256 blockTime) internal returns (uint256 finishedRentalTime){
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
-            address currentOwner = INVENTORY.ownerOf(tokenId);
+            address currentOwner = NODE_KEY.ownerOf(tokenId);
             if (currentOwner == address(this)) {
                 revert NotRented(tokenId);
             }
@@ -189,7 +220,7 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
                 revert NotCollectable(tokenId);
             }
 
-            INVENTORY.transferFrom(currentOwner, address(this), tokenId);
+            NODE_KEY.transferFrom(currentOwner, address(this), tokenId);
             finishedRentalTime += rental.endDate - rental.beginDate;
 
             rental.beginDate = 0;
