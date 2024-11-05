@@ -21,6 +21,10 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
         uint256 endDate;
     }
 
+    /// @notice The role identifier for the operator role.
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+
+    /// @notice The reason code for consuming points
     bytes32 public constant RENTAL_CONSUME_CODE = keccak256("NODE_KEY_RENTAL");
 
     Points public immutable POINTS;
@@ -185,19 +189,19 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
     }
 
     function setMonthlyMaintenanceFee(uint256 newMonthlyMaintenanceFee) external {
-        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         monthlyMaintenanceFee = newMonthlyMaintenanceFee;
         emit MonthlyMaintenanceFeeUpdated(newMonthlyMaintenanceFee);
     }
 
     function setMaxRentalDuration(uint256 newMaxRentalDuration) external {
-        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         maxRentalDuration = newMaxRentalDuration;
         emit MaxRentalDurationUpdated(newMaxRentalDuration);
     }
 
     function setMaxRentalCountPerCall(uint256 newRentalCountPerCall) external {
-        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         maxRentalCountPerCall = newRentalCountPerCall;
         emit MaxRentalCountPerCallUpdated(newRentalCountPerCall);
     }
