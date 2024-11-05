@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.1
+
+- Updates per remediations called out in internal audit report AB-SC-SOL-01 to AB-SC-SOL-15 and AB-SC-TST-1
+
 ## 1.3.0
 
 - Added Verifiable Credentials smart contracts and related test cases
