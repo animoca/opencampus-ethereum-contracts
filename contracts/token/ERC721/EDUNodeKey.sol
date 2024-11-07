@@ -87,8 +87,12 @@ contract EDUNodeKey is IERC721, ERC721Metadata, ERC721Mintable, ERC721Deliverabl
         }
 
         if (from != to && length != 0) {
-            erc721Storage.balances[from] -= length;
-            erc721Storage.balances[to] += length;
+            unchecked {
+                // cannot underflow as balance is verified through ownership
+                erc721Storage.balances[from] -= length;
+                //  cannot overflow as supply cannot overflow
+                erc721Storage.balances[to] += length;
+            }
         }
     }
 
@@ -115,8 +119,12 @@ contract EDUNodeKey is IERC721, ERC721Metadata, ERC721Mintable, ERC721Deliverabl
 
         erc721Storage.owners[tokenId] = uint256(uint160(to));
         if (from != to) {
-            --erc721Storage.balances[from];
-            ++erc721Storage.balances[to];
+            unchecked {
+                // cannot underflow as balance is verified through ownership
+                --erc721Storage.balances[from];
+                //  cannot overflow as supply cannot overflow
+                ++erc721Storage.balances[to];
+            }
         }
         emit Transfer(from, to, tokenId);
     }
