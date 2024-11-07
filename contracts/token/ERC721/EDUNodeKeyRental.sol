@@ -3,6 +3,8 @@ pragma solidity 0.8.22;
 
 import {IERC721} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721.sol";
 import {Points} from "@animoca/anichess-ethereum-contracts-2.2.3/contracts/points/Points.sol";
+import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
+import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
 import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {TokenRecovery} from "@animoca/ethereum-contracts/contracts/security/TokenRecovery.sol";
@@ -12,7 +14,8 @@ import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/me
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 
-contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
+contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryContext {
+    using AccessControlStorage for AccessControlStorage.Layout;
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
 
     struct RentalInfo {
@@ -39,6 +42,7 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
 
     event Rental(address indexed renter, uint256 tokenId, RentalInfo rental, uint256 fee);
     event BatchRental(address indexed renter, uint256[] tokenIds, RentalInfo[] rentals, uint256[] fees);
+    event Collected(uint256[] tokenIds);
     event MonthlyMaintenanceFeeUpdated(uint256 newMonthlyMaintenanceFee);
     event MaxRentalDurationUpdated(uint256 newMaxRentalDuration);
     event MaxRentalCountPerCallUpdated(uint256 newMaxRentalCountPerCall);
@@ -232,6 +236,10 @@ contract EDUNodeKeyRental is TokenRecovery, ForwarderRegistryContext {
 
             rental.beginDate = 0;
             rental.endDate = 0;
+        }
+
+        if (tokenIds.length > 0) {
+            emit Collected(tokenIds);
         }
 
         return finishedRentalTime;
