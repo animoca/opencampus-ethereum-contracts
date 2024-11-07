@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
+// solhint-disable-next-line max-line-length
+import {ERC721TransferToAddressZero, ERC721NonExistingToken, ERC721NonOwnedToken, ERC721SafeTransferRejected} from "@animoca/ethereum-contracts/contracts/token/ERC721/errors/ERC721Errors.sol";
+import {Context} from "@openzeppelin/contracts/utils/Context.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {IERC721} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721.sol";
 import {IERC721Receiver} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721Receiver.sol";
-import {ERC721TransferToAddressZero, ERC721NonExistingToken, ERC721NonOwnedToken, ERC721SafeTransferRejected} from "@animoca/ethereum-contracts/contracts/token/ERC721/errors/ERC721Errors.sol";
+import {IERC721BatchTransfer} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721BatchTransfer.sol";
 import {Transfer} from "@animoca/ethereum-contracts/contracts/token/ERC721/events/ERC721Events.sol";
 import {ERC721Storage} from "@animoca/ethereum-contracts/contracts/token/ERC721/libraries/ERC721Storage.sol";
 import {ERC721Metadata} from "@animoca/ethereum-contracts/contracts/token/ERC721/ERC721Metadata.sol";
@@ -14,26 +18,36 @@ import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/i
 import {ITokenMetadataResolver} from "@animoca/ethereum-contracts/contracts/token/metadata/interfaces/ITokenMetadataResolver.sol";
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
-import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
 
-contract EDUNodeKey is IERC721, ERC721Metadata, ERC721Mintable, ERC721Deliverable, TokenRecovery, ForwarderRegistryContext {
+/// @title EDUNodeKey
+/// @notice A contract that implements the ERC721 standard with metadata, minting, deliverable, batch transfer support.
+/// @notice Only accounts with the operator role can transfer tokens. Sets or unsets an approval have no effect.
+contract EDUNodeKey is IERC721, ERC721Metadata, ERC721Mintable, ERC721Deliverable, IERC721BatchTransfer, TokenRecovery, ForwarderRegistryContext {
     using Address for address;
     using ERC721Storage for ERC721Storage.Layout;
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
     using AccessControlStorage for AccessControlStorage.Layout;
 
+    /// @notice The role identifier for the operator role.
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
+    /// @notice Constructor
+    /// @param tokenName The name of the token.
+    /// @param tokenSymbol The symbol of the token.
+    /// @param metadataResolver The address of the metadata resolver contract.
+    /// @param forwarderRegistry The address of the forwarder registry contract.
     constructor(
         string memory tokenName,
         string memory tokenSymbol,
         ITokenMetadataResolver metadataResolver,
         IForwarderRegistry forwarderRegistry
-    ) ContractOwnership(msg.sender) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) ForwarderRegistryContext(forwarderRegistry) {}
+    ) ContractOwnership(msg.sender) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) ForwarderRegistryContext(forwarderRegistry) {
+        ERC721Storage.init();
+        ERC721Storage.initERC721BatchTransfer();
+    }
 
     /// @inheritdoc IERC721
     function approve(address to, uint256 tokenId) external virtual {
@@ -45,36 +59,65 @@ contract EDUNodeKey is IERC721, ERC721Metadata, ERC721Mintable, ERC721Deliverabl
         ERC721Storage.layout().setApprovalForAll(_msgSender(), operator, approved);
     }
 
-    /// @notice Unsafely transfers a batch of tokens to a recipient.
+    /// @notice Unsafely transfers a batch of tokens to a recipient by a sender.
     /// @dev Resets the token approval for each of `tokenIds`.
-    /// @dev Reverts if `to` is the zero address.
-    /// @dev Reverts if one of `tokenIds` is not owned by `from`.
-    /// @dev Reverts if the sender is not `from` and has not been approved by `from` for each of `tokenIds`.
-    /// @dev Emits an {IERC721-Transfer} event for each of `tokenIds`.
+    /// @dev Reverts with {NotRoleHolder} if the sender does not have the {OPERATOR_ROLE}.
+    /// @dev Reverts with {ERC721TransferToAddressZero} if `to` is the zero address.
+    /// @dev Reverts with {ERC721NonExistingToken} if one of `tokenIds` does not exist.
+    /// @dev Reverts with {ERC721NonOwnedToken} if one of `tokenIds` is not owned by `from`.
+    /// @dev Emits a {Transfer} event for each of `tokenIds`.
     /// @param from Current tokens owner.
     /// @param to Address of the new token owner.
     /// @param tokenIds Identifiers of the tokens to transfer.
     function batchTransferFrom(address from, address to, uint256[] calldata tokenIds) external {
         address msgSender = _msgSender();
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, msgSender);
-        ERC721Storage.layout().batchTransferFrom(msgSender, from, to, tokenIds);
+
+        if (to == address(0)) revert ERC721TransferToAddressZero();
+
+        ERC721Storage.Layout storage erc721Storage = ERC721Storage.layout();
+        uint256 length = tokenIds.length;
+        for (uint256 i; i < length; ++i) {
+            uint256 tokenId = tokenIds[i];
+            address owner = address(uint160(erc721Storage.owners[tokenId]));
+            if (owner == address(0)) revert ERC721NonExistingToken(tokenId);
+            if (owner != from) revert ERC721NonOwnedToken(from, tokenId);
+            erc721Storage.owners[tokenId] = uint256(uint160(to));
+            emit Transfer(from, to, tokenId);
+        }
+
+        if (from != to && length != 0) {
+            erc721Storage.balances[from] -= length;
+            erc721Storage.balances[to] += length;
+        }
     }
 
+    /// @notice Unsafely transfers the ownership of a token to a recipient by a sender.
+    /// @dev Resets the token approval for `tokenId`.
+    /// @dev Reverts with {NotRoleHolder} if the sender does not have the {OPERATOR_ROLE}.
+    /// @dev Reverts with {ERC721TransferToAddressZero} if `to` is the zero address.
+    /// @dev Reverts with {ERC721NonExistingToken} if `tokenId` does not exist.
+    /// @dev Reverts with {ERC721NonOwnedToken} if `from` is not the owner of `tokenId`.
+    /// @dev Emits a {Transfer} event.
+    /// @param from The current token owner.
+    /// @param to The recipient of the token transfer.
+    /// @param tokenId The identifier of the token to transfer.
     function transferFrom_(address from, address to, uint256 tokenId) internal {
         address msgSender = _msgSender();
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, msgSender);
 
         if (to == address(0)) revert ERC721TransferToAddressZero();
 
-        uint256 owner = ERC721Storage.layout().owners[tokenId];
-        if (uint160(owner) == 0) revert ERC721NonExistingToken(tokenId);
-        if (address(uint160(owner)) != from) revert ERC721NonOwnedToken(from, tokenId);
+        ERC721Storage.Layout storage erc721Storage = ERC721Storage.layout();
+        address owner = address(uint160(erc721Storage.owners[tokenId]));
+        if (owner == address(0)) revert ERC721NonExistingToken(tokenId);
+        if (owner != from) revert ERC721NonOwnedToken(from, tokenId);
 
-        ERC721Storage.layout().owners[tokenId] = uint256(uint160(to));
-
-        --ERC721Storage.layout().balances[from];
-        ++ERC721Storage.layout().balances[to];
-
+        erc721Storage.owners[tokenId] = uint256(uint160(to));
+        if (from != to) {
+            --erc721Storage.balances[from];
+            ++erc721Storage.balances[to];
+        }
         emit Transfer(from, to, tokenId);
     }
 
