@@ -3,8 +3,8 @@ const {getForwarderRegistryAddress, getTokenMetadataResolverWithBaseURIAddress} 
 const {behavesLikeERC721Mintable} = require('@animoca/ethereum-contracts/test/contracts/token/ERC721/behaviors/ERC721.mintable.behavior');
 const {behavesLikeERC721Deliverable} = require('@animoca/ethereum-contracts/test/contracts/token/ERC721/behaviors/ERC721.deliverable.behavior');
 const {behavesLikeERC721Metadata} = require('@animoca/ethereum-contracts/test/contracts/token/ERC721/behaviors/ERC721.metadata.behavior');
-const {behavesLikeStandard} = require('./behavior/EDUNodeKey.behavior');
-const {behavesLikeBatchTransfer} = require('./behavior/EDUNodeKey.batchtransfer.behavior');
+const {behavesLikeNonTransferableERC721} = require('./behavior/EDUNodeKey.behavior');
+const {behavesLikeBurnable} = require('./behavior/EDUNodeKey.burnable.behavior');
 
 const name = 'EDU Principal Node Key';
 const symbol = 'EDUKey';
@@ -32,7 +32,6 @@ runBehaviorTests('EDUNodeKeyMock', config, function (deployFn) {
       SelfApproval: {custom: true, error: 'ERC721SelfApproval', args: ['account']},
       SelfApprovalForAll: {custom: true, error: 'ERC721SelfApprovalForAll', args: ['account']},
       NonApprovedForApproval: {custom: true, error: 'ERC721NonApprovedForApproval', args: ['sender', 'owner', 'tokenId']},
-      TransferToAddressZero: {custom: true, error: 'ERC721TransferToAddressZero'},
       NonExistingToken: {custom: true, error: 'ERC721NonExistingToken', args: ['tokenId']},
       NonOwnedToken: {custom: true, error: 'ERC721NonOwnedToken', args: ['account', 'tokenId']},
       SafeTransferRejected: {custom: true, error: 'ERC721SafeTransferRejected', args: ['recipient', 'tokenId']},
@@ -46,16 +45,17 @@ runBehaviorTests('EDUNodeKeyMock', config, function (deployFn) {
       InconsistentArrayLengths: {custom: true, error: 'InconsistentArrayLengths'},
       NotMinter: {custom: true, error: 'NotRoleHolder', args: ['role', 'account']},
 
-      // transferFrom/ batchTransferFrom
+      NotTransferable: {custom: true, error: 'NotTransferable'},
       NotOperator: {custom: true, error: 'NotRoleHolder', args: ['role', 'account']},
     },
     features: {
       MetadataResolver: true,
     },
+    interfaces: {
+      ERC721Burnable: true,
+      ERC721Mintable: true,
+    },
     methods: {
-      'batchTransferFrom(address,address,uint256[])': async function (contract, from, to, ids, signer) {
-        return contract.connect(signer).batchTransferFrom(from, to, ids);
-      },
       'mint(address,uint256)': async function (contract, to, tokenId, signer) {
         return contract.connect(signer).mint(to, tokenId);
       },
@@ -64,6 +64,12 @@ runBehaviorTests('EDUNodeKeyMock', config, function (deployFn) {
       },
       'batchMint(address,uint256[])': async function (contract, to, tokenIds, signer) {
         return contract.connect(signer).batchMint(to, tokenIds);
+      },
+      'burnFrom(address,uint256)': async function (contract, from, id, signer) {
+        return contract.connect(signer).burnFrom(from, id);
+      },
+      'batchBurnFrom(address,uint256[])': async function (contract, from, tokenIds, signer) {
+        return contract.connect(signer).batchBurnFrom(from, tokenIds);
       },
     },
     deploy: async function (deployer) {
@@ -79,8 +85,8 @@ runBehaviorTests('EDUNodeKeyMock', config, function (deployFn) {
     },
   };
 
-  behavesLikeStandard(implementation);
-  behavesLikeBatchTransfer(implementation);
+  behavesLikeNonTransferableERC721(implementation);
+  behavesLikeBurnable(implementation);
 
   behavesLikeERC721Mintable(implementation);
   behavesLikeERC721Deliverable(implementation);
