@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
-import {IERC721} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721.sol";
+import {EDUNodeKey} from "./EDUNodeKey.sol";
 import {Points} from "@animoca/anichess-ethereum-contracts-2.2.3/contracts/points/Points.sol";
 import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
 import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
@@ -30,7 +30,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     bytes32 public constant RENTAL_CONSUME_CODE = keccak256("NODE_KEY_RENTAL");
 
     Points public immutable POINTS;
-    IERC721 public immutable NODE_KEY;
+    EDUNodeKey public immutable NODE_KEY;
 
     uint256 public monthlyMaintenanceFee;
     uint256 public maxRentalDuration;
@@ -63,7 +63,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256 maxRentalCountPerCall_,
         IForwarderRegistry forwarderRegistry
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
-        NODE_KEY = IERC721(nodeKeyAddress);
+        NODE_KEY = EDUNodeKey(nodeKeyAddress);
         POINTS = Points(pointsAddress);
         monthlyMaintenanceFee = monthlyMaintenanceFee_;
         maxRentalDuration = maxRentalDuration_;
@@ -90,11 +90,27 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         return _estimateNodeKeyPrice(totalEffectiveRentalTime - finishedRentalTime) + monthlyMaintenanceFee * duration;
     }
 
-    function rent(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredNodeKeyIds) public {
-        uint256 currentTime = block.timestamp;
-        uint256 finishedRentalTime = _collectExpiredTokens(expiredNodeKeyIds, currentTime);
+    function rentWithStrictCollection(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredNodeKeyIds) public {
+        _rent(account, tokenId, duration, expiredNodeKeyIds, true);
+    }
 
-        (RentalInfo memory rental, uint256 maintenanceFee, uint256 elaspedTime) = processRent(account, tokenId, duration, block.timestamp);
+    function rentWithFlexibleCollection(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredNodeKeyIds) public {
+        _rent(account, tokenId, duration, expiredNodeKeyIds, false);
+    }
+
+    function batchRentWithStrictCollection(address account, uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredNodeKeyIds) public {
+        _batchRent(account, tokenIds, durations, expiredNodeKeyIds, true);
+    }
+
+    function batchRentWithFlexibleCollection(address account, uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredNodeKeyIds) public {
+        _batchRent(account, tokenIds, durations, expiredNodeKeyIds, false);
+    }
+
+    function _rent(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredNodeKeyIds, bool requireSuccessOnCollect) internal {
+        uint256 currentTime = block.timestamp;
+        uint256 finishedRentalTime = _collectExpiredTokens(expiredNodeKeyIds, currentTime, requireSuccessOnCollect);
+
+        (RentalInfo memory rental, uint256 maintenanceFee, uint256 elaspedTime) = _processRent(account, tokenId, duration, block.timestamp);
         uint256 preEffectiveRentalTime = totalEffectiveRentalTime - finishedRentalTime - elaspedTime;
         uint256 nodeKeyPrice = _estimateNodeKeyPrice(preEffectiveRentalTime);
         totalEffectiveRentalTime = preEffectiveRentalTime + duration;
@@ -104,7 +120,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         emit Rental(account, tokenId, rental, fee);
     }
 
-    function batchRent(address account, uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredNodeKeyIds) public {
+    function _batchRent(address account, uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredNodeKeyIds, bool requireSuccessOnCollect) internal {
         if (tokenIds.length >= maxRentalCountPerCall) {
             revert RentalCountPerCallLimitExceeded();
         }
@@ -118,14 +134,14 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256[] memory expiredNodeKeyIds_ = expiredNodeKeyIds;
 
         uint256 currentTime = block.timestamp;
-        uint256 finishedRentalTime = _collectExpiredTokens(expiredNodeKeyIds_, currentTime);
+        uint256 finishedRentalTime = _collectExpiredTokens(expiredNodeKeyIds_, currentTime, requireSuccessOnCollect);
 
         RentalInfo[] memory rentalInfos;
         uint256[] memory fees;
         uint256 totalFee;
         for (uint256 i = 0; i < tokenIds_.length; i++) {
             uint256 tokenId = tokenIds_[i];
-            (RentalInfo memory rental, uint256 maintenanceFee, uint256 elaspedTime) = processRent(account_, tokenId, durations_[i], currentTime);
+            (RentalInfo memory rental, uint256 maintenanceFee, uint256 elaspedTime) = _processRent(account_, tokenId, durations_[i], currentTime);
             finishedRentalTime += elaspedTime;
             rentalInfos[i] = rental;
             fees[i] = maintenanceFee;
@@ -145,7 +161,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         emit BatchRental(account_, tokenIds_, rentalInfos, fees);
     }
 
-    function processRent(
+    function _processRent(
         address account,
         uint256 tokenId,
         uint256 duration,
@@ -177,7 +193,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             // New period
             rental.beginDate = currentTime;
             rental.endDate = currentTime + duration;
-            NODE_KEY.safeTransferFrom(currentNodeKeyOwner, account, tokenId);
+            NODE_KEY.safeMint(account, tokenId, "");
         } else {
             // Extend the period
             rental.beginDate = currentExpiry;
@@ -214,32 +230,31 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     }
 
     function collectExpiredTokens(uint256[] calldata tokenIds) public {
-        uint256 finishedRentalTime = _collectExpiredTokens(tokenIds, block.timestamp);
+        uint256 finishedRentalTime = _collectExpiredTokens(tokenIds, block.timestamp, true);
         totalEffectiveRentalTime -= finishedRentalTime;
     }
 
-    function _collectExpiredTokens(uint256[] memory tokenIds, uint256 blockTime) internal returns (uint256 finishedRentalTime) {
+    function _collectExpiredTokens(uint256[] memory tokenIds, uint256 blockTime, bool requireSuccess) internal returns (uint256 finishedRentalTime) {
+        uint256[] memory collectibleTokenIds;
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
-            address currentOwner = NODE_KEY.ownerOf(tokenId);
-            if (currentOwner == address(this)) {
-                revert NotRented(tokenId);
-            }
-
             RentalInfo storage rental = rentals[tokenId];
-            if (blockTime < rental.endDate) {
+            if (rental.endDate != 0 && blockTime >= rental.endDate) {
+                collectibleTokenIds[collectibleTokenIds.length - 1] = tokenId;
+                finishedRentalTime += rental.endDate - rental.beginDate;
+
+                rental.beginDate = 0;
+                rental.endDate = 0;
+
+                address currentOwner = NODE_KEY.ownerOf(tokenId);
+                NODE_KEY.burnFrom(currentOwner, tokenId);
+            } else if (requireSuccess) {
                 revert NotCollectable(tokenId);
             }
-
-            NODE_KEY.transferFrom(currentOwner, address(this), tokenId);
-            finishedRentalTime += rental.endDate - rental.beginDate;
-
-            rental.beginDate = 0;
-            rental.endDate = 0;
         }
 
-        if (tokenIds.length > 0) {
-            emit Collected(tokenIds);
+        if (collectibleTokenIds.length > 0) {
+            emit Collected(collectibleTokenIds);
         }
 
         return finishedRentalTime;
