@@ -20,12 +20,10 @@ function behavesLikeNonTransferableERC721({deploy, mint, errors}, operatorFilter
     const unknownNFT = 1000;
 
     const fixture = async function () {
-      this.token = await deploy(deployer);
-      await mint(this.token, owner.address, nft1, 1, deployer);
-      await mint(this.token, owner.address, nft2, 1, deployer);
-      await mint(this.token, owner.address, nft3, 1, deployer);
-
-      await this.token.grantRole(this.token.OPERATOR_ROLE(), operatorRoleHolder.address);
+      this.token = await deploy(deployer, operatorRoleHolder);
+      await mint(this.token, owner.address, nft1, 1, operatorRoleHolder);
+      await mint(this.token, owner.address, nft2, 1, operatorRoleHolder);
+      await mint(this.token, owner.address, nft3, 1, operatorRoleHolder);
 
       await this.token.connect(owner).approve(approved.address, nft1);
       await this.token.connect(owner).approve(approved.address, nft2);

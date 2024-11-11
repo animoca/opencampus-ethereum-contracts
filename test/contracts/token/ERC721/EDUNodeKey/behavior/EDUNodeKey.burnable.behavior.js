@@ -4,7 +4,7 @@ const {expectRevert} = require('@animoca/ethereum-contract-helpers/src/test/reve
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
 const {supportsInterfaces} = require('@animoca/ethereum-contracts/test/contracts/introspection/behaviors/SupportsInterface.behavior');
 
-function behavesLikeBurnable({deploy, mint, features, errors, interfaces, methods}) {
+function behavesLikeERC721Burnable({deploy, mint, errors, interfaces, methods}) {
   const {
     'burnFrom(address,uint256)': burnFrom,
     'batchBurnFrom(address,uint256[])': batchBurnFrom,
@@ -13,7 +13,7 @@ function behavesLikeBurnable({deploy, mint, features, errors, interfaces, method
     'batchMint(address,uint256[])': batchMint_ERC721,
   } = methods || {};
 
-  describe('like an Burnable', function () {
+  describe('like an ERC721 Burnable', function () {
     let accounts, deployer, owner, approved, approvedAll, other, operatorRoleHolder;
     let nft1 = 1;
     let nft2 = 2;
@@ -27,13 +27,11 @@ function behavesLikeBurnable({deploy, mint, features, errors, interfaces, method
     });
 
     const fixture = async function () {
-      this.token = await deploy(deployer);
-      await mint(this.token, owner.address, nft1, 1, deployer);
-      await mint(this.token, owner.address, nft2, 1, deployer);
-      await mint(this.token, owner.address, nft3, 1, deployer);
-      await mint(this.token, owner.address, nft4, 1, deployer);
-
-      await this.token.grantRole(this.token.OPERATOR_ROLE(), operatorRoleHolder.address);
+      this.token = await deploy(deployer, operatorRoleHolder);
+      await mint(this.token, owner.address, nft1, 1, operatorRoleHolder);
+      await mint(this.token, owner.address, nft2, 1, operatorRoleHolder);
+      await mint(this.token, owner.address, nft3, 1, operatorRoleHolder);
+      await mint(this.token, owner.address, nft4, 1, operatorRoleHolder);
 
       // NOTE: approve/ setApprovalForAll should have no effect on the token burning
       await this.token.connect(owner).approve(approved.address, nft1);
@@ -103,21 +101,21 @@ function behavesLikeBurnable({deploy, mint, features, errors, interfaces, method
       if (mint_ERC721 !== undefined) {
         it('can be minted again, using mint(address,uint256)', async function () {
           for (const id of ids) {
-            await mint_ERC721(this.token, owner.address, id, deployer);
+            await mint_ERC721(this.token, owner.address, id, operatorRoleHolder);
           }
         });
       }
 
       if (batchMint_ERC721 !== undefined) {
         it('can be minted again, using batchMint(address,uint256[])', async function () {
-          await batchMint_ERC721(this.token, owner.address, ids, deployer);
+          await batchMint_ERC721(this.token, owner.address, ids, operatorRoleHolder);
         });
       }
 
       if (safeMint_ERC721 !== undefined) {
         it('can be minted again, using safeMint(address,uint256,bytes)', async function () {
           for (const id of ids) {
-            await safeMint_ERC721(this.token, owner.address, id, '0x', deployer);
+            await safeMint_ERC721(this.token, owner.address, id, '0x', operatorRoleHolder);
           }
         });
       }
@@ -127,60 +125,6 @@ function behavesLikeBurnable({deploy, mint, features, errors, interfaces, method
           await this.token.deliver(
             ids.map(() => owner.address),
             ids
-          );
-        });
-      }
-    };
-
-    const cannotBeMintedAgain = function (ids) {
-      ids = Array.isArray(ids) ? ids : [ids];
-
-      it('[ERC721MintableOnce] wasBurnt(uint256) returns true', async function () {
-        for (const id of ids) {
-          expect(await this.token.wasBurnt(id)).to.be.true;
-        }
-      });
-
-      if (mint_ERC721 !== undefined) {
-        it('[ERC721MintableOnce] cannot be minted again, using mint(address,uint256)', async function () {
-          for (const id of ids) {
-            await expectRevert(mint_ERC721(this.token, owner.address, id, deployer), this.token, errors.BurntToken, {
-              tokenId: id,
-            });
-          }
-        });
-      }
-
-      if (batchMint_ERC721 !== undefined) {
-        it('[ERC721MintableOnce] cannot be minted again, using batchMint(address,uint256[])', async function () {
-          await expectRevert(batchMint_ERC721(this.token, owner.address, ids, deployer), this.token, errors.BurntToken, {
-            tokenId: ids[0],
-          });
-        });
-      }
-
-      if (safeMint_ERC721 !== undefined) {
-        it('[ERC721MintableOnce] cannot be minted again, using safeMint(address,uint256[],bytes)', async function () {
-          for (const id of ids) {
-            await expectRevert(safeMint_ERC721(this.token, owner.address, id, '0x', deployer), this.token, errors.BurntToken, {
-              tokenId: id,
-            });
-          }
-        });
-      }
-
-      if (interfaces && interfaces.ERC721Deliverable) {
-        it('[ERC721MintableOnce] cannot be minted again, using deliver(address[],uint256[])', async function () {
-          await expectRevert(
-            this.token.deliver(
-              ids.map(() => owner.address),
-              ids
-            ),
-            this.token,
-            errors.BurntToken,
-            {
-              tokenId: ids[0],
-            }
           );
         });
       }
@@ -212,11 +156,7 @@ function behavesLikeBurnable({deploy, mint, features, errors, interfaces, method
       });
 
       if (ids.length > 0) {
-        if (features && features.ERC721MintableOnce) {
-          cannotBeMintedAgain(ids);
-        } else {
-          canBeMintedAgain(ids);
-        }
+        canBeMintedAgain(ids);
       }
     };
 
@@ -270,5 +210,5 @@ function behavesLikeBurnable({deploy, mint, features, errors, interfaces, method
 }
 
 module.exports = {
-  behavesLikeBurnable,
+  behavesLikeERC721Burnable,
 };

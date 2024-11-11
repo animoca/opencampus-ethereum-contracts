@@ -1,10 +1,10 @@
 const {runBehaviorTests} = require('@animoca/ethereum-contract-helpers/src/test/run');
 const {getForwarderRegistryAddress, getTokenMetadataResolverWithBaseURIAddress} = require('@animoca/ethereum-contracts/test/helpers/registries');
-const {behavesLikeERC721Mintable} = require('@animoca/ethereum-contracts/test/contracts/token/ERC721/behaviors/ERC721.mintable.behavior');
-const {behavesLikeERC721Deliverable} = require('@animoca/ethereum-contracts/test/contracts/token/ERC721/behaviors/ERC721.deliverable.behavior');
-const {behavesLikeERC721Metadata} = require('@animoca/ethereum-contracts/test/contracts/token/ERC721/behaviors/ERC721.metadata.behavior');
 const {behavesLikeNonTransferableERC721} = require('./behavior/EDUNodeKey.behavior');
-const {behavesLikeBurnable} = require('./behavior/EDUNodeKey.burnable.behavior');
+const {behavesLikeERC721Burnable} = require('./behavior/EDUNodeKey.burnable.behavior');
+const {behavesLikeERC721Mintable} = require('./behavior/EDUNodeKey.mintable.behavior');
+const {behavesLikeERC721Deliverable} = require('./behavior/EDUNodeKey.deliverable.behavior');
+const {behavesLikeERC721Metadata} = require('./behavior/EDUNodeKey.metadata.behavior');
 
 const name = 'EDU Principal Node Key';
 const symbol = 'EDUKey';
@@ -43,8 +43,6 @@ runBehaviorTests('EDUNodeKeyMock', config, function (deployFn) {
 
       // Misc
       InconsistentArrayLengths: {custom: true, error: 'InconsistentArrayLengths'},
-      NotMinter: {custom: true, error: 'NotRoleHolder', args: ['role', 'account']},
-
       NotTransferable: {custom: true, error: 'NotTransferable'},
       NotOperator: {custom: true, error: 'NotRoleHolder', args: ['role', 'account']},
     },
@@ -72,21 +70,20 @@ runBehaviorTests('EDUNodeKeyMock', config, function (deployFn) {
         return contract.connect(signer).batchBurnFrom(from, tokenIds);
       },
     },
-    deploy: async function (deployer) {
+    deploy: async function (deployer, operatorRoleHolder) {
       const contract = await deployFn({name, symbol});
-      await contract.grantRole(await contract.MINTER_ROLE(), deployer.address);
+      if (operatorRoleHolder) {
+        await contract.grantRole(await contract.OPERATOR_ROLE(), operatorRoleHolder.address);
+      }
       return contract;
     },
-    mint: async function (contract, to, id, _value) {
-      return contract.mint(to, id);
-    },
-    tokenMetadata: async function (contract, id) {
-      return contract.tokenURI(id);
+    mint: async function (contract, to, id, _value, signer) {
+      return contract.connect(signer).mint(to, id);
     },
   };
 
   behavesLikeNonTransferableERC721(implementation);
-  behavesLikeBurnable(implementation);
+  behavesLikeERC721Burnable(implementation);
 
   behavesLikeERC721Mintable(implementation);
   behavesLikeERC721Deliverable(implementation);
