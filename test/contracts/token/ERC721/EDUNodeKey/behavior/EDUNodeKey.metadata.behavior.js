@@ -59,5 +59,5 @@ function behavesLikeERC721Metadata({name, symbol, deploy, errors, features}) {
 }
 
 module.exports = {
-    behavesLikeERC721Metadata,
+  behavesLikeERC721Metadata,
 };

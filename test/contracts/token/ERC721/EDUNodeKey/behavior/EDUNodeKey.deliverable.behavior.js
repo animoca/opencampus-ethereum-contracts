@@ -98,5 +98,5 @@ function behavesLikeERC721Deliverable({deploy, errors}) {
 }
 
 module.exports = {
-    behavesLikeERC721Deliverable,
+  behavesLikeERC721Deliverable,
 };

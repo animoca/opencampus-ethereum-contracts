@@ -110,7 +110,9 @@ function behavesLikeERC721Mintable({deploy, errors, interfaces, methods}) {
 
       if (data !== undefined && isERC721Receiver) {
         it('calls onERC721Received', async function () {
-          await expect(this.receipt).to.emit(this.receiver721, 'ERC721Received').withArgs(operatorRoleHolder.address, ethers.ZeroAddress, tokenIds, data);
+          await expect(this.receipt)
+            .to.emit(this.receiver721, 'ERC721Received')
+            .withArgs(operatorRoleHolder.address, ethers.ZeroAddress, tokenIds, data);
         });
       }
     };
@@ -184,5 +186,5 @@ function behavesLikeERC721Mintable({deploy, errors, interfaces, methods}) {
 }
 
 module.exports = {
-    behavesLikeERC721Mintable,
+  behavesLikeERC721Mintable,
 };

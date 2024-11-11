@@ -67,19 +67,19 @@ contract EDUNodeKey is IERC721, IEDUNodeKey, ERC721Metadata, AccessControl, Toke
 
     /// @inheritdoc IERC721
     /// @dev Reverts in any case, as this contract does not support transfering tokens.
-    function transferFrom(address /*from*/, address /*to*/, uint256 /*tokenId*/) external virtual {
+    function transferFrom(address, address, uint256) external pure {
         revert NotTransferable();
     }
 
     /// @inheritdoc IERC721
     /// @dev Reverts in any case, as this contract does not support transfering tokens.
-    function safeTransferFrom(address /*from*/, address /*to*/, uint256 /*tokenId*/) external virtual {
+    function safeTransferFrom(address, address, uint256) external pure {
         revert NotTransferable();
     }
 
     /// @inheritdoc IERC721
     /// @dev Reverts in any case, as this contract does not support transfering tokens.
-    function safeTransferFrom(address /*from*/, address /*to*/, uint256 /*tokenId*/, bytes calldata /*data*/) external virtual {
+    function safeTransferFrom(address, address, uint256, bytes calldata) external pure {
         revert NotTransferable();
     }
 
