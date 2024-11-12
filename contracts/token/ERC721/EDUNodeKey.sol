@@ -39,7 +39,7 @@ contract EDUNodeKey is IEDUNodeKey, ERC721Metadata, AccessControl, TokenRecovery
     uint256 internal constant EDU_NODE_KEY_BURNT_TOKEN_OWNER_VALUE = 0xdead000000000000000000000000000000000000000000000000000000000000;
 
     /// @notice Constructor
-    /// @notice Marks the following ERC165 interface(s) as supported: ERC721, ERC721Mintable, ERC721Deliverable, ERC721Burnable.
+    /// @notice Marks the following ERC165 interface(s) as supported: ERC721, ERC721Mintable, ERC721Burnable.
     /// @param tokenName The name of the token.
     /// @param tokenSymbol The symbol of the token.
     /// @param metadataResolver The address of the metadata resolver contract.
@@ -52,7 +52,6 @@ contract EDUNodeKey is IEDUNodeKey, ERC721Metadata, AccessControl, TokenRecovery
     ) ContractOwnership(msg.sender) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) ForwarderRegistryContext(forwarderRegistry) {
         ERC721Storage.init();
         ERC721Storage.initERC721Mintable();
-        ERC721Storage.initERC721Deliverable();
         ERC721Storage.initERC721Burnable();
     }
 
