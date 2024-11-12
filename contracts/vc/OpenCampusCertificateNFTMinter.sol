@@ -17,7 +17,7 @@ contract OpenCampusCertificateNFTMinter is ContractOwnership {
     IIssuersDIDRegistry public immutable DID_REGISTRY;
     OpenCampusCertificateNFTv1 public immutable NFT_V1;
 
-    IRevocationRegistry public _revocationRegistry;
+    IRevocationRegistry public revocationRegistry;
 
     /// @notice Thrown when the issuer is not one of the allowed issuers.
     error IssuerNotAllowed(bytes32 hashedDid, address signer);
@@ -28,17 +28,17 @@ contract OpenCampusCertificateNFTMinter is ContractOwnership {
     constructor(
         IIssuersDIDRegistry didRegistry,
         OpenCampusCertificateNFTv1 nftv1,
-        IRevocationRegistry revocationRegistry
+        IRevocationRegistry revocationRegistry_
     ) ContractOwnership(msg.sender) {
         DID_REGISTRY = didRegistry;
         NFT_V1 = nftv1;
-        _revocationRegistry = revocationRegistry;
+        revocationRegistry = revocationRegistry_;
     }
 
-    /// @param revocationRegistry The address of the Revocation Registry contract.
-    function setRevocationRegistry(IRevocationRegistry revocationRegistry) external {
+    /// @param revocationRegistry_ The address of the Revocation Registry contract.
+    function setRevocationRegistry(IRevocationRegistry revocationRegistry_) external {
         ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
-        _revocationRegistry = revocationRegistry;
+        revocationRegistry = revocationRegistry_;
     }
 
     /// @dev Reverts with `VcRevoked` error if the token being minted has been revoked.
@@ -55,7 +55,7 @@ contract OpenCampusCertificateNFTMinter is ContractOwnership {
         bytes32 hashedDid = keccak256(bytes(metadata.issuerDid));
 
         if (DID_REGISTRY.issuers(hashedDid, signer)) {
-            if (_revocationRegistry.isRevoked(hashedDid, tokenId)) {
+            if (revocationRegistry.isRevoked(hashedDid, tokenId)) {
                 revert VcRevoked(hashedDid, tokenId);
             }
             NFT_V1.mint(to, tokenId, metadata);

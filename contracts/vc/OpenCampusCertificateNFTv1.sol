@@ -29,7 +29,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
 
     IIssuersDIDRegistry public immutable DID_REGISTRY;
-    IRevocationRegistry public _revocationRegistry;
+    IRevocationRegistry public revocationRegistry;
 
     bytes32 public constant MINTER_ROLE = "minter";
     bytes32 public constant OPERATOR_ROLE = "operator";
@@ -43,18 +43,18 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
         string memory tokenSymbol,
         IForwarderRegistry forwarderRegistry,
         ITokenMetadataResolver metadataResolver,
-        IRevocationRegistry revocationRegistry,
+        IRevocationRegistry revocationRegistry_,
         IIssuersDIDRegistry didRegistry
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) {
         ERC721Storage.init();
         DID_REGISTRY = didRegistry;
-        _revocationRegistry = revocationRegistry;
+        revocationRegistry = revocationRegistry_;
     }
 
-    /// @param revocationRegistry The address of the Revocation Registry contract.
-    function setRevocationRegistry(IRevocationRegistry revocationRegistry) external {
+    /// @param revocationRegistry_ The address of the Revocation Registry contract.
+    function setRevocationRegistry(IRevocationRegistry revocationRegistry_) external {
         ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
-        _revocationRegistry = revocationRegistry;
+        revocationRegistry = revocationRegistry_;
     }
 
     /// @dev Reverts with `NotRoleHolder` if the sender does not have the 'minter' role.
@@ -75,7 +75,7 @@ contract OpenCampusCertificateNFTv1 is IERC721, ERC721Metadata, AccessControl, F
     function burn(uint256 tokenId) external {
         address owner = ERC721Storage.layout().ownerOf(tokenId);
         bytes32 hashedDid = keccak256(bytes(vcData[tokenId].issuerDid));
-        if (_revocationRegistry.isRevoked(hashedDid, tokenId)) {
+        if (revocationRegistry.isRevoked(hashedDid, tokenId)) {
             ERC721Storage.layout().owners[tokenId] = ERC721Storage.BURNT_TOKEN_OWNER_VALUE;
 
             unchecked {
