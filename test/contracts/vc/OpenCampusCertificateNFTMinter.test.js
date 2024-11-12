@@ -119,6 +119,14 @@ describe('OpenCampusCertificateNFTMinter', function () {
         const otherSig = getBytes(rawSig.compactSerialized);
         await expect(this.ocMinter.mint(holderAddress, tokenId, metaData, otherSig)).to.be.revertedWith('ECDSA: invalid signature length');
       });
+
+      it('test signature that would cause ecrecover to recover zero address', async function () {
+        // This InvalidSignature error would be thrown from the openzeppelin contract ECDSA.sol line #140
+        // explicitly when the recovered address from ecrecover is zero address, which can be caused by having v being zero.
+        const badSigRecoveredToZero =
+          '0x020d671b80fbd20466d8cb65cef79a24e3bca3fdf82e9dd89d78e7a4c4c045bd72944c20bb1d839e76ee6bb69fed61f64376c37799598b40b8c49148f3cdd80000';
+        await expect(this.ocMinter.mint(holderAddress, tokenId, metaData, badSigRecoveredToZero)).to.be.revertedWith('ECDSA: invalid signature');
+      });
     });
 
     context('When RevocationRegistry is set', function () {

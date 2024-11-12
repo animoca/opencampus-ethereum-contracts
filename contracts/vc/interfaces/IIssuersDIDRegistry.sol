@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.22;
+pragma solidity ^0.8.22;
 
 /// @title IAllowedIssuersRegistry
 /// @notice Interface for registry to store allowed issuers for VCs to mint NFT VCs
