@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
-import {EDUNodeKey} from "./EDUNodeKey.sol";
+import {IEDUNodeKey} from "./interfaces/IEDUNodeKey.sol";
 import {Points} from "@animoca/anichess-ethereum-contracts-2.2.3/contracts/points/Points.sol";
 import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
 import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
@@ -30,11 +30,12 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     bytes32 public constant RENTAL_CONSUME_CODE = keccak256("NODE_KEY_RENTAL");
 
     Points public immutable POINTS;
-    EDUNodeKey public immutable NODE_KEY;
+    IEDUNodeKey public immutable NODE_KEY;
 
     uint256 public monthlyMaintenanceFee;
     uint256 public maxRentalDuration;
     uint256 public maxRentalCountPerCall;
+    uint256 public nodeKeySupply;
 
     mapping(uint256 => RentalInfo) public rentals;
 
@@ -54,6 +55,10 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     error NotRentable(uint256 tokenId);
     error NotRented(uint256 tokenId);
     error NotCollectable(uint256 tokenId);
+    error UnsupportedTokenId(uint256 tokenId);
+    
+    error Test(uint256 current, uint256 beginDate, uint256 endDate);
+    error TestUint256(uint256 val);
 
     constructor(
         address nodeKeyAddress,
@@ -61,13 +66,15 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256 monthlyMaintenanceFee_,
         uint256 maxRentalDuration_,
         uint256 maxRentalCountPerCall_,
+        uint256 nodeKeySupply_,
         IForwarderRegistry forwarderRegistry
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
-        NODE_KEY = EDUNodeKey(nodeKeyAddress);
+        NODE_KEY = IEDUNodeKey(nodeKeyAddress);
         POINTS = Points(pointsAddress);
         monthlyMaintenanceFee = monthlyMaintenanceFee_;
         maxRentalDuration = maxRentalDuration_;
         maxRentalCountPerCall = maxRentalCountPerCall_;
+        nodeKeySupply = nodeKeySupply_;
     }
 
     function estimateNodeKeyPrice(uint256 duration, uint256[] calldata expiredNodeKeyIds) public view returns (uint256 fee) {
@@ -110,7 +117,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256 currentTime = block.timestamp;
         uint256 finishedRentalTime = _collectExpiredTokens(expiredNodeKeyIds, currentTime, requireSuccessOnCollect);
 
-        (RentalInfo memory rental, uint256 maintenanceFee, uint256 elaspedTime) = _processRent(account, tokenId, duration, block.timestamp);
+        (RentalInfo memory rental, uint256 maintenanceFee, uint256 elaspedTime) = _processRent(account, tokenId, duration, currentTime);
         uint256 preEffectiveRentalTime = totalEffectiveRentalTime - finishedRentalTime - elaspedTime;
         uint256 nodeKeyPrice = _estimateNodeKeyPrice(preEffectiveRentalTime);
         totalEffectiveRentalTime = preEffectiveRentalTime + duration;
@@ -175,13 +182,15 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             revert RentalDurationLimitExceeded(tokenId, duration);
         }
 
-        RentalInfo storage rental = rentals[tokenId];
-        address currentNodeKeyOwner = NODE_KEY.ownerOf(tokenId);
+        if (tokenId >= nodeKeySupply) {
+            revert UnsupportedTokenId(tokenId);
+        }
 
-        if (address(this) != currentNodeKeyOwner) {
+        RentalInfo storage rental = rentals[tokenId];
+        if (rental.endDate != 0) {
             if (currentTime >= rental.endDate) {
                 elaspedRentalTime = rental.endDate - rental.beginDate;
-            } else if (account == currentNodeKeyOwner) {
+            } else if (account == NODE_KEY.ownerOf(tokenId)) {
                 elaspedRentalTime = currentTime - rental.beginDate;
             } else {
                 revert NotRentable(tokenId);

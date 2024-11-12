@@ -1,102 +1,102 @@
-const {ethers} = require('hardhat');
-const {expect} = require('chai');
-const {expectRevert} = require('@animoca/ethereum-contract-helpers/src/test/revert');
-const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
-const {supportsInterfaces} = require('@animoca/ethereum-contracts/test/contracts/introspection/behaviors/SupportsInterface.behavior');
+// const {ethers} = require('hardhat');
+// const {expect} = require('chai');
+// const {expectRevert} = require('@animoca/ethereum-contract-helpers/src/test/revert');
+// const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
+// const {supportsInterfaces} = require('@animoca/ethereum-contracts/test/contracts/introspection/behaviors/SupportsInterface.behavior');
 
-function behavesLikeERC721Deliverable({deploy, errors}) {
-  describe('like an ERC721 Deliverable', function () {
-    let accounts, deployer, owner, operatorRoleHolder;
+// function behavesLikeERC721Deliverable({deploy, errors}) {
+//   describe('like an ERC721 Deliverable', function () {
+//     let accounts, deployer, owner, operatorRoleHolder;
 
-    before(async function () {
-      accounts = await ethers.getSigners();
-      [deployer, owner, operatorRoleHolder] = accounts;
-    });
+//     before(async function () {
+//       accounts = await ethers.getSigners();
+//       [deployer, owner, operatorRoleHolder] = accounts;
+//     });
 
-    const fixture = async function () {
-      this.token = await deploy(deployer, operatorRoleHolder);
-    };
+//     const fixture = async function () {
+//       this.token = await deploy(deployer, operatorRoleHolder);
+//     };
 
-    beforeEach(async function () {
-      await loadFixture(fixture, this);
-    });
+//     beforeEach(async function () {
+//       await loadFixture(fixture, this);
+//     });
 
-    const mintWasSuccessful = function (tokenIds) {
-      const ids = Array.isArray(tokenIds) ? tokenIds : [tokenIds];
-      it('gives the ownership of the token(s) to the given address', async function () {
-        for (const id of ids) {
-          expect(await this.token.ownerOf(id)).to.equal(owner.address);
-        }
-      });
+//     const mintWasSuccessful = function (tokenIds) {
+//       const ids = Array.isArray(tokenIds) ? tokenIds : [tokenIds];
+//       it('gives the ownership of the token(s) to the given address', async function () {
+//         for (const id of ids) {
+//           expect(await this.token.ownerOf(id)).to.equal(owner.address);
+//         }
+//       });
 
-      it('has an empty approval for the token(s)', async function () {
-        for (const id of ids) {
-          expect(await this.token.ownerOf(id)).to.equal(owner.address);
-        }
-      });
+//       it('has an empty approval for the token(s)', async function () {
+//         for (const id of ids) {
+//           expect(await this.token.ownerOf(id)).to.equal(owner.address);
+//         }
+//       });
 
-      it('emits Transfer event(s)', async function () {
-        for (const id of ids) {
-          await expect(this.receipt).to.emit(this.token, 'Transfer').withArgs(ethers.ZeroAddress, owner.address, id);
-        }
-      });
+//       it('emits Transfer event(s)', async function () {
+//         for (const id of ids) {
+//           await expect(this.receipt).to.emit(this.token, 'Transfer').withArgs(ethers.ZeroAddress, owner.address, id);
+//         }
+//       });
 
-      it('adjusts recipient balance', async function () {
-        const quantity = Array.isArray(tokenIds) ? tokenIds.length : 1;
-        expect(await this.token.balanceOf(owner.address)).to.equal(quantity);
-      });
-    };
+//       it('adjusts recipient balance', async function () {
+//         const quantity = Array.isArray(tokenIds) ? tokenIds.length : 1;
+//         expect(await this.token.balanceOf(owner.address)).to.equal(quantity);
+//       });
+//     };
 
-    describe('deliver(address[],uint256[])', function () {
-      describe('Pre-conditions', function () {
-        it('reverts with inconsistent arrays', async function () {
-          await expectRevert(this.token.connect(operatorRoleHolder).deliver([], [1]), this.token, errors.InconsistentArrayLengths);
-          await expectRevert(this.token.connect(operatorRoleHolder).deliver([owner.address], []), this.token, errors.InconsistentArrayLengths);
-        });
+//     describe('deliver(address[],uint256[])', function () {
+//       describe('Pre-conditions', function () {
+//         it('reverts with inconsistent arrays', async function () {
+//           await expectRevert(this.token.connect(operatorRoleHolder).deliver([], [1]), this.token, errors.InconsistentArrayLengths);
+//           await expectRevert(this.token.connect(operatorRoleHolder).deliver([owner.address], []), this.token, errors.InconsistentArrayLengths);
+//         });
 
-        it('reverts if minted to the zero address', async function () {
-          await expectRevert(this.token.connect(operatorRoleHolder).deliver([ethers.ZeroAddress], [1]), this.token, errors.MintToAddressZero);
-        });
+//         it('reverts if minted to the zero address', async function () {
+//           await expectRevert(this.token.connect(operatorRoleHolder).deliver([ethers.ZeroAddress], [1]), this.token, errors.MintToAddressZero);
+//         });
 
-        it('reverts if the token already exists', async function () {
-          await this.token.connect(operatorRoleHolder).deliver([owner.address], [1]);
-          await expectRevert(this.token.connect(operatorRoleHolder).deliver([owner.address], [1]), this.token, errors.ExistingToken, {
-            tokenId: 1,
-          });
-        });
+//         it('reverts if the token already exists', async function () {
+//           await this.token.connect(operatorRoleHolder).deliver([owner.address], [1]);
+//           await expectRevert(this.token.connect(operatorRoleHolder).deliver([owner.address], [1]), this.token, errors.ExistingToken, {
+//             tokenId: 1,
+//           });
+//         });
 
-        it('reverts if sent by non-operator', async function () {
-          await expectRevert(this.token.connect(owner).deliver([owner.address], [1]), this.token, errors.NotOperator, {
-            role: await this.token.OPERATOR_ROLE(),
-            account: owner.address,
-          });
-        });
-      });
+//         it('reverts if sent by non-operator', async function () {
+//           await expectRevert(this.token.connect(owner).deliver([owner.address], [1]), this.token, errors.NotOperator, {
+//             role: await this.token.OPERATOR_ROLE(),
+//             account: owner.address,
+//           });
+//         });
+//       });
 
-      context('with an empty list of tokens', function () {
-        this.beforeEach(async function () {
-          this.receipt = await this.token.connect(operatorRoleHolder).deliver([], []);
-        });
-        mintWasSuccessful([]);
-      });
-      context('with a single token', function () {
-        this.beforeEach(async function () {
-          this.receipt = await this.token.connect(operatorRoleHolder).deliver([owner.address], [1]);
-        });
-        mintWasSuccessful([1]);
-      });
-      context('with a list of tokens from the same collection', function () {
-        this.beforeEach(async function () {
-          this.receipt = await this.token.connect(operatorRoleHolder).deliver([owner.address, owner.address], [1, 2]);
-        });
-        mintWasSuccessful([1, 2]);
-      });
-    });
+//       context('with an empty list of tokens', function () {
+//         this.beforeEach(async function () {
+//           this.receipt = await this.token.connect(operatorRoleHolder).deliver([], []);
+//         });
+//         mintWasSuccessful([]);
+//       });
+//       context('with a single token', function () {
+//         this.beforeEach(async function () {
+//           this.receipt = await this.token.connect(operatorRoleHolder).deliver([owner.address], [1]);
+//         });
+//         mintWasSuccessful([1]);
+//       });
+//       context('with a list of tokens from the same collection', function () {
+//         this.beforeEach(async function () {
+//           this.receipt = await this.token.connect(operatorRoleHolder).deliver([owner.address, owner.address], [1, 2]);
+//         });
+//         mintWasSuccessful([1, 2]);
+//       });
+//     });
 
-    supportsInterfaces(['IERC721Deliverable']);
-  });
-}
+//     supportsInterfaces(['IERC721Deliverable']);
+//   });
+// }
 
-module.exports = {
-  behavesLikeERC721Deliverable,
-};
+// module.exports = {
+//   behavesLikeERC721Deliverable,
+// };

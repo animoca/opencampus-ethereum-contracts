@@ -86,6 +86,6 @@ runBehaviorTests('EDUNodeKeyMock', config, function (deployFn) {
   behavesLikeERC721Burnable(implementation);
 
   behavesLikeERC721Mintable(implementation);
-  behavesLikeERC721Deliverable(implementation);
+  // behavesLikeERC721Deliverable(implementation);
   behavesLikeERC721Metadata(implementation);
 });

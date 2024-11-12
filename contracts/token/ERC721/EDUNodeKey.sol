@@ -6,6 +6,7 @@ import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
 import {IERC721} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721.sol";
+import {IERC721Mintable} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721Mintable.sol";
 import {Transfer} from "@animoca/ethereum-contracts/contracts/token/ERC721/events/ERC721Events.sol";
 import {ERC721Storage} from "@animoca/ethereum-contracts/contracts/token/ERC721/libraries/ERC721Storage.sol";
 import {ERC721Metadata} from "@animoca/ethereum-contracts/contracts/token/ERC721/ERC721Metadata.sol";
@@ -22,7 +23,7 @@ import {IEDUNodeKey} from "./interfaces/IEDUNodeKey.sol";
 /// @notice A contract that implements the ERC721 standard with metadata, minting, burning.
 /// @notice Minting and Burning can only be performed by accounts with the operator role.
 /// @notice Transferability is disabled.
-contract EDUNodeKey is IERC721, IEDUNodeKey, ERC721Metadata, AccessControl, TokenRecovery, ForwarderRegistryContext {
+contract EDUNodeKey is IEDUNodeKey, ERC721Metadata, AccessControl, TokenRecovery, ForwarderRegistryContext {
     /// @notice Thrown for any transfer attempts.
     error NotTransferable();
 
@@ -83,32 +84,25 @@ contract EDUNodeKey is IERC721, IEDUNodeKey, ERC721Metadata, AccessControl, Toke
         revert NotTransferable();
     }
 
-    /// @inheritdoc IEDUNodeKey
+    /// @inheritdoc IERC721Mintable
     /// @dev Reverts with {NotRoleHolder} if the sender does not have the operator role.
     function mint(address to, uint256 tokenId) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         ERC721Storage.layout().mint(to, tokenId);
     }
 
-    /// @inheritdoc IEDUNodeKey
+    /// @inheritdoc IERC721Mintable
     /// @dev Reverts with {NotRoleHolder} if the sender does not have the operator role.
     function safeMint(address to, uint256 tokenId, bytes calldata data) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         ERC721Storage.layout().safeMint(_msgSender(), to, tokenId, data);
     }
 
-    /// @inheritdoc IEDUNodeKey
+    /// @inheritdoc IERC721Mintable
     /// @dev Reverts with {NotRoleHolder} if the sender does not have the operator role.
     function batchMint(address to, uint256[] calldata tokenIds) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         ERC721Storage.layout().batchMint(to, tokenIds);
-    }
-
-    /// @inheritdoc IEDUNodeKey
-    /// @dev Reverts with {NotRoleHolder} if the sender does not have the operator role.
-    function deliver(address[] calldata recipients, uint256[] calldata tokenIds) external {
-        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
-        ERC721Storage.layout().deliver(recipients, tokenIds);
     }
 
     /// @notice Burns a token.
