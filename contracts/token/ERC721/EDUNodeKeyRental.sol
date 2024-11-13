@@ -138,10 +138,9 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         address account_ = account;
         uint256[] memory tokenIds_ = tokenIds;
         uint256[] memory durations_ = durations;
-        uint256[] memory expiredNodeKeyIds_ = expiredNodeKeyIds;
 
         uint256 currentTime = block.timestamp;
-        uint256 finishedRentalTime = _collectExpiredTokens(expiredNodeKeyIds_, currentTime, requireSuccessOnCollect);
+        uint256 finishedRentalTime = _collectExpiredTokens(expiredNodeKeyIds, currentTime, requireSuccessOnCollect);
 
         RentalInfo[] memory rentalInfos;
         uint256[] memory fees;
@@ -198,15 +197,14 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         }
 
         uint256 currentExpiry = rental.endDate;
+        rental.beginDate = currentTime;
         if (currentTime >= currentExpiry) {
             // New period
-            rental.beginDate = currentTime;
             rental.endDate = currentTime + duration;
             NODE_KEY.safeMint(account, tokenId, "");
         } else {
             // Extend the period
-            rental.beginDate = currentExpiry;
-            rental.endDate = currentExpiry + duration;
+            rental.endDate += duration;
         }
 
         return (rental, monthlyMaintenanceFee * duration, elaspedRentalTime);
@@ -243,7 +241,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         totalEffectiveRentalTime -= finishedRentalTime;
     }
 
-    function _collectExpiredTokens(uint256[] memory tokenIds, uint256 blockTime, bool requireSuccess) internal returns (uint256 finishedRentalTime) {
+    function _collectExpiredTokens(uint256[] calldata tokenIds, uint256 blockTime, bool requireSuccess) internal returns (uint256 finishedRentalTime) {
         uint256[] memory collectibleTokenIds;
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
