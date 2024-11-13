@@ -6,6 +6,15 @@ const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtu
 const {getForwarderRegistryAddress, getTokenMetadataResolverPerTokenAddress} = require('@animoca/ethereum-contracts/test/helpers/registries');
 const {time} = require('@nomicfoundation/hardhat-network-helpers');
 const keccak256 = require('keccak256');
+const { ZeroAddress } = require('ethers');
+
+function calculateNodeKeyPrice(totalEffectiveRentalTime) {
+  return totalEffectiveRentalTime;
+}
+
+function calculateFee(totalEffectiveRentalTime, duration, maintenanceFee) {
+  return calculateNodeKeyPrice(totalEffectiveRentalTime) + duration * maintenanceFee;
+}
 
 async function getBlockTimestamp(tx) {
   const block = await ethers.provider.getBlock(tx.blockNumber);
@@ -60,10 +69,35 @@ describe('EDUNodeKeyRental', function () {
     await this.ocp.addConsumeReasonCodes([this.rentalReasonCode]);
     await this.nodeKeyContract.grantRole(await this.nodeKeyContract.OPERATOR_ROLE(), this.rentalContract.target);
 
-    await this.rentalContract.connect(user1).rentWithStrictCollection(user1, 400n, 1000n, []);
-    await this.rentalContract.connect(user1).rentWithStrictCollection(user1, 401n, 1000n, []);
-    await this.rentalContract.connect(user2).rentWithStrictCollection(user2, 402n, 1000n, []);
-    await this.rentalContract.connect(user2).rentWithStrictCollection(user2, 403n, 10000n, []);
+    this.initialRentals = [
+      {
+        account: user1,
+        tokenId: 400n,
+        duration: 1000n,
+      },
+      {
+        account: user1,
+        tokenId: 401n,
+        duration: 1000n,
+      },
+      {
+        account: user2,
+        tokenId: 402n,
+        duration: 1000n,
+      },
+      {
+        account: user2,
+        tokenId: 403n,
+        duration: 10000n,
+      }
+    ];
+
+    this.initialRentalsDuration = this.initialRentals.reduce((acc, cur) => acc + cur.duration, 0n);
+
+    for (let i = 0; i < this.initialRentals.length; i++) {
+      const rental = this.initialRentals[i];
+      await this.rentalContract.connect(rental.account).rent(rental.account, rental.tokenId, rental.duration, []);
+    }
   };
 
   beforeEach(async function () {
@@ -76,12 +110,12 @@ describe('EDUNodeKeyRental', function () {
     });
 
     it('Node key rented', async function () {
-      await this.rentalContract.connect(user1).rentWithStrictCollection(user1, 0n, 10n, []);
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n, []);
       expect(await this.rentalContract.renterOf(0n)).to.be.equal(user1);
     });
 
     it('Node key rented, and expired', async function () {
-      await this.rentalContract.connect(user1).rentWithStrictCollection(user1, 0n, 10n, []);
+      await this.rentalContract.connect(user1).rent(user1, 0n, 10n, []);
       await time.increase(10n);
       expectRevert(this.rentalContract.renterOf(0n), this.rentalContract, 'NotRented', 0n);
     });
@@ -112,8 +146,8 @@ describe('EDUNodeKeyRental', function () {
 
   context('rent(address account, uint256 tokenId, uint256 duration)', function () {
     it('successfully rent 1 node key', async function () {
-      const tx = await this.rentalContract.connect(user1).rentWithStrictCollection(user1, 0n, 1000n, []);
-      const expectedCost = 13000n + 1000n * this.monthlyMaintenanceFee;
+      const tx = await this.rentalContract.connect(user1).rent(user1, 0n, 1000n, []);
+      const expectedCost = calculateFee(this.initialRentalsDuration, 1000n, this.monthlyMaintenanceFee);
       const blockTimestamp = await getBlockTimestamp(tx);
       await expect(tx)
         .to.emit(this.ocp, 'Consumed')
@@ -123,86 +157,66 @@ describe('EDUNodeKeyRental', function () {
     });
 
     it('rent a node key for 0 duration', async function () {
-      await expect(this.rentalContract.connect(user1).rentWithStrictCollection(user1, 0n, 0n, [])).to.be.revertedWithCustomError(
+      await expect(this.rentalContract.connect(user1).rent(user1, 0n, 0n, [])).to.be.revertedWithCustomError(
         this.rentalContract,
         'ZeroRentalDuration'
       );
     });
 
     it('rent a token however signer does not have enough balance to rent', async function () {
-      await expect(this.rentalContract.connect(user4).rentWithStrictCollection(user4, 0n, 2000n, []))
+      await expect(this.rentalContract.connect(user4).rent(user4, 0n, 2000n, []))
         .to.be.revertedWithCustomError(this.ocp, 'InsufficientBalance')
         .withArgs(user4, 15000n);
     });
 
-    it('extend the rent on an non-expired node key.', async function () {
-      await time.increase(5n);
+    it('extend the rental on an non-expired node key.', async function () {
+      // rent for 1000s initially
+      const tx1 = await this.rentalContract.connect(user1).rent(user1, 0n, 1000n, []);
+      const blockTimestamp1 = await getBlockTimestamp(tx1);
+      await time.increase(200n);
 
-      const w = await this.rentalContract.connect(user1).rentWithStrictCollection(user1, 400n, 1000n, []);
-      const {beginDate, endDate} = await this.rentalContract.rentals(400n);
+      // extend the rental for 500s
+      const tx2 = await this.rentalContract.connect(user1).rent(user1, 0n, 500n, []);
+      const blockTimestamp2 = await getBlockTimestamp(tx2);
 
-      console.log(beginDate, endDate, await getBlockTimestamp(w));
-
-      const tx = await this.rentalContract.connect(user1).rentWithStrictCollection(user1, 400n, 1000n, []);
-      const blockTimestamp = await getBlockTimestamp(tx);
-
-      await expect(tx)
+      const expectedCost = calculateFee(this.initialRentalsDuration + 1000n - (blockTimestamp2 - blockTimestamp1), 500n, this.monthlyMaintenanceFee);
+      await expect(tx2)
         .to.emit(this.ocp, 'Consumed')
-        .withArgs(this.rentalContract, this.rentalReasonCode, user1, 2n + 1000n * this.monthlyMaintenanceFee)
+        .withArgs(this.rentalContract, this.rentalReasonCode, user1, expectedCost)
         .to.emit(this.rentalContract, 'Rental')
-        .withArgs(user1, 400n, [endDate, endDate + 1000n], 2n + 1000n * this.monthlyMaintenanceFee);
+        .withArgs(user1, 0n, [blockTimestamp2, blockTimestamp1 + 1000n + 500n], expectedCost);
     });
 
     it('rent non-expired node key from another wallet', async function () {
-      await expect(this.rentalContract.connect(user3).rentWithStrictCollection(user3, 400n, 10n, []))
+      await expect(this.rentalContract.connect(user3).rent(user3, 400n, 10n, []))
         .to.be.revertedWithCustomError(this.rentalContract, 'NotRentable')
         .withArgs(400n);
-    });
-
-    it('rent an expired node key from another wallet, during grace period', async function () {
-      await time.increase(10n);
-      await expect(this.rentalContract.connect(user3).rentWithStrictCollection(user3, 400n, 10n, []))
-        .to.be.revertedWithCustomError(this.rentalContract, 'NotRentable')
-        .withArgs(400n);
-    });
-
-    it('rent an expired node key from another wallet, after grace period', async function () {
-      await time.increase(10n);
-
-      const tx = await this.rentalContract.connect(user3).rentWithStrictCollection(user3, 400n, 10n, []);
-      const blockTimestamp = await getBlockTimestamp(tx);
-
-      await expect(tx)
-        .to.emit(this.ocp, 'Consumed')
-        .withArgs(this.rentalContract, this.rentalReasonCode, user3, 10n)
-        .to.emit(this.rentalContract, 'Rental')
-        .withArgs(user3, [400n], [[blockTimestamp + 10n, blockTimestamp + 10n, 1n]], [10n]);
     });
   });
 
-  context('collectIdledTokens(uint256[] calldata tokenIds) external', function () {
+  context('collectExpiredTokens(uint256[] calldata tokenIds) external', function () {
     it('Successfully collect the idled tokens', async function () {
-      await time.increase(10n);
-      await expect(this.rentalContract.collectIdledTokens([400n, 401n, 402n]))
+      await time.increase(1000n);
+      await expect(this.rentalContract.collectExpiredTokens([400n, 401n, 402n]))
         .to.emit(this.nodeKeyContract, 'Transfer')
-        .withArgs(user1, this.rentalContract, 400n)
+        .withArgs(user1, ZeroAddress, 400n)
         .to.emit(this.nodeKeyContract, 'Transfer')
-        .withArgs(user1, this.rentalContract, 401n)
+        .withArgs(user1, ZeroAddress, 401n)
         .to.emit(this.nodeKeyContract, 'Transfer')
-        .withArgs(user2, this.rentalContract, 402n);
+        .withArgs(user2, ZeroAddress, 402n);
     });
 
-    it('Failed to collect tokens since some token is not idled ', async function () {
-      await time.increase(10n);
-      await expect(this.rentalContract.collectIdledTokens([401n, 403n]))
-        .to.be.revertedWithCustomError(this.rentalContract, 'NotCollectable')
+    it('Failed to collect tokens since some token is not expired', async function () {
+      await time.increase(1000n);
+      await expect(this.rentalContract.collectExpiredTokens([401n, 403n]))
+      .to.be.revertedWithCustomError(this.rentalContract, 'NotCollectable')
         .withArgs(403n);
     });
 
     it('Failed to collect tokens since some token is never rented ', async function () {
-      await time.increase(10n);
-      await expect(this.rentalContract.collectIdledTokens([400n, 10n]))
-        .to.be.revertedWithCustomError(this.rentalContract, 'NotRented')
+      await time.increase(1000n);
+      await expect(this.rentalContract.collectExpiredTokens([400n, 10n]))
+        .to.be.revertedWithCustomError(this.rentalContract, 'NotCollectable')
         .withArgs(10n);
     });
   });
