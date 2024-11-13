@@ -3,7 +3,6 @@ const {getForwarderRegistryAddress, getTokenMetadataResolverWithBaseURIAddress} 
 const {behavesLikeNonTransferableERC721} = require('./behavior/EDUNodeKey.behavior');
 const {behavesLikeERC721Burnable} = require('./behavior/EDUNodeKey.burnable.behavior');
 const {behavesLikeERC721Mintable} = require('./behavior/EDUNodeKey.mintable.behavior');
-const {behavesLikeERC721Deliverable} = require('./behavior/EDUNodeKey.deliverable.behavior');
 const {behavesLikeERC721Metadata} = require('./behavior/EDUNodeKey.metadata.behavior');
 
 const name = 'EDU Principal Node Key';
@@ -86,6 +85,5 @@ runBehaviorTests('EDUNodeKeyMock', config, function (deployFn) {
   behavesLikeERC721Burnable(implementation);
 
   behavesLikeERC721Mintable(implementation);
-  // behavesLikeERC721Deliverable(implementation);
   behavesLikeERC721Metadata(implementation);
 });
