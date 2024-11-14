@@ -103,6 +103,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             } else if (NODE_KEY.ownerOf(tokenId) == account) {
                 elapsedTime += currentTime - rental.beginDate;
             }
+            // TODO; handle the case that same tokenId exists in expiredTokenIds
         }
 
         return _estimateNodeKeyPrice(totalEffectiveRentalTime - elapsedTime) + monthlyMaintenanceFee * duration;
@@ -131,6 +132,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 } else if (NODE_KEY.ownerOf(tokenId) == account) {
                     elapsedTime += currentTime - rental.beginDate;
                 }
+                // TODO; handle the case that same tokenId exists in expiredTokenIds
             }
         }
 
@@ -139,22 +141,11 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
     function rent(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredTokenIds) public {
         uint256 currentTime = block.timestamp;
-        uint256 elapsedTime = _collectExpiredTokens(expiredTokenIds, currentTime);
+        uint256 expiredTokenElaspedTime = _collectExpiredTokens(expiredTokenIds, currentTime);
 
-        RentalInfo storage rental = rentals[tokenId];
-        if (rental.endDate != 0) {
-            if (currentTime >= rental.endDate) {
-                elapsedTime += rental.endDate - rental.beginDate;
-            } else if (NODE_KEY.ownerOf(tokenId) == account) {
-                elapsedTime += currentTime - rental.beginDate;
-            } else {
-                revert NotRentable(tokenId);
-            }
-        }
+        (RentalInfo memory rental, uint256 elapsedTime) = _processRent(account, tokenId, duration, currentTime);
 
-        _processRent(account, tokenId, duration, currentTime, rental);
-
-        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - elapsedTime;
+        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - expiredTokenElaspedTime - elapsedTime;
         totalEffectiveRentalTime = preEffectiveRentalTime + duration;
 
         uint256 fee = _estimateNodeKeyPrice(preEffectiveRentalTime) + monthlyMaintenanceFee * duration;
@@ -175,7 +166,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256[] memory durations_ = durations;
 
         uint256 currentTime = block.timestamp;
-        uint256 elapsedTime = _collectExpiredTokens(expiredTokenIds, currentTime);
+        uint256 totalElapsedTime = _collectExpiredTokens(expiredTokenIds, currentTime);
 
         RentalInfo[] memory rentalInfos;
         uint256[] memory fees;
@@ -184,24 +175,14 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         for (uint256 i = 0; i < tokenIds_.length; i++) {
             uint256 tokenId = tokenIds_[i];
             uint256 duration = durations_[i];
-            RentalInfo storage rental = rentals[tokenId];
-            if (rental.endDate != 0) {
-                if (currentTime >= rental.endDate) {
-                    elapsedTime += rental.endDate - rental.beginDate;
-                } else if (NODE_KEY.ownerOf(tokenId) == account_) {
-                    elapsedTime += currentTime - rental.beginDate;
-                } else {
-                    revert NotRentable(tokenId);
-                }
-            }
-
-            _processRent(account_, tokenId, duration, currentTime, rental);
+            (RentalInfo memory rental, uint256 elapsedTime) = _processRent(account_, tokenId, duration, currentTime);
+            totalElapsedTime += elapsedTime;
             rentalInfos[i] = rental;
             fees[i] = monthlyMaintenanceFee * duration;
             totalDuration += duration;
         }
 
-        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - elapsedTime;
+        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - totalElapsedTime;
         totalEffectiveRentalTime = preEffectiveRentalTime + totalDuration;
 
         uint256 nodeKeyPrice = _estimateNodeKeyPrice(preEffectiveRentalTime);
@@ -218,9 +199,8 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         address account,
         uint256 tokenId,
         uint256 duration,
-        uint256 currentTime,
-        RentalInfo memory rental
-    ) internal returns (RentalInfo memory, uint256, uint256 elaspedRentalTime) {
+        uint256 currentTime
+    ) internal returns (RentalInfo memory, uint256 elapsedTime) {
         if (duration == 0) {
             revert ZeroRentalDuration();
         }
@@ -231,6 +211,17 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
         if (tokenId >= nodeKeySupply) {
             revert UnsupportedTokenId(tokenId);
+        }
+
+        RentalInfo storage rental = rentals[tokenId];
+        if (rental.endDate != 0) {
+            if (currentTime >= rental.endDate) {
+                elapsedTime = rental.endDate - rental.beginDate;
+            } else if (NODE_KEY.ownerOf(tokenId) == account) {
+                elapsedTime = currentTime - rental.beginDate;
+            } else {
+                revert NotRentable(tokenId);
+            }
         }
 
         uint256 currentExpiry = rental.endDate;
@@ -244,7 +235,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             rental.endDate += duration;
         }
 
-        return (rental, monthlyMaintenanceFee * duration, elaspedRentalTime);
+        return (rental, elapsedTime);
     }
 
     function renterOf(uint256 tokenId) public view returns (address) {
