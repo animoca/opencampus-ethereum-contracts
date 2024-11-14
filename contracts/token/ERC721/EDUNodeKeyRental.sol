@@ -95,15 +95,25 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     function estimateRentalFee(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredTokenIds) public view returns (uint256 fee) {
         uint256 elapsedTime = calculateElaspedTimeForExpiredTokens(expiredTokenIds);
 
-        RentalInfo memory rental = rentals[tokenId];
-        uint256 currentTime = block.timestamp;
-        if (rental.endDate != 0) {
-            if (currentTime >= rental.endDate) {
-                elapsedTime += rental.endDate - rental.beginDate;
-            } else if (NODE_KEY.ownerOf(tokenId) == account) {
-                elapsedTime += currentTime - rental.beginDate;
+        bool isCollected = false;
+        // Check if tokenId is in expiredTokenIds, that its elapsedTime should have been handled
+        for (uint256 i = 0; i < expiredTokenIds.length; i++) {
+            if (expiredTokenIds[i] == tokenId) {
+                isCollected = true;
+                break;
             }
-            // TODO; handle the case that same tokenId exists in expiredTokenIds
+        }
+
+        if (!isCollected) {
+            RentalInfo memory rental = rentals[tokenId];
+            if (rental.endDate != 0) {
+                uint256 currentTime = block.timestamp;
+                if (currentTime >= rental.endDate) {
+                    elapsedTime += rental.endDate - rental.beginDate;
+                } else if (NODE_KEY.ownerOf(tokenId) == account) {
+                    elapsedTime += currentTime - rental.beginDate;
+                }
+            }
         }
 
         return _estimateNodeKeyPrice(totalEffectiveRentalTime - elapsedTime) + monthlyMaintenanceFee * duration;
@@ -123,16 +133,26 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256 elapsedTime = calculateElaspedTimeForExpiredTokens(expiredTokenIds);
         for (uint256 i = 0; i < tokenIds.length; i++) {
             totalDuration += durations[i];
-
             uint256 tokenId = tokenIds[i];
-            RentalInfo memory rental = rentals[tokenId];
-            if (rental.endDate != 0) {
-                if (currentTime >= rental.endDate) {
-                    elapsedTime += rental.endDate - rental.beginDate;
-                } else if (NODE_KEY.ownerOf(tokenId) == account) {
-                    elapsedTime += currentTime - rental.beginDate;
+            bool isCollected = false;
+
+            // Check if tokenId is in expiredTokenIds, that its elapsedTime should have been handled
+            for (uint256 j = 0; j < expiredTokenIds.length; j++) {
+                if (expiredTokenIds[j] == tokenId) {
+                    isCollected = true;
+                    break;
                 }
-                // TODO; handle the case that same tokenId exists in expiredTokenIds
+            }
+
+            if (!isCollected) {
+                RentalInfo memory rental = rentals[tokenId];
+                if (rental.endDate != 0) {
+                    if (currentTime >= rental.endDate) {
+                        elapsedTime += rental.endDate - rental.beginDate;
+                    } else if (NODE_KEY.ownerOf(tokenId) == account) {
+                        elapsedTime += currentTime - rental.beginDate;
+                    }
+                }
             }
         }
 
