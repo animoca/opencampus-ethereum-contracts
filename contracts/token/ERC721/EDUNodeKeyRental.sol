@@ -171,7 +171,6 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         RentalInfo[] memory rentalInfos;
         uint256[] memory fees;
         uint256 totalDuration;
-        uint256 totalFee;
         for (uint256 i = 0; i < tokenIds_.length; i++) {
             uint256 tokenId = tokenIds_[i];
             uint256 duration = durations_[i];
@@ -186,7 +185,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         totalEffectiveRentalTime = preEffectiveRentalTime + totalDuration;
 
         uint256 nodeKeyPrice = _estimateNodeKeyPrice(preEffectiveRentalTime);
-        totalFee = nodeKeyPrice * tokenIds_.length + totalDuration * monthlyMaintenanceFee;
+        uint256 totalFee = nodeKeyPrice * tokenIds_.length + totalDuration * monthlyMaintenanceFee;
         for (uint256 i = 0; i < fees.length; i++) {
             fees[i] += nodeKeyPrice;
         }
