@@ -232,26 +232,25 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             revert UnsupportedTokenId(tokenId);
         }
 
+        address currentOwner = NODE_KEY.ownerOf(tokenId);
         RentalInfo storage rental = rentals[tokenId];
         if (rental.endDate != 0) {
             if (currentTime >= rental.endDate) {
                 elapsedTime = rental.endDate - rental.beginDate;
-            } else if (NODE_KEY.ownerOf(tokenId) == account) {
+                rental.endDate = currentTime + duration;
+            } else if (currentOwner == account) {
                 elapsedTime = currentTime - rental.beginDate;
+                rental.endDate += duration;
             } else {
                 revert NotRentable(tokenId);
             }
         }
 
-        uint256 currentExpiry = rental.endDate;
         rental.beginDate = currentTime;
-        if (currentTime >= currentExpiry) {
-            // New period
-            rental.endDate = currentTime + duration;
+
+        if (currentOwner != account) {
+            NODE_KEY.burnFrom(currentOwner, tokenId);
             NODE_KEY.safeMint(account, tokenId, "");
-        } else {
-            // Extend the period
-            rental.endDate += duration;
         }
 
         return (rental, elapsedTime);
