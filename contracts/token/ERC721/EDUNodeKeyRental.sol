@@ -112,6 +112,8 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                     elapsedTime += rental.endDate - rental.beginDate;
                 } else if (NODE_KEY.ownerOf(tokenId) == account) {
                     elapsedTime += currentTime - rental.beginDate;
+                } else {
+                    revert NotRentable(tokenId);
                 }
             }
         }
@@ -151,6 +153,8 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                         elapsedTime += rental.endDate - rental.beginDate;
                     } else if (NODE_KEY.ownerOf(tokenId) == account) {
                         elapsedTime += currentTime - rental.beginDate;
+                    } else {
+                        revert NotRentable(tokenId);
                     }
                 }
             }
