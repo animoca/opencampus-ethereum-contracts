@@ -49,7 +49,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     event MaxRentalCountPerCallUpdated(uint256 newMaxRentalCountPerCall);
 
     error InvalidTokenIdsParam();
-    error ZeroRentalDuration();
+    error ZeroRentalDuration(uint256 tokenId);
     error RentalDurationLimitExceeded(uint256 tokenId, uint256 duration);
     error RentalCountPerCallLimitExceeded();
     error NotRentable(uint256 tokenId);
@@ -74,7 +74,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         nodeKeySupply = nodeKeySupply_;
     }
 
-    function calculateElaspedTimeForExpiredTokens(uint256[] calldata tokenIds) public view returns (uint256 elaspedTime) {
+    function calculateElapsedTimeForExpiredTokens(uint256[] calldata tokenIds) public view returns (uint256 elapsedTime) {
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
             RentalInfo storage rental = rentals[tokenId];
@@ -86,14 +86,14 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 revert TokenNotExpired(tokenId);
             }
 
-            elaspedTime += rental.endDate - rental.beginDate;
+            elapsedTime += rental.endDate - rental.beginDate;
         }
 
-        return elaspedTime;
+        return elapsedTime;
     }
 
     function estimateRentalFee(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredTokenIds) public view returns (uint256 fee) {
-        uint256 elapsedTime = calculateElaspedTimeForExpiredTokens(expiredTokenIds);
+        uint256 elapsedTime = calculateElapsedTimeForExpiredTokens(expiredTokenIds);
 
         bool isCollected = false;
         // Check if tokenId is in expiredTokenIds, that its elapsedTime should have been handled
@@ -132,7 +132,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
         uint256 currentTime = block.timestamp;
         uint256 totalDuration = 0;
-        uint256 elapsedTime = calculateElaspedTimeForExpiredTokens(expiredTokenIds);
+        uint256 elapsedTime = calculateElapsedTimeForExpiredTokens(expiredTokenIds);
         for (uint256 i = 0; i < tokenIds.length; i++) {
             totalDuration += durations[i];
             uint256 tokenId = tokenIds[i];
@@ -165,11 +165,11 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
     function rent(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredTokenIds) public {
         uint256 currentTime = block.timestamp;
-        uint256 expiredTokenElaspedTime = _collectExpiredTokens(expiredTokenIds, currentTime);
+        uint256 expiredTokenElapsedTime = _collectExpiredTokens(expiredTokenIds, currentTime);
 
         (RentalInfo memory rental, uint256 elapsedTime) = _processRent(account, tokenId, duration, currentTime);
 
-        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - expiredTokenElaspedTime - elapsedTime;
+        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - expiredTokenElapsedTime - elapsedTime;
         totalEffectiveRentalTime = preEffectiveRentalTime + duration;
 
         uint256 fee = _estimateNodeKeyPrice(preEffectiveRentalTime) + monthlyMaintenanceFee * duration;
@@ -225,10 +225,10 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256 currentTime
     ) internal returns (RentalInfo memory, uint256 elapsedTime) {
         if (duration == 0) {
-            revert ZeroRentalDuration();
+            revert ZeroRentalDuration(tokenId);
         }
 
-        if (duration >= maxRentalDuration) {
+        if (duration > maxRentalDuration) {
             revert RentalDurationLimitExceeded(tokenId, duration);
         }
 
@@ -236,7 +236,6 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             revert UnsupportedTokenId(tokenId);
         }
 
-        
         RentalInfo storage rental = rentals[tokenId];
         if (rental.endDate == 0) {
             NODE_KEY.safeMint(account, tokenId, "");
