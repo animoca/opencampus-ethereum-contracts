@@ -137,47 +137,41 @@ function behavesLikeERC721Mintable({deploy, errors, interfaces, methods}) {
       });
     };
 
-    if (mint_ERC721 !== undefined) {
-      describe('mint(address,uint256)', function () {
-        const mintFn = async function (tokenId, _data) {
-          return mint_ERC721(this.token, this.to, tokenId, this.sender);
-        };
-        const data = undefined;
-        revertsOnPreconditions(mintFn, data);
-        mintsByRecipient(mintFn, 1, data);
-      });
-    }
+    describe('mint(address,uint256)', function () {
+      const mintFn = async function (tokenId, _data) {
+        return mint_ERC721(this.token, this.to, tokenId, this.sender);
+      };
+      const data = undefined;
+      revertsOnPreconditions(mintFn, data);
+      mintsByRecipient(mintFn, 1, data);
+    });
 
-    if (batchMint_ERC721 !== undefined) {
-      describe('batchMint(address,uint256[])', function () {
-        const mintFn = async function (tokenIds, _data) {
-          const ids = Array.isArray(tokenIds) ? tokenIds : [tokenIds];
-          return batchMint_ERC721(this.token, this.to, ids, this.sender);
-        };
-        const data = undefined;
-        revertsOnPreconditions(mintFn, data);
-        context('with an empty list of tokens', function () {
-          mintsByRecipient(mintFn, [], data);
-        });
-        context('with a single token', function () {
-          mintsByRecipient(mintFn, [1], data);
-        });
-        context('with a list of tokens from the same collection', function () {
-          mintsByRecipient(mintFn, [1, 2], data);
-        });
+    describe('batchMint(address,uint256[])', function () {
+      const mintFn = async function (tokenIds, _data) {
+        const ids = Array.isArray(tokenIds) ? tokenIds : [tokenIds];
+        return batchMint_ERC721(this.token, this.to, ids, this.sender);
+      };
+      const data = undefined;
+      revertsOnPreconditions(mintFn, data);
+      context('with an empty list of tokens', function () {
+        mintsByRecipient(mintFn, [], data);
       });
-    }
+      context('with a single token', function () {
+        mintsByRecipient(mintFn, [1], data);
+      });
+      context('with a list of tokens from the same collection', function () {
+        mintsByRecipient(mintFn, [1, 2], data);
+      });
+    });
 
-    if (safeMint_ERC721 !== undefined) {
-      describe('safeMint(address,uint256,bytes)', function () {
-        const mintFn = async function (tokenId, data) {
-          return safeMint_ERC721(this.token, this.to, tokenId, data, this.sender);
-        };
-        const data = '0x42';
-        revertsOnPreconditions(mintFn, data);
-        mintsByRecipient(mintFn, 1, data);
-      });
-    }
+    describe('safeMint(address,uint256,bytes)', function () {
+      const mintFn = async function (tokenId, data) {
+        return safeMint_ERC721(this.token, this.to, tokenId, data, this.sender);
+      };
+      const data = '0x42';
+      revertsOnPreconditions(mintFn, data);
+      mintsByRecipient(mintFn, 1, data);
+    });
 
     if (interfaces && interfaces.ERC721Mintable) {
       supportsInterfaces(['IERC721Mintable']);

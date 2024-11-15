@@ -171,37 +171,33 @@ function behavesLikeERC721Burnable({deploy, mint, errors, interfaces, methods}) 
       });
     };
 
-    if (burnFrom !== undefined) {
-      describe('burnFrom(address,uint256)', function () {
-        const burnFn = async function (tokenId) {
-          return burnFrom(this.token, this.from, tokenId, this.sender);
-        };
-        revertsOnPreconditions(burnFn);
-        burnsByOperatorRoleHolder(burnFn, nft1);
+    describe('burnFrom(address,uint256)', function () {
+      const burnFn = async function (tokenId) {
+        return burnFrom(this.token, this.from, tokenId, this.sender);
+      };
+      revertsOnPreconditions(burnFn);
+      burnsByOperatorRoleHolder(burnFn, nft1);
+    });
+
+    describe('batchBurnFrom(address,uint256[])', function () {
+      const burnFn = async function (tokenIds) {
+        const ids = Array.isArray(tokenIds) ? tokenIds : [tokenIds];
+        return batchBurnFrom(this.token, this.from, ids, this.sender);
+      };
+      revertsOnPreconditions(burnFn);
+
+      context('with an empty list of tokens', function () {
+        burnsByOperatorRoleHolder(burnFn, []);
       });
-    }
 
-    if (batchBurnFrom !== undefined) {
-      describe('batchBurnFrom(address,uint256[])', function () {
-        const burnFn = async function (tokenIds) {
-          const ids = Array.isArray(tokenIds) ? tokenIds : [tokenIds];
-          return batchBurnFrom(this.token, this.from, ids, this.sender);
-        };
-        revertsOnPreconditions(burnFn);
-
-        context('with an empty list of tokens', function () {
-          burnsByOperatorRoleHolder(burnFn, []);
-        });
-
-        context('with a single token', function () {
-          burnsByOperatorRoleHolder(burnFn, [nft1]);
-        });
-
-        context('with a list of tokens from the same collection', function () {
-          burnsByOperatorRoleHolder(burnFn, [nft1, nft2]);
-        });
+      context('with a single token', function () {
+        burnsByOperatorRoleHolder(burnFn, [nft1]);
       });
-    }
+
+      context('with a list of tokens from the same collection', function () {
+        burnsByOperatorRoleHolder(burnFn, [nft1, nft2]);
+      });
+    });
 
     if (interfaces && interfaces.ERC721Burnable) {
       supportsInterfaces(['IERC721Burnable']);

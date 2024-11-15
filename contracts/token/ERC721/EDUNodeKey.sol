@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
-import {ERC721NonExistingToken, ERC721NonOwnedToken} from "@animoca/ethereum-contracts/contracts/token/ERC721/errors/ERC721Errors.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
+import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
+import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
+import {TokenRecovery} from "@animoca/ethereum-contracts/contracts/security/TokenRecovery.sol";
+import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
+import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
+import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
+import {ITokenMetadataResolver} from "@animoca/ethereum-contracts/contracts/token/metadata/interfaces/ITokenMetadataResolver.sol";
+import {ERC721NonExistingToken, ERC721NonOwnedToken} from "@animoca/ethereum-contracts/contracts/token/ERC721/errors/ERC721Errors.sol";
 import {IERC721} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721.sol";
 import {IERC721Mintable} from "@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721Mintable.sol";
 import {Transfer} from "@animoca/ethereum-contracts/contracts/token/ERC721/events/ERC721Events.sol";
 import {ERC721Storage} from "@animoca/ethereum-contracts/contracts/token/ERC721/libraries/ERC721Storage.sol";
 import {ERC721Metadata} from "@animoca/ethereum-contracts/contracts/token/ERC721/ERC721Metadata.sol";
-import {TokenRecovery} from "@animoca/ethereum-contracts/contracts/security/TokenRecovery.sol";
-import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
-import {ITokenMetadataResolver} from "@animoca/ethereum-contracts/contracts/token/metadata/interfaces/ITokenMetadataResolver.sol";
-import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
-import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
-import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
-import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {IEDUNodeKey} from "./interfaces/IEDUNodeKey.sol";
 
 /// @title EDUNodeKey
@@ -63,24 +63,6 @@ contract EDUNodeKey is IEDUNodeKey, ERC721Metadata, AccessControl, TokenRecovery
     /// @inheritdoc IERC721
     function setApprovalForAll(address operator, bool approved) external {
         ERC721Storage.layout().setApprovalForAll(_msgSender(), operator, approved);
-    }
-
-    /// @inheritdoc IERC721
-    /// @dev Reverts in any case, as this contract does not support transfering tokens.
-    function transferFrom(address, address, uint256) external pure {
-        revert NotTransferable();
-    }
-
-    /// @inheritdoc IERC721
-    /// @dev Reverts in any case, as this contract does not support transfering tokens.
-    function safeTransferFrom(address, address, uint256) external pure {
-        revert NotTransferable();
-    }
-
-    /// @inheritdoc IERC721
-    /// @dev Reverts in any case, as this contract does not support transfering tokens.
-    function safeTransferFrom(address, address, uint256, bytes calldata) external pure {
-        revert NotTransferable();
     }
 
     /// @inheritdoc IERC721Mintable
@@ -156,6 +138,24 @@ contract EDUNodeKey is IEDUNodeKey, ERC721Metadata, AccessControl, TokenRecovery
                 erc721Storage.balances[from] -= length;
             }
         }
+    }
+
+    /// @inheritdoc IERC721
+    /// @dev Reverts in any case, as this contract does not support transfering tokens.
+    function transferFrom(address, address, uint256) external pure {
+        revert NotTransferable();
+    }
+
+    /// @inheritdoc IERC721
+    /// @dev Reverts in any case, as this contract does not support transfering tokens.
+    function safeTransferFrom(address, address, uint256) external pure {
+        revert NotTransferable();
+    }
+
+    /// @inheritdoc IERC721
+    /// @dev Reverts in any case, as this contract does not support transfering tokens.
+    function safeTransferFrom(address, address, uint256, bytes calldata) external pure {
+        revert NotTransferable();
     }
 
     /// @inheritdoc IERC721
