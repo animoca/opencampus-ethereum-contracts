@@ -209,14 +209,14 @@ describe('EDUNodeKeyRental', function () {
     it('Failed to collect tokens since some token is not expired', async function () {
       await time.increase(1000n);
       await expect(this.rentalContract.collectExpiredTokens([401n, 403n]))
-      .to.be.revertedWithCustomError(this.rentalContract, 'NotCollectable')
+      .to.be.revertedWithCustomError(this.rentalContract, 'TokenNotExpired')
         .withArgs(403n);
     });
 
     it('Failed to collect tokens since some token is never rented ', async function () {
       await time.increase(1000n);
       await expect(this.rentalContract.collectExpiredTokens([400n, 10n]))
-        .to.be.revertedWithCustomError(this.rentalContract, 'NotCollectable')
+        .to.be.revertedWithCustomError(this.rentalContract, 'TokenNotExpired')
         .withArgs(10n);
     });
   });
