@@ -188,8 +188,8 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256 currentTime = block.timestamp;
         uint256 totalElapsedTime = _collectExpiredTokens(expiredTokenIds, currentTime);
 
-        RentalInfo[] memory rentalInfos;
-        uint256[] memory fees;
+        RentalInfo[] memory rentalInfos = new RentalInfo[](tokenIds.length);
+        uint256[] memory fees = new uint256[](tokenIds.length);
         uint256 totalDuration;
         for (uint256 i = 0; i < tokenIds_.length; i++) {
             uint256 tokenId = tokenIds_[i];
@@ -232,12 +232,18 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             revert UnsupportedTokenId(tokenId);
         }
 
-        address currentOwner = NODE_KEY.ownerOf(tokenId);
+        
         RentalInfo storage rental = rentals[tokenId];
-        if (rental.endDate != 0) {
+        if (rental.endDate == 0) {
+            NODE_KEY.safeMint(account, tokenId, "");
+            rental.endDate = currentTime + duration;
+        } else {
+            address currentOwner = NODE_KEY.ownerOf(tokenId);
             if (currentTime >= rental.endDate) {
                 elapsedTime = rental.endDate - rental.beginDate;
                 rental.endDate = currentTime + duration;
+                NODE_KEY.burnFrom(currentOwner, tokenId);
+                NODE_KEY.safeMint(account, tokenId, "");
             } else if (currentOwner == account) {
                 elapsedTime = currentTime - rental.beginDate;
                 rental.endDate += duration;
@@ -247,12 +253,6 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         }
 
         rental.beginDate = currentTime;
-
-        if (currentOwner != account) {
-            NODE_KEY.burnFrom(currentOwner, tokenId);
-            NODE_KEY.safeMint(account, tokenId, "");
-        }
-
         return (rental, elapsedTime);
     }
 
