@@ -5,8 +5,8 @@ const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtu
 const {deployContract} = require('@animoca/ethereum-contract-helpers/src/test/deploy');
 const {supportsInterfaces} = require('@animoca/ethereum-contracts/test/contracts/introspection/behaviors/SupportsInterface.behavior');
 
-function behavesLikeNonTransferableERC721({deploy, mint, errors}, operatorFilterRegistryAddress = null) {
-  describe('like an non-transferable ERC721', function () {
+function behavesLikeERC721({deploy, mint, errors}, operatorFilterRegistryAddress = null) {
+  describe('like an ERC721', function () {
     let accounts, deployer, owner, approved, approvedAll, other, operatorRoleHolder;
 
     before(async function () {
@@ -25,6 +25,7 @@ function behavesLikeNonTransferableERC721({deploy, mint, errors}, operatorFilter
       await mint(this.token, owner.address, nft2, 1, operatorRoleHolder);
       await mint(this.token, owner.address, nft3, 1, operatorRoleHolder);
 
+      // NOTE: approve/ setApprovalForAll should have no effect on the transfer
       await this.token.connect(owner).approve(approved.address, nft1);
       await this.token.connect(owner).approve(approved.address, nft2);
       await this.token.connect(owner).setApprovalForAll(approvedAll.address, true);
@@ -65,35 +66,166 @@ function behavesLikeNonTransferableERC721({deploy, mint, errors}, operatorFilter
       });
     });
 
-    const revertsOnTransfer = function (transferFunction, data) {
-      describe('reverts any transfer attempt, regardless of the sender', function () {
-        it('reverts if called by the token owner operator role holder', async function () {
+    const revertsOnPreconditions = function (transferFunction, data) {
+      describe('Pre-conditions', function () {
+        it('reverts if transferred to the zero address', async function () {
+          this.sender = operatorRoleHolder;
+          this.from = owner.address;
+          this.to = ethers.ZeroAddress;
+          await expectRevert(transferFunction.call(this, nft1, data), this.token, errors.TransferToAddressZero);
+        });
+
+        it('reverts if the token does not exist', async function () {
           this.sender = operatorRoleHolder;
           this.from = owner.address;
           this.to = other.address;
-          await expectRevert(transferFunction.call(this, nft1, data), this.token, errors.NotTransferable);
+          await expectRevert(transferFunction.call(this, unknownNFT, data), this.token, errors.NonExistingToken, {
+            tokenId: unknownNFT,
+          });
         });
 
-        it('reverts if called by the token owner', async function () {
-          this.sender = owner;
+        it('reverts if `from` is not the token owner', async function () {
+          this.sender = operatorRoleHolder;
           this.from = other.address;
           this.to = other.address;
-          await expectRevert(transferFunction.call(this, nft1, data), this.token, errors.NotTransferable);
+          await expectRevert(transferFunction.call(this, nft1, data), this.token, errors.NonOwnedToken, {
+            account: other.address,
+            tokenId: nft1,
+          });
         });
 
-        it('reverts if called by a wallet with single token approval', async function () {
-          this.sender = approved;
-          this.from = other.address;
-          this.to = other.address;
-          await expectRevert(transferFunction.call(this, nft1, data), this.token, errors.NotTransferable);
+        context('when not called by an operator role holder', function () {
+          it('reverts if called by the token owner', async function () {
+            this.sender = owner;
+            this.from = other.address;
+            this.to = other.address;
+            await expectRevert(transferFunction.call(this, nft1, data), this.token, errors.NotOperator, {
+              role: this.token.OPERATOR_ROLE(),
+              account: owner.address,
+            });
+          });
+
+          it('reverts if called by a wallet with single token approval', async function () {
+            this.sender = approved;
+            this.from = other.address;
+            this.to = other.address;
+            await expectRevert(transferFunction.call(this, nft1, data), this.token, errors.NotOperator, {
+              role: this.token.OPERATOR_ROLE(),
+              account: approved.address,
+            });
+          });
+
+          it('reverts if called by a wallet all tokens approval', async function () {
+            this.sender = approvedAll;
+            this.from = other.address;
+            this.to = other.address;
+            await expectRevert(transferFunction.call(this, nft1, data), this.token, errors.NotOperator, {
+              role: this.token.OPERATOR_ROLE(),
+              account: approvedAll.address,
+            });
+          });
         });
 
-        it('reverts if called by a wallet all tokens approval', async function () {
-          this.sender = approvedAll;
-          this.from = other.address;
-          this.to = other.address;
-          await expectRevert(transferFunction.call(this, nft1, data), this.token, errors.NotTransferable);
+        if (data !== undefined) {
+          it('reverts if sent to a non-receiver contract', async function () {
+            this.sender = operatorRoleHolder;
+            this.from = owner.address;
+            this.to = await this.token.getAddress();
+            await expect(transferFunction.call(this, nft1, data)).to.be.reverted;
+          });
+          it('reverts if sent to an ERC721Receiver which reverts', async function () {
+            this.sender = operatorRoleHolder;
+            this.from = owner.address;
+            this.to = await this.wrongTokenReceiver721.getAddress();
+            await expect(transferFunction.call(this, nft1, data)).to.be.reverted;
+          });
+          it('reverts if sent to an ERC721Receiver which rejects the transfer', async function () {
+            this.sender = operatorRoleHolder;
+            this.from = owner.address;
+            this.to = await this.refusingReceiver721.getAddress();
+            await expectRevert(transferFunction.call(this, nft1, data), this.token, errors.SafeTransferRejected, {
+              recipient: this.to,
+              tokenId: nft1,
+            });
+          });
+        }
+      });
+    };
+
+    const transferWasSuccessful = function (tokenId, data, isERC721Receiver, selfTransfer) {
+      if (selfTransfer) {
+        it('does not affect the token ownership', async function () {
+          expect(await this.token.ownerOf(tokenId)).to.equal(this.from);
         });
+      } else {
+        it('gives the token ownership to the recipient', async function () {
+          expect(await this.token.ownerOf(tokenId)).to.equal(this.to);
+        });
+      }
+
+      it('clears the approval for the token', async function () {
+        expect(await this.token.getApproved(tokenId)).to.equal(ethers.ZeroAddress);
+      });
+
+      it('emits a Transfer event', async function () {
+        await expect(this.receipt).to.emit(this.token, 'Transfer').withArgs(this.from, this.to, tokenId);
+      });
+
+      if (selfTransfer) {
+        it('does not affect the owner balance', async function () {
+          expect(await this.token.balanceOf(this.from)).to.equal(this.nftBalance);
+        });
+      } else {
+        it('decreases the owner balance', async function () {
+          expect(await this.token.balanceOf(this.from)).to.equal(this.nftBalance - 1n);
+        });
+
+        it('increases the recipients balance', async function () {
+          expect(await this.token.balanceOf(this.to)).to.equal(1);
+        });
+      }
+
+      if (data !== undefined && isERC721Receiver) {
+        it('calls on ERC721Received', async function () {
+          await expect(this.receipt).to.emit(this.receiver721, 'ERC721Received').withArgs(this.sender.address, this.from, tokenId, data);
+        });
+      }
+    };
+
+    const transfersByOperatorRoleHolder = function (transferFunction, tokenId, data, isERC721Receiver, selfTransfer) {
+      context('when called by an operator role holder', function () {
+        beforeEach(async function () {
+          this.sender = operatorRoleHolder;
+          this.receipt = await transferFunction.call(this, tokenId, data);
+        });
+        transferWasSuccessful(tokenId, data, isERC721Receiver, selfTransfer);
+      });
+    };
+
+    const transfersByRecipient = function (transferFunction, tokenId, data) {
+      context('when sent to another wallet', function () {
+        beforeEach(async function () {
+          this.from = owner.address;
+          this.to = other.address;
+        });
+        transfersByOperatorRoleHolder(transferFunction, tokenId, data, false);
+      });
+
+      context('when sent to the same owner', function () {
+        this.beforeEach(async function () {
+          this.from = owner.address;
+          this.to = owner.address;
+        });
+        const selfTransfer = true;
+        transfersByOperatorRoleHolder(transferFunction, tokenId, data, false, selfTransfer);
+      });
+
+      context('when sent to an ERC721Receiver contract', function () {
+        this.beforeEach(async function () {
+          this.from = owner.address;
+          this.to = await this.receiver721.getAddress();
+        });
+        transfersByOperatorRoleHolder(transferFunction, tokenId, data, true);
       });
     };
 
@@ -102,7 +234,8 @@ function behavesLikeNonTransferableERC721({deploy, mint, errors}, operatorFilter
         return this.token.connect(this.sender).transferFrom(this.from, this.to, tokenId);
       };
       const data = undefined;
-      revertsOnTransfer(transferFn, data);
+      revertsOnPreconditions(transferFn, data);
+      transfersByRecipient(transferFn, nft1, data);
     });
 
     describe('safeTransferFrom(address,address,uint256)', function () {
@@ -110,7 +243,8 @@ function behavesLikeNonTransferableERC721({deploy, mint, errors}, operatorFilter
         return this.token.connect(this.sender)['safeTransferFrom(address,address,uint256)'](this.from, this.to, tokenId);
       };
       const data = '0x';
-      revertsOnTransfer(transferFn, data);
+      revertsOnPreconditions(transferFn, data);
+      transfersByRecipient(transferFn, nft1, data);
     });
 
     describe('safeTransferFrom(address,address,uint256,bytes)', function () {
@@ -118,7 +252,8 @@ function behavesLikeNonTransferableERC721({deploy, mint, errors}, operatorFilter
         return this.token.connect(this.sender)['safeTransferFrom(address,address,uint256,bytes)'](this.from, this.to, tokenId, data);
       };
       const data = '0x42';
-      revertsOnTransfer(transferFn, data);
+      revertsOnPreconditions(transferFn, data);
+      transfersByRecipient(transferFn, nft1, data);
     });
 
     describe('approve(address,address)', function () {
@@ -281,5 +416,5 @@ function behavesLikeNonTransferableERC721({deploy, mint, errors}, operatorFilter
 }
 
 module.exports = {
-  behavesLikeNonTransferableERC721,
+  behavesLikeERC721,
 };
