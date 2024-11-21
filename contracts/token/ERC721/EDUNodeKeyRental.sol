@@ -222,8 +222,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             if (currentTime >= rental.endDate) {
                 elapsedTime = rental.endDate - rental.beginDate;
                 rental.endDate = currentTime + duration;
-                NODE_KEY.burnFrom(currentOwner, tokenId);
-                NODE_KEY.safeMint(account, tokenId, "");
+                NODE_KEY.safeTransferFrom(currentOwner, account, tokenId);
             } else if (currentOwner == account) {
                 elapsedTime = currentTime - rental.beginDate;
                 rental.endDate += duration;
