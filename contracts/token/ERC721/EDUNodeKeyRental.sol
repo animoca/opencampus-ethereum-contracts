@@ -176,7 +176,13 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         emit Rental(account, tokenId, rental, fee);
     }
 
-    function batchRent(address account, uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredTokenIds, uint256 maxFee) public {
+    function batchRent(
+        address account,
+        uint256[] calldata tokenIds,
+        uint256[] calldata durations,
+        uint256[] calldata expiredTokenIds,
+        uint256 maxFee
+    ) public {
         if (tokenIds.length >= maxRentalCountPerCall) {
             revert RentalCountPerCallLimitExceeded();
         }
