@@ -92,7 +92,12 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         return elapsedTime;
     }
 
-    function estimateRentalFee(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredTokenIds) public view returns (uint256 fee) {
+    function estimateRentalFee(
+        address account,
+        uint256 tokenId,
+        uint256 duration,
+        uint256[] calldata expiredTokenIds
+    ) public view returns (uint256 fee) {
         uint256 elapsedTime = calculateElapsedTimeForExpiredTokens(expiredTokenIds);
 
         RentalInfo memory rental = rentals[tokenId];
@@ -102,7 +107,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 elapsedTime += rental.endDate - rental.beginDate;
             } else if (NODE_KEY.ownerOf(tokenId) == account) {
                 if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
-                    revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);   
+                    revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);
                 }
                 elapsedTime += currentTime - rental.beginDate;
             } else {
@@ -113,7 +118,12 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         return _estimateNodeKeyPrice(totalEffectiveRentalTime - elapsedTime) + monthlyMaintenanceFee * duration;
     }
 
-    function estimateBatchRentalFee(address account, uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredTokenIds) public view returns (uint256 fee) {
+    function estimateBatchRentalFee(
+        address account,
+        uint256[] calldata tokenIds,
+        uint256[] calldata durations,
+        uint256[] calldata expiredTokenIds
+    ) public view returns (uint256 fee) {
         if (tokenIds.length >= maxRentalCountPerCall) {
             revert RentalCountPerCallLimitExceeded();
         }
@@ -135,7 +145,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                     elapsedTime += rental.endDate - rental.beginDate;
                 } else if (NODE_KEY.ownerOf(tokenId) == account) {
                     if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
-                        revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);   
+                        revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);
                     }
                     elapsedTime += currentTime - rental.beginDate;
                 } else {
@@ -232,7 +242,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 NODE_KEY.safeTransferFrom(currentOwner, account, tokenId);
             } else if (currentOwner == account) {
                 if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
-                    revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);   
+                    revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);
                 }
                 elapsedTime = currentTime - rental.beginDate;
                 rental.endDate += duration;
