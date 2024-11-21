@@ -56,6 +56,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     error NotRented(uint256 tokenId);
     error TokenNotExpired(uint256 tokenId);
     error UnsupportedTokenId(uint256 tokenId);
+    error FeeExceeded(uint256 calculatedFee, uint256 maxFee);
 
     constructor(
         address nodeKeyAddress,
@@ -157,7 +158,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         return _estimateNodeKeyPrice(totalEffectiveRentalTime - elapsedTime) * tokenIds.length + totalDuration * monthlyMaintenanceFee;
     }
 
-    function rent(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredTokenIds) public {
+    function rent(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredTokenIds, uint256 maxFee) public {
         uint256 currentTime = block.timestamp;
         uint256 expiredTokenElapsedTime = _collectExpiredTokens(expiredTokenIds, currentTime);
 
@@ -167,11 +168,15 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         totalEffectiveRentalTime = preEffectiveRentalTime + duration;
 
         uint256 fee = _estimateNodeKeyPrice(preEffectiveRentalTime) + monthlyMaintenanceFee * duration;
+        if (fee > maxFee) {
+            revert FeeExceeded(fee, maxFee);
+        }
+
         POINTS.consume(_msgSender(), fee, RENTAL_CONSUME_CODE);
         emit Rental(account, tokenId, rental, fee);
     }
 
-    function batchRent(address account, uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredTokenIds) public {
+    function batchRent(address account, uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredTokenIds, uint256 maxFee) public {
         if (tokenIds.length >= maxRentalCountPerCall) {
             revert RentalCountPerCallLimitExceeded();
         }
@@ -206,6 +211,10 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256 totalFee = nodeKeyPrice * tokenIds_.length + totalDuration * monthlyMaintenanceFee;
         for (uint256 i = 0; i < fees.length; i++) {
             fees[i] += nodeKeyPrice;
+        }
+
+        if (totalFee > maxFee) {
+            revert FeeExceeded(totalFee, maxFee);
         }
 
         POINTS.consume(_msgSender(), totalFee, RENTAL_CONSUME_CODE);
