@@ -331,8 +331,12 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     }
 
     function _estimateNodeKeyPrice(uint256 totalEffectiveRentalTime_) internal pure returns (uint256) {
-        // ln(x) * 3000 = log2(x) * ln(2) * 3000 
-        return Math.log2(totalEffectiveRentalTime_) * LN2_WITH_POWER_10_18 / POWER_10_18 * 3000;
+        // ln(x) + ln(x / 100) * 500 
+        return (Math.log2(totalEffectiveRentalTime_) + Math.log2(totalEffectiveRentalTime_ / 100)) * 500 * LN2_WITH_POWER_10_18 / POWER_10_18;
+    }
+
+    function estimateNodeKeyPriceTest(uint256 totalEffectiveRentalTime_) public pure returns (uint256) {
+        return _estimateNodeKeyPrice(totalEffectiveRentalTime_);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
