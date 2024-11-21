@@ -101,6 +101,9 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             if (currentTime >= rental.endDate) {
                 elapsedTime += rental.endDate - rental.beginDate;
             } else if (NODE_KEY.ownerOf(tokenId) == account) {
+                if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
+                    revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);   
+                }
                 elapsedTime += currentTime - rental.beginDate;
             } else {
                 revert NotRentable(tokenId);
@@ -123,13 +126,17 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256 totalDuration = 0;
         uint256 elapsedTime = calculateElapsedTimeForExpiredTokens(expiredTokenIds);
         for (uint256 i = 0; i < tokenIds.length; i++) {
-            totalDuration += durations[i];
+            uint256 duration = durations[i];
+            totalDuration += duration;
             uint256 tokenId = tokenIds[i];
             RentalInfo memory rental = rentals[tokenId];
             if (rental.endDate != 0) {
                 if (currentTime >= rental.endDate) {
                     elapsedTime += rental.endDate - rental.beginDate;
                 } else if (NODE_KEY.ownerOf(tokenId) == account) {
+                    if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
+                        revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);   
+                    }
                     elapsedTime += currentTime - rental.beginDate;
                 } else {
                     revert NotRentable(tokenId);
@@ -224,6 +231,9 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 rental.endDate = currentTime + duration;
                 NODE_KEY.safeTransferFrom(currentOwner, account, tokenId);
             } else if (currentOwner == account) {
+                if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
+                    revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);   
+                }
                 elapsedTime = currentTime - rental.beginDate;
                 rental.endDate += duration;
             } else {
