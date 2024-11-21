@@ -13,10 +13,12 @@ import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/i
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryContext {
     using AccessControlStorage for AccessControlStorage.Layout;
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
+    using Math for uint256;
 
     struct RentalInfo {
         uint256 beginDate;
@@ -28,6 +30,9 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
     /// @notice The reason code for consuming points
     bytes32 public constant RENTAL_CONSUME_CODE = keccak256("NODE_KEY_RENTAL");
+
+    uint256 constant POWER_10_18 = 10**18;
+    uint256 constant LN2_WITH_POWER_10_18 = 693147180559945309; // ln(2) * 10^18 for fixed-point arithmetic
 
     Points public immutable POINTS;
     IEDUNodeKey public immutable NODE_KEY;
@@ -168,7 +173,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         totalEffectiveRentalTime = preEffectiveRentalTime + duration;
 
         uint256 fee = _estimateNodeKeyPrice(preEffectiveRentalTime) + monthlyMaintenanceFee * duration;
-        if (fee > maxFee) {
+        if (maxFee != 0 && fee > maxFee) {
             revert FeeExceeded(fee, maxFee);
         }
 
@@ -219,7 +224,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             fees[i] += nodeKeyPrice;
         }
 
-        if (totalFee > maxFee) {
+        if (maxFee != 0 && totalFee > maxFee) {
             revert FeeExceeded(totalFee, maxFee);
         }
 
@@ -326,7 +331,8 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     }
 
     function _estimateNodeKeyPrice(uint256 totalEffectiveRentalTime_) internal pure returns (uint256) {
-        return totalEffectiveRentalTime_;
+        // ln(x) * 3000 = log2(x) * ln(2) * 3000 
+        return Math.log2(totalEffectiveRentalTime_) * LN2_WITH_POWER_10_18 / POWER_10_18 * 3000;
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
