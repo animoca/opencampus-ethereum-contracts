@@ -36,9 +36,6 @@ contract EDUNodeKey is IEDUNodeKey, ERC721Metadata, AccessControl, TokenRecovery
     /// @notice This magic number is used as the owner's value to indicate that the token has been burnt
     uint256 internal constant EDU_NODE_KEY_BURNT_TOKEN_OWNER_VALUE = 0xdead000000000000000000000000000000000000000000000000000000000000;
 
-    /// @notice Thrown for any transfer attempts.
-    error NotTransferable();
-
     /// @notice Constructor
     /// @notice Marks the following ERC165 interface(s) as supported: ERC721, ERC721Mintable, ERC721Burnable, ERC721BatchTransfer
     /// @param tokenName The name of the token.
