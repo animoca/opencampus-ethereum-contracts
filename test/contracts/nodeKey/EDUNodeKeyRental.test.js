@@ -236,7 +236,7 @@ describe('EDUNodeKeyRental', function () {
 
     it('rent non-expired node key from another wallet', async function () {
       await expect(this.rentalContract.connect(user3).rent(user3, 400n, 10n, [], 0n))
-        .to.be.revertedWithCustomError(this.rentalContract, 'NotRentable')
+        .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
         .withArgs(400n);
     });
   });
@@ -355,7 +355,7 @@ describe('EDUNodeKeyRental', function () {
 
       it('rent a token that is currently rented by another account', async function () {
         await expect(this.rentalContract.estimateRentalFee(user1, 403n, 1000n, []))
-          .to.be.revertedWithCustomError(this.rentalContract, 'NotRentable')
+          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
           .withArgs(403n);
       });
 

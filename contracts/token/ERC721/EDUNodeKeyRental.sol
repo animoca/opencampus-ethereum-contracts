@@ -57,7 +57,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     error ZeroRentalDuration(uint256 tokenId);
     error RentalDurationLimitExceeded(uint256 tokenId, uint256 duration);
     error RentalCountPerCallLimitExceeded();
-    error NotRentable(uint256 tokenId);
+    error TokenAlreadyRented(uint256 tokenId);
     error NotRented(uint256 tokenId);
     error TokenNotExpired(uint256 tokenId);
     error UnsupportedTokenId(uint256 tokenId);
@@ -117,7 +117,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 }
                 elapsedTime += currentTime - rental.beginDate;
             } else {
-                revert NotRentable(tokenId);
+                revert TokenAlreadyRented(tokenId);
             }
         }
 
@@ -155,7 +155,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                     }
                     elapsedTime += currentTime - rental.beginDate;
                 } else {
-                    revert NotRentable(tokenId);
+                    revert TokenAlreadyRented(tokenId);
                 }
             }
         }
@@ -267,7 +267,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 elapsedTime = currentTime - rental.beginDate;
                 rental.endDate += duration;
             } else {
-                revert NotRentable(tokenId);
+                revert TokenAlreadyRented(tokenId);
             }
         }
 
