@@ -100,32 +100,6 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
     function estimateRentalFee(
         address account,
-        uint256 tokenId,
-        uint256 duration,
-        uint256[] calldata expiredTokenIds
-    ) public view returns (uint256 fee) {
-        uint256 elapsedTime = calculateElapsedTimeForExpiredTokens(expiredTokenIds);
-
-        RentalInfo memory rental = rentals[tokenId];
-        if (rental.endDate != 0) {
-            uint256 currentTime = block.timestamp;
-            if (currentTime >= rental.endDate) {
-                elapsedTime += rental.endDate - rental.beginDate;
-            } else if (NODE_KEY.ownerOf(tokenId) == account) {
-                if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
-                    revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);
-                }
-                elapsedTime += currentTime - rental.beginDate;
-            } else {
-                revert TokenAlreadyRented(tokenId);
-            }
-        }
-
-        return _estimateNodeKeyPrice(totalEffectiveRentalTime - elapsedTime) + monthlyMaintenanceFee * duration;
-    }
-
-    function estimateBatchRentalFee(
-        address account,
         uint256[] calldata tokenIds,
         uint256[] calldata durations,
         uint256[] calldata expiredTokenIds
@@ -163,25 +137,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         return _estimateNodeKeyPrice(totalEffectiveRentalTime - elapsedTime) * tokenIds.length + totalDuration * monthlyMaintenanceFee;
     }
 
-    function rent(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredTokenIds, uint256 maxFee) public {
-        uint256 currentTime = block.timestamp;
-        uint256 expiredTokenElapsedTime = _collectExpiredTokens(expiredTokenIds, currentTime);
-
-        (RentalInfo memory rental, uint256 elapsedTime) = _processRent(account, tokenId, duration, currentTime);
-
-        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - expiredTokenElapsedTime - elapsedTime;
-        totalEffectiveRentalTime = preEffectiveRentalTime + duration;
-
-        uint256 fee = _estimateNodeKeyPrice(preEffectiveRentalTime) + monthlyMaintenanceFee * duration;
-        if (maxFee != 0 && fee > maxFee) {
-            revert FeeExceeded(fee, maxFee);
-        }
-
-        POINTS.consume(_msgSender(), fee, RENTAL_CONSUME_CODE);
-        emit Rental(account, tokenId, rental, fee);
-    }
-
-    function batchRent(
+    function rent(
         address account,
         uint256[] calldata tokenIds,
         uint256[] calldata durations,
@@ -208,8 +164,40 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         for (uint256 i = 0; i < tokenIds_.length; i++) {
             uint256 tokenId = tokenIds_[i];
             uint256 duration = durations_[i];
-            (RentalInfo memory rental, uint256 elapsedTime) = _processRent(account_, tokenId, duration, currentTime);
-            totalElapsedTime += elapsedTime;
+            if (duration == 0) {
+                revert ZeroRentalDuration(tokenId);
+            }
+    
+            if (duration > maxRentalDuration) {
+                revert RentalDurationLimitExceeded(tokenId, duration);
+            }
+    
+            if (tokenId >= nodeKeySupply) {
+                revert UnsupportedTokenId(tokenId);
+            }
+
+            RentalInfo storage rental = rentals[tokenId];
+            if (rental.endDate == 0) {
+                NODE_KEY.safeMint(account_, tokenId, "");
+                rental.endDate = currentTime + duration;
+            } else {
+                address currentOwner = NODE_KEY.ownerOf(tokenId);
+                if (currentTime >= rental.endDate) {
+                    totalElapsedTime += rental.endDate - rental.beginDate;
+                    rental.endDate = currentTime + duration;
+                    NODE_KEY.safeTransferFrom(currentOwner, account_, tokenId);
+                } else if (currentOwner == account_) {
+                    if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
+                        revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);
+                    }
+                    totalElapsedTime += currentTime - rental.beginDate;
+                    rental.endDate += duration;
+                } else {
+                    revert TokenAlreadyRented(tokenId);
+                }
+            }
+    
+            rental.beginDate = currentTime;
             rentalInfos[i] = rental;
             fees[i] = monthlyMaintenanceFee * duration;
             totalDuration += duration;
@@ -230,49 +218,6 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
         POINTS.consume(_msgSender(), totalFee, RENTAL_CONSUME_CODE);
         emit BatchRental(account_, tokenIds_, rentalInfos, fees);
-    }
-
-    function _processRent(
-        address account,
-        uint256 tokenId,
-        uint256 duration,
-        uint256 currentTime
-    ) internal returns (RentalInfo memory, uint256 elapsedTime) {
-        if (duration == 0) {
-            revert ZeroRentalDuration(tokenId);
-        }
-
-        if (duration > maxRentalDuration) {
-            revert RentalDurationLimitExceeded(tokenId, duration);
-        }
-
-        if (tokenId >= nodeKeySupply) {
-            revert UnsupportedTokenId(tokenId);
-        }
-
-        RentalInfo storage rental = rentals[tokenId];
-        if (rental.endDate == 0) {
-            NODE_KEY.safeMint(account, tokenId, "");
-            rental.endDate = currentTime + duration;
-        } else {
-            address currentOwner = NODE_KEY.ownerOf(tokenId);
-            if (currentTime >= rental.endDate) {
-                elapsedTime = rental.endDate - rental.beginDate;
-                rental.endDate = currentTime + duration;
-                NODE_KEY.safeTransferFrom(currentOwner, account, tokenId);
-            } else if (currentOwner == account) {
-                if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
-                    revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);
-                }
-                elapsedTime = currentTime - rental.beginDate;
-                rental.endDate += duration;
-            } else {
-                revert TokenAlreadyRented(tokenId);
-            }
-        }
-
-        rental.beginDate = currentTime;
-        return (rental, elapsedTime);
     }
 
     function renterOf(uint256 tokenId) public view returns (address) {
