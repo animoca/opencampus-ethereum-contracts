@@ -121,6 +121,10 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             uint256 tokenId = tokenIds[i];
             RentalInfo memory rental = rentals[tokenId];
             if (rental.endDate == 0) {
+                if (duration > maxRentalDuration) {
+                    revert RentalDurationLimitExceeded(tokenId, duration);
+                }
+
                 totalFee += nodeKeyPrice;
             } else if (NODE_KEY.ownerOf(tokenId) == account) {
                 if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
