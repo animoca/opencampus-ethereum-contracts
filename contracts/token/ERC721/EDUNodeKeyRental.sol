@@ -46,7 +46,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
     uint256 public totalEffectiveRentalTime;
 
-    event BatchRental(address indexed renter, uint256[] tokenIds, RentalInfo[] rentals, uint256[] fees);
+    event Rental(address indexed renter, uint256[] tokenIds, RentalInfo[] rentals, uint256[] fees);
     event Collected(uint256[] tokenIds);
     event MonthlyMaintenanceFeeUpdated(uint256 newMonthlyMaintenanceFee);
     event MaxRentalDurationUpdated(uint256 newMaxRentalDuration);
@@ -216,7 +216,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         }
 
         POINTS.consume(_msgSender(), totalFee, RENTAL_CONSUME_CODE);
-        emit BatchRental(account_, tokenIds_, rentalInfos, fees);
+        emit Rental(account_, tokenIds_, rentalInfos, fees);
     }
 
     function renterOf(uint256 tokenId) public view returns (address) {
