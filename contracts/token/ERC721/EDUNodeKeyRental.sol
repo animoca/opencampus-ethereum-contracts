@@ -46,7 +46,6 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
     uint256 public totalEffectiveRentalTime;
 
-    event Rental(address indexed renter, uint256 tokenId, RentalInfo rental, uint256 fee);
     event BatchRental(address indexed renter, uint256[] tokenIds, RentalInfo[] rentals, uint256[] fees);
     event Collected(uint256[] tokenIds);
     event MonthlyMaintenanceFeeUpdated(uint256 newMonthlyMaintenanceFee);
