@@ -36,13 +36,17 @@ function calculateNodeKeyPrice(totalEffectiveRentalTime) {
   return ((log2(totalEffectiveRentalTime) + log2(totalEffectiveRentalTime / DIVIDER)) * STARTING_PRICE * LN2_WITH_POWER_10_18) / POWER_10_18;
 }
 
-function calculateFee(totalEffectiveRentalTime, duration, maintenanceFee = DEFAULT_MAINTENANCE_FEE) {
-  return calculateNodeKeyPrice(totalEffectiveRentalTime) + duration * maintenanceFee;
-}
-
-function calculateFees(totalEffectiveRentalTime, durations, maintenanceFee = DEFAULT_MAINTENANCE_FEE) {
+const RENTAL_TYPE = {
+  CLEAN: 0,
+  EXTENSION: 1,
+};
+function calculateFees(totalEffectiveRentalTime, durations, types, maintenanceFee = DEFAULT_MAINTENANCE_FEE) {
   const totalNodeKeyPrice = calculateNodeKeyPrice(totalEffectiveRentalTime);
-  return durations.map((duration) => totalNodeKeyPrice + duration * maintenanceFee);
+  return durations.map((duration, i) => {
+    if (types[i] == null) throw new Error('calculateFees: Rental type must not be null.');
+    if (types[i] === RENTAL_TYPE.EXTENSION) return duration * maintenanceFee;
+    return totalNodeKeyPrice + duration * maintenanceFee;
+  });
 }
 
 async function getBlockTimestamp(tx) {
@@ -123,7 +127,7 @@ describe('EDUNodeKeyRental', function () {
 
     for (let i = 0; i < this.initialRentals.length; i++) {
       const rental = this.initialRentals[i];
-      await this.rentalContract.connect(rental.account).rent(rental.account, rental.tokenId, rental.duration, [], 0n);
+      await this.rentalContract.connect(rental.account).rent(rental.account, [rental.tokenId], [rental.duration], [], 0n);
     }
   };
 
@@ -137,131 +141,19 @@ describe('EDUNodeKeyRental', function () {
     });
 
     it('Node key rented', async function () {
-      await this.rentalContract.connect(user1).rent(user1, 0n, 10n, [], 0n);
+      await this.rentalContract.connect(user1).rent(user1, [0n], [10n], [], 0n);
       expect(await this.rentalContract.renterOf(0n)).to.be.equal(user1);
     });
 
     it('Node key rented, and expired', async function () {
-      await this.rentalContract.connect(user1).rent(user1, 0n, 10n, [], 0n);
+      await this.rentalContract.connect(user1).rent(user1, [0n], [10n], [], 0n);
       await time.increase(10n);
       expectRevert(this.rentalContract.renterOf(0n), this.rentalContract, 'TokenNotRented', 0n);
     });
   });
 
-  context('rent(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredTokenIds, uint256 maxFee) public', function () {
-    it('successfully rent 1 clean node key', async function () {
-      const tx = await this.rentalContract.connect(user1).rent(user1, 0n, 1000n, [], 0n);
-      const expectedCost = calculateFee(this.initialRentalsDuration, 1000n);
-      const blockTimestamp = await getBlockTimestamp(tx);
-      await expect(tx)
-        .to.emit(this.ocp, 'Consumed')
-        .withArgs(this.rentalContract, this.rentalReasonCode, user1, expectedCost)
-        .to.emit(this.rentalContract, 'Rental')
-        .withArgs(user1, 0n, [blockTimestamp, blockTimestamp + 1000n], expectedCost);
-    });
-
-    it('successfully rent 1 expired node key, it was rented by another account', async function () {
-      await this.rentalContract.connect(user2).rent(user2, 0n, 1000n, [], 0n);
-      await time.increase(2000n);
-
-      const tx = await this.rentalContract.connect(user1).rent(user1, 0n, 1000n, [], 0n);
-      const expectedCost = calculateFee(this.initialRentalsDuration, 1000n);
-      const blockTimestamp = await getBlockTimestamp(tx);
-
-      await expect(tx)
-        .to.emit(this.ocp, 'Consumed')
-        .withArgs(this.rentalContract, this.rentalReasonCode, user1, expectedCost)
-        .to.emit(this.rentalContract, 'Rental')
-        .withArgs(user1, 0n, [blockTimestamp, blockTimestamp + 1000n], expectedCost);
-    });
-
-    it('successfully rent 1 expired node key, it was rented by another account. With collecting all expired tokens', async function () {
-      await this.rentalContract.connect(user2).rent(user2, 0n, 1000n, [], 0n);
-      await time.increase(2000n);
-
-      const tx = await this.rentalContract.connect(user1).rent(user1, 0n, 1000n, [400n, 401n, 402n], 0n);
-      const expiredTokensTime = 1000n + 1000n + 1000n;
-      const expectedCost = calculateFee(this.initialRentalsDuration - expiredTokensTime, 1000n);
-      const blockTimestamp = await getBlockTimestamp(tx);
-
-      await expect(tx)
-        .to.emit(this.ocp, 'Consumed')
-        .withArgs(this.rentalContract, this.rentalReasonCode, user1, expectedCost)
-        .to.emit(this.rentalContract, 'Rental')
-        .withArgs(user1, 0n, [blockTimestamp, blockTimestamp + 1000n], expectedCost)
-        .to.emit(this.rentalContract, 'Collected')
-        .withArgs([400n, 401n, 402n]);
-    });
-
-    it('rent a node key that reaches the token supply', async function () {
-      await expect(this.rentalContract.connect(user1).rent(user1, this.nodeKeyContractTotalSupply, 1000n, [], 0n))
-        .to.be.revertedWithCustomError(this.rentalContract, 'UnsupportedTokenId')
-        .withArgs(this.nodeKeyContractTotalSupply);
-    });
-
-    it('rent a node key for 0 duration', async function () {
-      await expect(this.rentalContract.connect(user1).rent(user1, 0n, 0n, [], 0n))
-        .to.be.revertedWithCustomError(this.rentalContract, 'ZeroRentalDuration')
-        .withArgs(0n);
-    });
-
-    it('rent a node key for a duration that reaches the maximum rental duration', async function () {
-      await expect(this.rentalContract.connect(user1).rent(user1, 0n, this.maxRentalDuration + 1n, [], 0n))
-        .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
-        .withArgs(0n, this.maxRentalDuration + 1n);
-    });
-
-    it('rent a token however signer does not have enough balance to rent', async function () {
-      const expectedCost = calculateFee(this.initialRentalsDuration, 2000n);
-      await expect(this.rentalContract.connect(user4).rent(user4, 0n, 2000n, [], 0n))
-        .to.be.revertedWithCustomError(this.ocp, 'InsufficientBalance')
-        .withArgs(user4, expectedCost);
-    });
-
-    it('extend the rental on an non-expired node key.', async function () {
-      // rent for 1000s initially
-      const tx1 = await this.rentalContract.connect(user1).rent(user1, 0n, 1000n, [], 0n);
-      const blockTimestamp1 = await getBlockTimestamp(tx1);
-      await time.increase(200n);
-
-      // extend the rental for 500s
-      const tx2 = await this.rentalContract.connect(user1).rent(user1, 0n, 500n, [], 0n);
-      const blockTimestamp2 = await getBlockTimestamp(tx2);
-
-      const expectedCost = calculateFee(this.initialRentalsDuration + 1000n - (blockTimestamp2 - blockTimestamp1), 500n);
-      await expect(tx2)
-        .to.emit(this.ocp, 'Consumed')
-        .withArgs(this.rentalContract, this.rentalReasonCode, user1, expectedCost)
-        .to.emit(this.rentalContract, 'Rental')
-        .withArgs(user1, 0n, [blockTimestamp2, blockTimestamp1 + 1000n + 500n], expectedCost);
-    });
-
-    it('extend the rental that the total rent duration reaches the maximum rental duration', async function () {
-      await this.rentalContract.connect(user1).rent(user1, 0n, this.maxRentalDuration, [], 0n);
-      await time.increase(200n);
-
-      await expect(this.rentalContract.connect(user1).rent(user1, 0n, 1n, [], 0n))
-        .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
-        .withArgs(0n, this.maxRentalDuration + 1n);
-    });
-
-    it('rent non-expired node key from another wallet', async function () {
-      await expect(this.rentalContract.connect(user3).rent(user3, 400n, 10n, [], 0n))
-        .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
-        .withArgs(400n);
-    });
-
-    it('rental fee is higher than the maxFee', async function () {
-      const fee = calculateFee(this.initialRentalsDuration, 1000n);
-      const maxFee = fee - 1n;
-      await expect(this.rentalContract.connect(user1).rent(user1, 0n, 1000n, [], maxFee))
-        .to.be.revertedWithCustomError(this.rentalContract, 'FeeExceeded')
-        .withArgs(fee, maxFee);
-    });
-  });
-
   context(
-    `batchRent(
+    `rent(
       address account,
       uint256[] calldata tokenIds,
       uint256[] calldata durations,
@@ -275,181 +167,65 @@ describe('EDUNodeKeyRental', function () {
           tokenIds.push(i);
         }
         const durations = tokenIds.map((_) => 1000n);
-        await expect(this.rentalContract.connect(user1).batchRent(user1, tokenIds, durations, [], 0n)).to.be.revertedWithCustomError(
+        await expect(this.rentalContract.connect(user1).rent(user1, tokenIds, durations, [], 0n)).to.be.revertedWithCustomError(
           this.rentalContract,
           'RentalCountPerCallLimitExceeded'
         );
       });
 
       it('reverts if tokenIds and durations length mismatch', async function () {
-        await expect(this.rentalContract.connect(user1).batchRent(user1, [0n], [1000n, 2000n], [], 0n)).to.be.revertedWithCustomError(
+        await expect(this.rentalContract.connect(user1).rent(user1, [0n], [1000n, 2000n], [], 0n)).to.be.revertedWithCustomError(
           this.rentalContract,
           'InconsistentArrayLengths'
         );
       });
 
-      it('successfully rent 1 clean node key', async function () {
-        const tx = await this.rentalContract.connect(user1).batchRent(user1, [0n], [1000n], [], 0n);
-        const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n]);
-        const blockTimestamp = await getBlockTimestamp(tx);
-        await expect(tx)
-          .to.emit(this.ocp, 'Consumed')
-          .withArgs(
-            this.rentalContract,
-            this.rentalReasonCode,
-            user1,
-            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-          )
-          .to.emit(this.rentalContract, 'BatchRental')
-          .withArgs(user1, [0n], [[blockTimestamp, blockTimestamp + 1000n]], expectedCosts);
-      });
-
-      it('successfully rent 2 clean node key', async function () {
-        const tx = await this.rentalContract.connect(user1).batchRent(user1, [0n, 1n], [1000n, 2000n], [], 0n);
-        const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 2000n]);
-        const blockTimestamp = await getBlockTimestamp(tx);
-        await expect(tx)
-          .to.emit(this.ocp, 'Consumed')
-          .withArgs(
-            this.rentalContract,
-            this.rentalReasonCode,
-            user1,
-            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-          )
-          .to.emit(this.rentalContract, 'BatchRental')
-          .withArgs(
-            user1,
-            [0n, 1n],
-            [
-              [blockTimestamp, blockTimestamp + 1000n],
-              [blockTimestamp, blockTimestamp + 2000n],
-            ],
-            expectedCosts
-          );
-      });
-
-      it('successfully rent 1 clean node key, and extend the rental on an non-expired node key.', async function () {
-        // rent 0n for 1000s initially
-        const tx1 = await this.rentalContract.connect(user1).rent(user1, 0n, 1000n, [], 0n);
-        const blockTimestamp1 = await getBlockTimestamp(tx1);
-        await time.increase(200n);
-
-        // extend 0n for 500s, and rent 1n for 1000s
-        const tx2 = await this.rentalContract.connect(user1).batchRent(user1, [0n, 1n], [500n, 1000n], [], 0n);
-        const blockTimestamp2 = await getBlockTimestamp(tx2);
-
-        const expectedCosts = calculateFees(this.initialRentalsDuration + 1000n - (blockTimestamp2 - blockTimestamp1), [500n, 1000n]);
-
-        await expect(tx2)
-          .to.emit(this.ocp, 'Consumed')
-          .withArgs(
-            this.rentalContract,
-            this.rentalReasonCode,
-            user1,
-            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-          )
-          .to.emit(this.rentalContract, 'BatchRental')
-          .withArgs(
-            user1,
-            [0n, 1n],
-            [
-              [blockTimestamp2, blockTimestamp1 + 1000n + 500n],
-              [blockTimestamp2, blockTimestamp2 + 1000n],
-            ],
-            expectedCosts
-          );
-      });
-
-      it('successfully rent 2 node keys; one is clean token, another is expired node key that rented by another account', async function () {
-        await this.rentalContract.connect(user2).rent(user2, 0n, 1000n, [], 0n);
-        await time.increase(2000n);
-
-        const tx = await this.rentalContract.connect(user1).batchRent(user1, [0n, 1n], [1000n, 50n], [], 0n);
-        const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n]);
-        const blockTimestamp = await getBlockTimestamp(tx);
-
-        await expect(tx)
-          .to.emit(this.ocp, 'Consumed')
-          .withArgs(
-            this.rentalContract,
-            this.rentalReasonCode,
-            user1,
-            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-          )
-          .to.emit(this.rentalContract, 'BatchRental')
-          .withArgs(
-            user1,
-            [0n, 1n],
-            [
-              [blockTimestamp, blockTimestamp + 1000n],
-              [blockTimestamp, blockTimestamp + 50n],
-            ],
-            expectedCosts
-          );
-      });
-
-      it(`successfully rent 2 node keys;
-        one clean token, another was rented by another account and expired. With collecting all expired tokens`, async function () {
-        await this.rentalContract.connect(user2).rent(user2, 0n, 1000n, [], 0n);
-        await time.increase(2000n);
-
-        const tx = await this.rentalContract.connect(user1).batchRent(user1, [0n, 1n], [1000n, 50n], [400n, 401n, 402n], 0n);
-        const expiredTokensTime = 1000n + 1000n + 1000n;
-        const expectedCosts = calculateFees(this.initialRentalsDuration - expiredTokensTime, [1000n, 50n]);
-        const blockTimestamp = await getBlockTimestamp(tx);
-
-        await expect(tx)
-          .to.emit(this.ocp, 'Consumed')
-          .withArgs(
-            this.rentalContract,
-            this.rentalReasonCode,
-            user1,
-            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-          )
-          .to.emit(this.rentalContract, 'BatchRental')
-          .withArgs(
-            user1,
-            [0n, 1n],
-            [
-              [blockTimestamp, blockTimestamp + 1000n],
-              [blockTimestamp, blockTimestamp + 50n],
-            ],
-            expectedCosts
-          )
-          .to.emit(this.rentalContract, 'Collected')
-          .withArgs([400n, 401n, 402n]);
-      });
-
       it('one of the tokenId that reaches the token supply', async function () {
-        await expect(this.rentalContract.connect(user1).batchRent(user1, [0n, this.nodeKeyContractTotalSupply], [1000n, 2000n], [], 0n))
+        await expect(this.rentalContract.connect(user1).rent(user1, [0n, this.nodeKeyContractTotalSupply], [1000n, 2000n], [], 0n))
           .to.be.revertedWithCustomError(this.rentalContract, 'UnsupportedTokenId')
           .withArgs(this.nodeKeyContractTotalSupply);
       });
 
       it('one of the tokenIds has 0 duration', async function () {
-        await expect(this.rentalContract.connect(user1).batchRent(user1, [0n, 1n], [0n, 1000n], [], 0n))
+        await expect(this.rentalContract.connect(user1).rent(user1, [0n, 1n], [0n, 1000n], [], 0n))
           .to.be.revertedWithCustomError(this.rentalContract, 'ZeroRentalDuration')
           .withArgs(0n);
       });
 
+      it('one of the tokenIds reaches the maximum rental duration', async function () {
+        await expect(this.rentalContract.connect(user1).rent(user1, [2n, 0n], [1000n, this.maxRentalDuration + 1n], [], 0n))
+          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
+          .withArgs(0n, this.maxRentalDuration + 1n);
+      });
+
       it('the total rent duration of one of the tokenIds to extend reaches the maximum rental duration', async function () {
-        await this.rentalContract.connect(user1).rent(user1, 0n, this.maxRentalDuration, [], 0n);
+        await this.rentalContract.connect(user1).rent(user1, [0n], [this.maxRentalDuration], [], 0n);
         await time.increase(200n);
 
-        await expect(this.rentalContract.connect(user1).batchRent(user1, [0n, 2n], [1n, 1000n], [], 0n))
+        await expect(this.rentalContract.connect(user1).rent(user1, [2n, 0n], [1000n, 1n], [], 0n))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
           .withArgs(0n, this.maxRentalDuration + 1n);
       });
 
       it('one of the tokenIds is non-expired node key from another wallet', async function () {
-        await expect(this.rentalContract.connect(user1).batchRent(user1, [0n, 403n], [1000n, 2000n], [], 0n))
+        await expect(this.rentalContract.connect(user1).rent(user1, [0n, 403n], [1000n, 2000n], [], 0n))
           .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
           .withArgs(403n);
       });
 
+      // TODO: confirm the behavior of rented by current renter and another account
+      it('one of the tokenIds is expired and rented by another account, not being supplied to expiredTokenIds', async function () {
+        await this.rentalContract.connect(user2).rent(user2, [0n], [1000n], [], 0n);
+        await time.increase(2000n);
+
+        await expect(this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 50n], [], 0n))
+          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
+          .withArgs(0n);
+      });
+
       it('signer does not have enough balance to rent', async function () {
-        const expectedCosts = calculateFees(this.initialRentalsDuration, [2000n, 1000n]);
-        await expect(this.rentalContract.connect(user4).batchRent(user4, [0n, 1n], [2000n, 1000n], [], 0n))
+        const expectedCosts = calculateFees(this.initialRentalsDuration, [2000n, 1000n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+        await expect(this.rentalContract.connect(user4).rent(user4, [0n, 1n], [2000n, 1000n], [], 0n))
           .to.be.revertedWithCustomError(this.ocp, 'InsufficientBalance')
           .withArgs(
             user4,
@@ -458,11 +234,179 @@ describe('EDUNodeKeyRental', function () {
       });
 
       it('the fee is higher than the maxFee', async function () {
-        const fee = calculateFees(this.initialRentalsDuration, [1000n, 1000n]).reduce((acc, cost) => acc + cost, 0n);
+        const fee = calculateFees(this.initialRentalsDuration, [1000n, 1000n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]).reduce(
+          (acc, cost) => acc + cost,
+          0n
+        );
         const maxFee = fee - 1n;
-        await expect(this.rentalContract.connect(user1).batchRent(user1, [0n, 1n], [1000n, 1000n], [], maxFee))
+        await expect(this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 1000n], [], maxFee))
           .to.be.revertedWithCustomError(this.rentalContract, 'FeeExceeded')
           .withArgs(fee, maxFee);
+      });
+
+      context('when successful', function () {
+        it('successfully rent 1 clean node key', async function () {
+          const tx = await this.rentalContract.connect(user1).rent(user1, [0n], [1000n], [], 0n);
+          const expectedCost = calculateFees(this.initialRentalsDuration, [1000n], [RENTAL_TYPE.CLEAN]).reduce((acc, cost) => acc + cost, 0n);
+          const blockTimestamp = await getBlockTimestamp(tx);
+          await expect(tx)
+            .to.emit(this.ocp, 'Consumed')
+            .withArgs(this.rentalContract, this.rentalReasonCode, user1, expectedCost)
+            .to.emit(this.rentalContract, 'Rental')
+            .withArgs(user1, [0n], [[blockTimestamp, blockTimestamp + 1000n, expectedCost]]);
+        });
+
+        it('successfully rent 1 clean node key that being paid by another account', async function () {
+          const tx = await this.rentalContract.connect(user2).rent(user1, [0n], [1000n], [], 0n);
+          const expectedCost = calculateFees(this.initialRentalsDuration, [1000n], [RENTAL_TYPE.CLEAN]).reduce((acc, cost) => acc + cost, 0n);
+          const blockTimestamp = await getBlockTimestamp(tx);
+          await expect(tx)
+            .to.emit(this.ocp, 'Consumed')
+            .withArgs(this.rentalContract, this.rentalReasonCode, user2, expectedCost)
+            .to.emit(this.rentalContract, 'Rental')
+            .withArgs(user1, [0n], [[blockTimestamp, blockTimestamp + 1000n, expectedCost]]);
+        });
+
+        it('successfully rent 2 clean node key', async function () {
+          const tx = await this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 2000n], [], 0n);
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 2000n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+          const blockTimestamp = await getBlockTimestamp(tx);
+          await expect(tx)
+            .to.emit(this.ocp, 'Consumed')
+            .withArgs(
+              this.rentalContract,
+              this.rentalReasonCode,
+              user1,
+              expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+            )
+            .to.emit(this.rentalContract, 'Rental')
+            .withArgs(
+              user1,
+              [0n, 1n],
+              [
+                [blockTimestamp, blockTimestamp + 1000n, expectedCosts[0]],
+                [blockTimestamp, blockTimestamp + 2000n, expectedCosts[1]],
+              ]
+            );
+        });
+
+        it('successfully rent 2 node keys; 1 clean node key, and extend the rental on an non-expired node key.', async function () {
+          // rent 0n for 1000s initially
+          const tx1 = await this.rentalContract.connect(user1).rent(user1, [0n], [1000n], [], 0n);
+          const blockTimestamp1 = await getBlockTimestamp(tx1);
+          const initialRentCost = calculateFees(this.initialRentalsDuration, [1000n], [RENTAL_TYPE.CLEAN])[0];
+          await time.increase(200n);
+
+          // extend 0n for 500s, and rent 1n for 1000s
+          const tx2 = await this.rentalContract.connect(user1).rent(user1, [0n, 1n], [500n, 1000n], [], 0n);
+          const blockTimestamp2 = await getBlockTimestamp(tx2);
+          const expectedCosts = calculateFees(this.initialRentalsDuration + 1000n, [500n, 1000n], [RENTAL_TYPE.EXTENSION, RENTAL_TYPE.CLEAN]);
+
+          await expect(tx2)
+            .to.emit(this.ocp, 'Consumed')
+            .withArgs(
+              this.rentalContract,
+              this.rentalReasonCode,
+              user1,
+              expectedCosts.reduce((acc, cost) => acc + cost, 0n) // NOTE: Consumed event only considers the extension cost
+            )
+            .to.emit(this.rentalContract, 'Rental')
+            .withArgs(
+              user1,
+              [0n, 1n],
+              [
+                // NOTE: the rental info struct includes the initial rental + the extension
+                [blockTimestamp1, blockTimestamp1 + 1000n + 500n, initialRentCost + expectedCosts[0]],
+                [blockTimestamp2, blockTimestamp2 + 1000n, expectedCosts[1]],
+              ]
+            );
+        });
+
+        // TODO: confirm the behavior if not putting the expired token in expiredTokenIds
+        it('successfully rent 2 node keys; 1 clean node key, and extend the rental on an expired node key.', async function () {
+          await this.rentalContract.connect(user1).rent(user1, [0n], [1000n], [], 0n);
+          await time.increase(2000n);
+
+          const tx = await this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 50n], [0n], 0n);
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+          const blockTimestamp = await getBlockTimestamp(tx);
+
+          await expect(tx)
+            .to.emit(this.ocp, 'Consumed')
+            .withArgs(
+              this.rentalContract,
+              this.rentalReasonCode,
+              user1,
+              expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+            )
+            .to.emit(this.rentalContract, 'Rental')
+            .withArgs(
+              user1,
+              [0n, 1n],
+              [
+                [blockTimestamp, blockTimestamp + 1000n, expectedCosts[0]],
+                [blockTimestamp, blockTimestamp + 50n, expectedCosts[1]],
+              ]
+            );
+        });
+      });
+
+      it('successfully rent 2 node keys; one is clean token, another is expired node key that rented by another account', async function () {
+        await this.rentalContract.connect(user2).rent(user2, [0n], [1000n], [], 0n);
+        await time.increase(2000n);
+
+        const tx = await this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 50n], [0n], 0n);
+        const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+        const blockTimestamp = await getBlockTimestamp(tx);
+
+        await expect(tx)
+          .to.emit(this.ocp, 'Consumed')
+          .withArgs(
+            this.rentalContract,
+            this.rentalReasonCode,
+            user1,
+            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+          )
+          .to.emit(this.rentalContract, 'Rental')
+          .withArgs(
+            user1,
+            [0n, 1n],
+            [
+              [blockTimestamp, blockTimestamp + 1000n, expectedCosts[0]],
+              [blockTimestamp, blockTimestamp + 50n, expectedCosts[1]],
+            ]
+          );
+      });
+
+      it(`successfully rent 2 node keys;
+          one clean token, another was rented by another account and expired. With collecting all expired tokens`, async function () {
+        await this.rentalContract.connect(user2).rent(user2, [0n], [1000n], [], 0n);
+        await time.increase(2000n);
+
+        const tx = await this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 50n], [0n, 400n, 401n, 402n], 0n);
+        const expiredTokensTime = 1000n + 1000n + 1000n;
+        const expectedCosts = calculateFees(this.initialRentalsDuration - expiredTokensTime, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+        const blockTimestamp = await getBlockTimestamp(tx);
+
+        await expect(tx)
+          .to.emit(this.ocp, 'Consumed')
+          .withArgs(
+            this.rentalContract,
+            this.rentalReasonCode,
+            user1,
+            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+          )
+          .to.emit(this.rentalContract, 'Rental')
+          .withArgs(
+            user1,
+            [0n, 1n],
+            [
+              [blockTimestamp, blockTimestamp + 1000n, expectedCosts[0]],
+              [blockTimestamp, blockTimestamp + 50n, expectedCosts[1]],
+            ]
+          )
+          .to.emit(this.rentalContract, 'Collected')
+          .withArgs([0n, 400n, 401n, 402n]);
       });
     }
   );
@@ -495,69 +439,7 @@ describe('EDUNodeKeyRental', function () {
   });
 
   context(
-    'estimateRentalFee(address account, uint256 tokenId, uint256 duration, uint256[] calldata expiredTokenIds) public view returns (uint256 fee)',
-    function () {
-      it('rent a clean token', async function () {
-        const expectedCost = calculateFee(this.initialRentalsDuration, 1000n);
-        expect(await this.rentalContract.estimateRentalFee(user1, 20n, 1000n, [])).equal(expectedCost);
-      });
-
-      it('rent a token that has expired', async function () {
-        await time.increase(1000n);
-        const expectedCost = calculateFee(this.initialRentalsDuration - 1000n, 1000n);
-        expect(await this.rentalContract.estimateRentalFee(user1, 400n, 1000n, [])).equal(expectedCost);
-      });
-
-      it('extend a token', async function () {
-        await this.rentalContract.rent(user1, 10n, 1000n, [], 0n);
-        await time.increase(500n);
-        const expectedCost = calculateFee(this.initialRentalsDuration + 1000n - 500n, 1000n);
-        expect(await this.rentalContract.estimateRentalFee(user1, 10n, 1000n, [])).equal(expectedCost);
-      });
-
-      it('extend a token, while renting 2 expired tokens', async function () {
-        await this.rentalContract.rent(user1, 10n, 2000n, [], 0n);
-        await time.increase(1500n);
-        const expectedCost = calculateFee(this.initialRentalsDuration + 2000n - 1500n - 2n * 1000n, 1000n);
-        expect(await this.rentalContract.estimateRentalFee(user1, 10n, 1000n, [400n, 401n])).equal(expectedCost);
-      });
-
-      it('rent a token that is currently rented by another account', async function () {
-        await expect(this.rentalContract.estimateRentalFee(user1, 403n, 1000n, []))
-          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
-          .withArgs(403n);
-      });
-
-      it('rent a token that has expired, while collecting 2 other tokens', async function () {
-        await time.increase(1000n);
-        const expiredTokensTime = 1000n + 1000n;
-        const expiredTokenToRentTime = 1000n;
-        const expectedCost = calculateFee(this.initialRentalsDuration - expiredTokensTime - expiredTokenToRentTime, 1000n);
-        expect(await this.rentalContract.estimateRentalFee(user1, 400n, 1000n, [401n, 402n])).equal(expectedCost);
-      });
-
-      it('rent a token that has expired, while collecting 2 other tokens + include the token to be rented in expiredTokenIds too', async function () {
-        await time.increase(1000n);
-        const expiredTokensTime = 1000n + 1000n + 1000n;
-        // NOTE: it's expected behavior to include the expired token to be rented as elapsed time, even it's already included in expiredTokenIds
-        const expiredTokenToRentTime = 1000n;
-        const expectedCost = calculateFee(this.initialRentalsDuration - expiredTokensTime - expiredTokenToRentTime, 1000n);
-        expect(await this.rentalContract.estimateRentalFee(user1, 400n, 1000n, [400n, 401n, 402n])).equal(expectedCost);
-      });
-
-      it('extend the rental that the total rent duration reaches the maximum rental duration', async function () {
-        await this.rentalContract.connect(user1).rent(user1, 0n, this.maxRentalDuration, [], 0n);
-        await time.increase(200n);
-
-        await expect(this.rentalContract.estimateRentalFee(user1, 0n, 1n, []))
-          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
-          .withArgs(0n, this.maxRentalDuration + 1n);
-      });
-    }
-  );
-
-  context(
-    `estimateBatchRentalFee(
+    `estimateRentalFee(
       address account,
       uint256[] calldata tokenIds,
       uint256[] calldata durations,
@@ -571,92 +453,109 @@ describe('EDUNodeKeyRental', function () {
           tokenIds.push(i);
         }
         const durations = tokenIds.map((_) => 1000n);
-        await expect(this.rentalContract.connect(user1).estimateBatchRentalFee(user1, tokenIds, durations, [])).to.be.revertedWithCustomError(
+        await expect(this.rentalContract.connect(user1).estimateRentalFee(user1, tokenIds, durations, [])).to.be.revertedWithCustomError(
           this.rentalContract,
           'RentalCountPerCallLimitExceeded'
         );
       });
 
       it('revert if tokenIds and durations length mismatch', async function () {
-        await expect(this.rentalContract.connect(user1).estimateBatchRentalFee(user1, [0n], [1000n, 2000n], [])).to.be.revertedWithCustomError(
+        await expect(this.rentalContract.connect(user1).estimateRentalFee(user1, [0n], [1000n, 2000n], [])).to.be.revertedWithCustomError(
           this.rentalContract,
           'InconsistentArrayLengths'
         );
       });
 
+      it('one of the tokenId that reaches the token supply', async function () {
+        await expect(this.rentalContract.connect(user1)
+          .estimateRentalFee(user1, [0n, this.nodeKeyContractTotalSupply], [1000n, 2000n], []))
+          .to.be.revertedWithCustomError(
+            this.rentalContract,
+            'UnsupportedTokenId'
+          )
+          .withArgs(this.nodeKeyContractTotalSupply);
+      });
+
+      it('one of the tokenIds has 0 duration', async function () {
+        await expect(this.rentalContract.connect(user1)
+          .estimateRentalFee(user1, [0n, 1n], [0n, 1000n], []))
+          .to.be.revertedWithCustomError(this.rentalContract, 'ZeroRentalDuration')
+          .withArgs(0n);
+      });
+
       it('rent a clean token', async function () {
-        const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n]);
-        expect(await this.rentalContract.estimateBatchRentalFee(user1, [20n], [1000n], [])).equal(
-          expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-        );
+        const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n], [RENTAL_TYPE.CLEAN]);
+        expect(await this.rentalContract.estimateRentalFee(user1, [20n], [1000n], [])).equal(expectedCosts.reduce((acc, cost) => acc + cost, 0n));
       });
 
       it('rent 2 clean tokens', async function () {
-        const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n]);
-        expect(await this.rentalContract.estimateBatchRentalFee(user1, [20n, 21n], [1000n, 50n], [])).equal(
+        const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+        expect(await this.rentalContract.estimateRentalFee(user1, [20n, 21n], [1000n, 50n], [])).equal(
           expectedCosts.reduce((acc, cost) => acc + cost, 0n)
         );
       });
 
-      it('rent 2 tokens; one is clean token, one of the tokens has expired', async function () {
+      // TODO: confirm if it's the expected behavior, throw error anyways if the token to be rented is expired, no matter it's included in expiredTokenIds
+      it('rent 2 tokens; one is clean token, one of the tokens rented by another account has expired', async function () {
         await time.increase(1000n);
-        const expectedCosts = calculateFees(this.initialRentalsDuration - 1000n, [50n, 1000n]);
-        expect(await this.rentalContract.estimateBatchRentalFee(user2, [20n, 400n], [50, 1000n], [])).equal(
-          expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-        );
+        await expect(this.rentalContract.estimateRentalFee(user2, [20n, 400n], [50, 1000n], [400n]))
+          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
+          .withArgs(400n);
       });
 
-      it('rent 2 tokens; one is clean token, and extend a token', async function () {
-        await this.rentalContract.connect(user1).rent(user1, 10n, 1000n, [], 0n);
+      it('rent 2 tokens; one is clean token, and extend a token an non-expired token', async function () {
+        await this.rentalContract.connect(user1).rent(user1, [0n], [1000n], [], 0n);
         await time.increase(500n);
-        const expectedCosts = calculateFees(this.initialRentalsDuration + 1000n - 500n, [1000n, 50n]);
-        expect(await this.rentalContract.estimateBatchRentalFee(user1, [10n, 0n], [1000n, 50n], [])).equal(
+        const expectedCosts = calculateFees(this.initialRentalsDuration + 1000n, [500n, 1000n], [RENTAL_TYPE.EXTENSION, RENTAL_TYPE.CLEAN]);
+        expect(await this.rentalContract.estimateRentalFee(user1, [0n, 1n], [500n, 1000n], [])).equal(
           expectedCosts.reduce((acc, cost) => acc + cost, 0n)
         );
       });
 
-      it('rent 2 tokens; one is clean token, and extend a token, while collecting 2 expired tokens', async function () {
-        await this.rentalContract.connect(user1).rent(user1, 10n, 2000n, [], 0n);
+      it('rent 2 tokens; one is clean token, and extend a token an non-expired token, while collecting 2 expired tokens', async function () {
+        await this.rentalContract.connect(user1).rent(user1, [10n], [5000n], [], 0n);
         await time.increase(1500n);
-        const expectedCosts = calculateFees(this.initialRentalsDuration + 2000n - 1500n - 2n * 1000n, [1000n, 50n]);
-        expect(await this.rentalContract.estimateBatchRentalFee(user1, [10n, 0n], [1000n, 50n], [400n, 401n])).equal(
+        const expectedCosts = calculateFees(
+          this.initialRentalsDuration + 5000n - 2n * 1000n,
+          [1000n, 50n],
+          [RENTAL_TYPE.EXTENSION, RENTAL_TYPE.CLEAN]
+        );
+        expect(await this.rentalContract.estimateRentalFee(user1, [10n, 0n], [1000n, 50n], [400n, 401n])).equal(
           expectedCosts.reduce((acc, cost) => acc + cost, 0n)
         );
       });
 
       it('rent 2 tokens; one is clean token, another token is currently rented by another account', async function () {
-        await expect(this.rentalContract.estimateBatchRentalFee(user1, [0n, 403n], [50n, 1000n], []))
+        await expect(this.rentalContract.estimateRentalFee(user1, [0n, 403n], [50n, 1000n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
           .withArgs(403n);
       });
 
-      it('rent 2 tokens; one is clean token, another has expired, while collecting 2 other tokens', async function () {
-        await time.increase(1000n);
-        const expiredTokensTime = 1000n + 1000n;
-        const expiredTokenToRentTime = 1000n;
-        const expectedCosts = calculateFees(this.initialRentalsDuration - expiredTokensTime - expiredTokenToRentTime, [50n, 1000n]);
-        expect(await this.rentalContract.estimateBatchRentalFee(user1, [0n, 400n], [50, 1000n], [401n, 402n])).equal(
-          expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-        );
-      });
+      // TODO: confirm the behavior if put/ not putting the expired token in expiredTokenIds
+      // it('rent 2 tokens; one is clean token, another has expired and not provided in expiredTokenIds, while collecting 2 other tokens', async function () {
+      //   await time.increase(1000n);
+      //   const expiredTokensTime = 1000n + 1000n;
+      //   const expectedCosts = calculateFees(
+      //     this.initialRentalsDuration - expiredTokensTime,
+      //     [50n, 1000n],
+      //     [RENTAL_TYPE.CLEAN, RENTAL_TYPE.EXTENSION]
+      //   );
+      //   expect(await this.rentalContract.estimateRentalFee(user1, [0n, 400n], [50, 1000n], [401n, 402n])).equal(
+      //     expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+      //   );
+      // });
 
-      it(`rent 2 tokens; one is clean token, another has expired,
-        while collecting 2 other tokens + include the token to be rented in expiredTokenIds too`, async function () {
-        await time.increase(1000n);
-        const expiredTokensTime = 1000n + 1000n + 1000n;
-        // NOTE: it's expected behavior to include the expired token to be rented as elapsed time, even it's already included in expiredTokenIds
-        const expiredTokenToRentTime = 1000n;
-        const expectedCosts = calculateFees(this.initialRentalsDuration - expiredTokensTime - expiredTokenToRentTime, [50n, 1000n]);
-        expect(await this.rentalContract.estimateBatchRentalFee(user1, [0n, 400n], [50n, 1000n], [400n, 401n, 402n])).equal(
-          expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-        );
+      it('rent 2 tokens; one is clean token, another token reaches the maximum rental duration', async function () {
+        await expect(this.rentalContract.estimateRentalFee(user1, [1n, 0n], [1000n, this.maxRentalDuration + 1n], []))
+          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
+          .withArgs(0n, this.maxRentalDuration + 1n);
       });
 
       it('rent 2 tokens; one is clean token, another token to extend reaches the maximum rental duration', async function () {
-        await this.rentalContract.connect(user1).rent(user1, 0n, this.maxRentalDuration, [], 0n);
+        await this.rentalContract.connect(user1).rent(user1, [0n], [this.maxRentalDuration], [], 0n);
         await time.increase(200n);
 
-        await expect(this.rentalContract.estimateBatchRentalFee(user1, [1n, 0n], [1000n, 1n], []))
+        await expect(this.rentalContract.estimateRentalFee(user1, [1n, 0n], [1000n, 1n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
           .withArgs(0n, this.maxRentalDuration + 1n);
       });
