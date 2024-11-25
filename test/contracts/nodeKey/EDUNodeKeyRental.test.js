@@ -715,15 +715,15 @@ describe('EDUNodeKeyRental', function () {
     });
   });
 
-  context('setMonthlyMaintenanceFee(uint256 newMonthlyMaintenanceFee) external', function () {
+  context('setMaintenanceFee(uint256 newMonthlyMaintenanceFee) external', function () {
     it('Success', async function () {
-      await expect(this.rentalContract.connect(rentalOperator).setMonthlyMaintenanceFee(2n))
+      await expect(this.rentalContract.connect(rentalOperator).setMaintenanceFee(2n))
         .to.emit(this.rentalContract, 'MaintenanceFeeUpdated')
         .withArgs(2n);
     });
 
     it('Failure because it set by non operator wallet', async function () {
-      await expect(this.rentalContract.connect(user1).setMonthlyMaintenanceFee(2n))
+      await expect(this.rentalContract.connect(user1).setMaintenanceFee(2n))
         .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
         .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
     });
