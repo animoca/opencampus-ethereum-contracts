@@ -37,11 +37,11 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
     Points public immutable POINTS;
     IEDUNodeKey public immutable NODE_KEY;
+    uint256 public immutable NODE_KEY_SUPPLY;
 
     uint256 public maintenanceFee;
     uint256 public maxRentalDuration;
     uint256 public maxRentalCountPerCall;
-    uint256 public nodeKeySupply;
 
     mapping(uint256 => RentalInfo) public rentals;
 
@@ -69,7 +69,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256 maintenanceFee_,
         uint256 maxRentalDuration_,
         uint256 maxRentalCountPerCall_,
-        uint256 nodeKeySupply_,
+        uint256 nodeKeySupply,
         IForwarderRegistry forwarderRegistry
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
         NODE_KEY = IEDUNodeKey(nodeKeyAddress);
@@ -77,7 +77,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         maintenanceFee = maintenanceFee_;
         maxRentalDuration = maxRentalDuration_;
         maxRentalCountPerCall = maxRentalCountPerCall_;
-        nodeKeySupply = nodeKeySupply_;
+        NODE_KEY_SUPPLY = nodeKeySupply;
     }
 
     function calculateElapsedTimeForExpiredTokens(uint256[] calldata tokenIds) public view returns (uint256 elapsedTime) {
@@ -123,7 +123,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 revert ZeroRentalDuration(tokenId);
             }
 
-            if (tokenId >= nodeKeySupply) {
+            if (tokenId >= NODE_KEY_SUPPLY) {
                 revert UnsupportedTokenId(tokenId);
             }
 
@@ -180,7 +180,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 revert ZeroRentalDuration(tokenId);
             }
 
-            if (tokenId >= nodeKeySupply) {
+            if (tokenId >= NODE_KEY_SUPPLY) {
                 revert UnsupportedTokenId(tokenId);
             }
 
@@ -263,6 +263,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
                 rental.beginDate = 0;
                 rental.endDate = 0;
+                rental.fee = 0;
 
                 address currentOwner = NODE_KEY.ownerOf(tokenId);
                 NODE_KEY.burnFrom(currentOwner, tokenId);
