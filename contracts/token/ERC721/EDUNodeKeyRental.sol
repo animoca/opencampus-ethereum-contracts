@@ -38,7 +38,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     Points public immutable POINTS;
     IEDUNodeKey public immutable NODE_KEY;
 
-    uint256 public monthlyMaintenanceFee;
+    uint256 public maintenanceFee;
     uint256 public maxRentalDuration;
     uint256 public maxRentalCountPerCall;
     uint256 public nodeKeySupply;
@@ -66,7 +66,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     constructor(
         address nodeKeyAddress,
         address pointsAddress,
-        uint256 monthlyMaintenanceFee_,
+        uint256 maintenanceFee_,
         uint256 maxRentalDuration_,
         uint256 maxRentalCountPerCall_,
         uint256 nodeKeySupply_,
@@ -74,7 +74,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
         NODE_KEY = IEDUNodeKey(nodeKeyAddress);
         POINTS = Points(pointsAddress);
-        monthlyMaintenanceFee = monthlyMaintenanceFee_;
+        maintenanceFee = maintenanceFee_;
         maxRentalDuration = maxRentalDuration_;
         maxRentalCountPerCall = maxRentalCountPerCall_;
         nodeKeySupply = nodeKeySupply_;
@@ -119,6 +119,14 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 duration = durations[i];
             uint256 tokenId = tokenIds[i];
+            if (duration == 0) {
+                revert ZeroRentalDuration(tokenId);
+            }
+
+            if (tokenId >= nodeKeySupply) {
+                revert UnsupportedTokenId(tokenId);
+            }
+
             RentalInfo memory rental = rentals[tokenId];
             if (rental.endDate == 0) {
                 if (duration > maxRentalDuration) {
@@ -134,7 +142,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 revert TokenAlreadyRented(tokenId);
             }
 
-            totalFee += duration * monthlyMaintenanceFee;
+            totalFee += duration * maintenanceFee;
         }
 
         return totalFee;
@@ -185,7 +193,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 NODE_KEY.safeMint(account_, tokenId, "");
                 rental.beginDate = currentTime;
                 rental.endDate = currentTime + duration;
-                uint256 fee = nodeKeyPrice + monthlyMaintenanceFee * duration;
+                uint256 fee = nodeKeyPrice + maintenanceFee * duration;
                 rental.fee = fee;
                 totalFee += fee;
             } else if (account_ == NODE_KEY.ownerOf(tokenId)) {
@@ -194,7 +202,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 }
 
                 rental.endDate += duration;
-                uint256 fee = monthlyMaintenanceFee * duration;
+                uint256 fee = maintenanceFee * duration;
                 rental.fee += fee;
                 totalFee += fee;
             } else {
@@ -225,7 +233,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
     function setMonthlyMaintenanceFee(uint256 newMonthlyMaintenanceFee) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
-        monthlyMaintenanceFee = newMonthlyMaintenanceFee;
+        maintenanceFee = newMonthlyMaintenanceFee;
         emit MonthlyMaintenanceFeeUpdated(newMonthlyMaintenanceFee);
     }
 
