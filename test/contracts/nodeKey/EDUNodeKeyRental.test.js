@@ -467,18 +467,13 @@ describe('EDUNodeKeyRental', function () {
       });
 
       it('one of the tokenId that reaches the token supply', async function () {
-        await expect(this.rentalContract.connect(user1)
-          .estimateRentalFee(user1, [0n, this.nodeKeyContractTotalSupply], [1000n, 2000n], []))
-          .to.be.revertedWithCustomError(
-            this.rentalContract,
-            'UnsupportedTokenId'
-          )
+        await expect(this.rentalContract.connect(user1).estimateRentalFee(user1, [0n, this.nodeKeyContractTotalSupply], [1000n, 2000n], []))
+          .to.be.revertedWithCustomError(this.rentalContract, 'UnsupportedTokenId')
           .withArgs(this.nodeKeyContractTotalSupply);
       });
 
       it('one of the tokenIds has 0 duration', async function () {
-        await expect(this.rentalContract.connect(user1)
-          .estimateRentalFee(user1, [0n, 1n], [0n, 1000n], []))
+        await expect(this.rentalContract.connect(user1).estimateRentalFee(user1, [0n, 1n], [0n, 1000n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'ZeroRentalDuration')
           .withArgs(0n);
       });
@@ -495,7 +490,7 @@ describe('EDUNodeKeyRental', function () {
         );
       });
 
-      // TODO: confirm if it's the expected behavior, throw error anyways if the token to be rented is expired, no matter it's included in expiredTokenIds
+      // TODO: confirm if it's expected to throw error anyways if the token to be rented is expired, no matter it's included in expiredTokenIds
       it('rent 2 tokens; one is clean token, one of the tokens rented by another account has expired', async function () {
         await time.increase(1000n);
         await expect(this.rentalContract.estimateRentalFee(user2, [20n, 400n], [50, 1000n], [400n]))
@@ -532,7 +527,8 @@ describe('EDUNodeKeyRental', function () {
       });
 
       // TODO: confirm the behavior if put/ not putting the expired token in expiredTokenIds
-      // it('rent 2 tokens; one is clean token, another has expired and not provided in expiredTokenIds, while collecting 2 other tokens', async function () {
+      // it(`rent 2 tokens; one is clean token, another has expired and not provided in expiredTokenIds,while collecting 2 other tokens`,
+      //   async function () {
       //   await time.increase(1000n);
       //   const expiredTokensTime = 1000n + 1000n;
       //   const expectedCosts = calculateFees(

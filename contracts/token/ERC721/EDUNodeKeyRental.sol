@@ -32,7 +32,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     /// @notice The reason code for consuming points
     bytes32 public constant RENTAL_CONSUME_CODE = keccak256("NODE_KEY_RENTAL");
 
-    uint256 constant POWER_10_18 = 10**18;
+    uint256 constant POWER_10_18 = 10 ** 18;
     uint256 constant LN2_WITH_POWER_10_18 = 693147180559945309; // ln(2) * 10^18 for fixed-point arithmetic
 
     Points public immutable POINTS;
@@ -280,8 +280,8 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     }
 
     function _estimateNodeKeyPrice(uint256 totalEffectiveRentalTime_) internal pure returns (uint256) {
-        // ln(x) + ln(x / 100) * 500 
-        return (Math.log2(totalEffectiveRentalTime_) + Math.log2(totalEffectiveRentalTime_ / 100)) * 500 * LN2_WITH_POWER_10_18 / POWER_10_18;
+        // ln(x) + ln(x / 100) * 500
+        return ((Math.log2(totalEffectiveRentalTime_) + Math.log2(totalEffectiveRentalTime_ / 100)) * 500 * LN2_WITH_POWER_10_18) / POWER_10_18;
     }
 
     function estimateNodeKeyPriceTest(uint256 totalEffectiveRentalTime_) public pure returns (uint256) {
