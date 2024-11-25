@@ -10,7 +10,7 @@ contract EDUNodeKeyRentalMock is EDUNodeKeyRental {
     constructor(
         address nodeKeyAddress,
         address pointsAddress,
-        uint256 monthlyMaintenceFee_,
+        uint256 maintenceFee_,
         uint256 maxRentalDuration_,
         uint256 maxRentalCountPerCall_,
         uint256 nodeKeySupply_,
@@ -19,7 +19,7 @@ contract EDUNodeKeyRentalMock is EDUNodeKeyRental {
         EDUNodeKeyRental(
             nodeKeyAddress,
             pointsAddress,
-            monthlyMaintenceFee_,
+            maintenceFee_,
             maxRentalDuration_,
             maxRentalCountPerCall_,
             nodeKeySupply_,
