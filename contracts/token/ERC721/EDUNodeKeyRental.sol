@@ -49,7 +49,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
     event Rental(address indexed renter, uint256[] tokenIds, RentalInfo[] rentals);
     event Collected(uint256[] tokenIds);
-    event MonthlyMaintenanceFeeUpdated(uint256 newMonthlyMaintenanceFee);
+    event MaintenanceFeeUpdated(uint256 newMaintenanceFee);
     event MaxRentalDurationUpdated(uint256 newMaxRentalDuration);
     event MaxRentalCountPerCallUpdated(uint256 newMaxRentalCountPerCall);
 
@@ -58,7 +58,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     error RentalDurationLimitExceeded(uint256 tokenId, uint256 duration);
     error RentalCountPerCallLimitExceeded();
     error TokenAlreadyRented(uint256 tokenId);
-    error NotRented(uint256 tokenId);
+    error TokenNotRented(uint256 tokenId);
     error TokenNotExpired(uint256 tokenId);
     error UnsupportedTokenId(uint256 tokenId);
     error FeeExceeded(uint256 calculatedFee, uint256 maxFee);
@@ -86,7 +86,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             uint256 tokenId = tokenIds[i];
             RentalInfo storage rental = rentals[tokenId];
             if (rental.endDate == 0) {
-                revert NotRented(tokenId);
+                revert TokenNotRented(tokenId);
             }
 
             if (currentTime < rental.endDate) {
@@ -227,14 +227,14 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         if (block.timestamp < rentals[tokenId].endDate) {
             return NODE_KEY.ownerOf(tokenId);
         } else {
-            revert NotRented(tokenId);
+            revert TokenNotRented(tokenId);
         }
     }
 
     function setMonthlyMaintenanceFee(uint256 newMonthlyMaintenanceFee) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         maintenanceFee = newMonthlyMaintenanceFee;
-        emit MonthlyMaintenanceFeeUpdated(newMonthlyMaintenanceFee);
+        emit MaintenanceFeeUpdated(newMonthlyMaintenanceFee);
     }
 
     function setMaxRentalDuration(uint256 newMaxRentalDuration) external {

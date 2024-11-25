@@ -133,7 +133,7 @@ describe('EDUNodeKeyRental', function () {
 
   context('renterOf(uint256 tokenId) public view returns (address)', function () {
     it('Node key never rented', async function () {
-      expectRevert(this.rentalContract.renterOf(0n), this.rentalContract, 'NotRented', 0n);
+      expectRevert(this.rentalContract.renterOf(0n), this.rentalContract, 'TokenNotRented', 0n);
     });
 
     it('Node key rented', async function () {
@@ -144,7 +144,7 @@ describe('EDUNodeKeyRental', function () {
     it('Node key rented, and expired', async function () {
       await this.rentalContract.connect(user1).rent(user1, 0n, 10n, [], 0n);
       await time.increase(10n);
-      expectRevert(this.rentalContract.renterOf(0n), this.rentalContract, 'NotRented', 0n);
+      expectRevert(this.rentalContract.renterOf(0n), this.rentalContract, 'TokenNotRented', 0n);
     });
   });
 
@@ -685,7 +685,7 @@ describe('EDUNodeKeyRental', function () {
 
     it('Some tokenId has not rented', async function () {
       await expect(this.rentalContract.calculateElapsedTimeForExpiredTokens([12n]))
-        .to.be.revertedWithCustomError(this.rentalContract, 'NotRented')
+        .to.be.revertedWithCustomError(this.rentalContract, 'TokenNotRented')
         .withArgs(12n);
     });
 
@@ -703,7 +703,7 @@ describe('EDUNodeKeyRental', function () {
 
     it('1st token has not expired, 2nd token has not rented', async function () {
       await expect(this.rentalContract.calculateElapsedTimeForExpiredTokens([12n, 400n]))
-        .to.be.revertedWithCustomError(this.rentalContract, 'NotRented')
+        .to.be.revertedWithCustomError(this.rentalContract, 'TokenNotRented')
         .withArgs(12n);
     });
 
@@ -718,7 +718,7 @@ describe('EDUNodeKeyRental', function () {
   context('setMonthlyMaintenanceFee(uint256 newMonthlyMaintenanceFee) external', function () {
     it('Success', async function () {
       await expect(this.rentalContract.connect(rentalOperator).setMonthlyMaintenanceFee(2n))
-        .to.emit(this.rentalContract, 'MonthlyMaintenanceFeeUpdated')
+        .to.emit(this.rentalContract, 'MaintenanceFeeUpdated')
         .withArgs(2n);
     });
 
