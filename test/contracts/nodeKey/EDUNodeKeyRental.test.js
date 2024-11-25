@@ -715,7 +715,7 @@ describe('EDUNodeKeyRental', function () {
     });
   });
 
-  context('setMaintenanceFee(uint256 newMonthlyMaintenanceFee) external', function () {
+  context('setMaintenanceFee(uint256 newMaintenanceFee) external', function () {
     it('Success', async function () {
       await expect(this.rentalContract.connect(rentalOperator).setMaintenanceFee(2n))
         .to.emit(this.rentalContract, 'MaintenanceFeeUpdated')

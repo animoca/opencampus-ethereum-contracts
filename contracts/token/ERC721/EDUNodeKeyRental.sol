@@ -231,10 +231,10 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         }
     }
 
-    function setMaintenanceFee(uint256 newMonthlyMaintenanceFee) external {
+    function setMaintenanceFee(uint256 newMaintenanceFee) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
-        maintenanceFee = newMonthlyMaintenanceFee;
-        emit MaintenanceFeeUpdated(newMonthlyMaintenanceFee);
+        maintenanceFee = newMaintenanceFee;
+        emit MaintenanceFeeUpdated(newMaintenanceFee);
     }
 
     function setMaxRentalDuration(uint256 newMaxRentalDuration) external {
