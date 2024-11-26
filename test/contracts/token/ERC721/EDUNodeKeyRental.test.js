@@ -356,64 +356,64 @@ describe('EDUNodeKeyRental', function () {
               ]
             );
         });
-      });
 
-      it('successfully rent 2 node keys; one is clean token, another is expired node key that rented by another account', async function () {
-        await this.rentalContract.connect(user2).rent(user2, [0n], [1000n], [], 0n);
-        await time.increase(1000n);
+        it('successfully rent 2 node keys; 1 clean node key, another is expired node key that rented by another account', async function () {
+          await this.rentalContract.connect(user2).rent(user2, [0n], [1000n], [], 0n);
+          await time.increase(1000n);
 
-        const tx = await this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 50n], [0n], 0n);
-        const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
-        const blockTimestamp = await getBlockTimestamp(tx);
+          const tx = await this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 50n], [0n], 0n);
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+          const blockTimestamp = await getBlockTimestamp(tx);
 
-        await expect(tx)
-          .to.emit(this.ocp, 'Consumed')
-          .withArgs(
-            this.rentalContract,
-            this.rentalReasonCode,
-            user1,
-            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-          )
-          .to.emit(this.rentalContract, 'Rental')
-          .withArgs(
-            user1,
-            [0n, 1n],
-            [
-              [blockTimestamp, blockTimestamp + 1000n, expectedCosts[0]],
-              [blockTimestamp, blockTimestamp + 50n, expectedCosts[1]],
-            ]
-          );
-      });
+          await expect(tx)
+            .to.emit(this.ocp, 'Consumed')
+            .withArgs(
+              this.rentalContract,
+              this.rentalReasonCode,
+              user1,
+              expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+            )
+            .to.emit(this.rentalContract, 'Rental')
+            .withArgs(
+              user1,
+              [0n, 1n],
+              [
+                [blockTimestamp, blockTimestamp + 1000n, expectedCosts[0]],
+                [blockTimestamp, blockTimestamp + 50n, expectedCosts[1]],
+              ]
+            );
+        });
 
-      it(`successfully rent 2 node keys;
-          one clean token, another was rented by another account and expired. With collecting all expired tokens`, async function () {
-        await this.rentalContract.connect(user2).rent(user2, [0n], [1000n], [], 0n);
-        await time.increase(2000n);
+        it(`successfully rent 2 node keys;
+            1 clean node key, another was rented by another account and expired. With collecting all expired tokens`, async function () {
+          await this.rentalContract.connect(user2).rent(user2, [0n], [1000n], [], 0n);
+          await time.increase(2000n);
 
-        const tx = await this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 50n], [0n, 400n, 401n, 402n], 0n);
-        const expiredTokensTime = 1000n + 1000n + 1000n;
-        const expectedCosts = calculateFees(this.initialRentalsDuration - expiredTokensTime, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
-        const blockTimestamp = await getBlockTimestamp(tx);
+          const tx = await this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 50n], [0n, 400n, 401n, 402n], 0n);
+          const expiredTokensTime = 1000n + 1000n + 1000n;
+          const expectedCosts = calculateFees(this.initialRentalsDuration - expiredTokensTime, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+          const blockTimestamp = await getBlockTimestamp(tx);
 
-        await expect(tx)
-          .to.emit(this.ocp, 'Consumed')
-          .withArgs(
-            this.rentalContract,
-            this.rentalReasonCode,
-            user1,
-            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-          )
-          .to.emit(this.rentalContract, 'Rental')
-          .withArgs(
-            user1,
-            [0n, 1n],
-            [
-              [blockTimestamp, blockTimestamp + 1000n, expectedCosts[0]],
-              [blockTimestamp, blockTimestamp + 50n, expectedCosts[1]],
-            ]
-          )
-          .to.emit(this.rentalContract, 'Collected')
-          .withArgs([0n, 400n, 401n, 402n]);
+          await expect(tx)
+            .to.emit(this.ocp, 'Consumed')
+            .withArgs(
+              this.rentalContract,
+              this.rentalReasonCode,
+              user1,
+              expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+            )
+            .to.emit(this.rentalContract, 'Rental')
+            .withArgs(
+              user1,
+              [0n, 1n],
+              [
+                [blockTimestamp, blockTimestamp + 1000n, expectedCosts[0]],
+                [blockTimestamp, blockTimestamp + 50n, expectedCosts[1]],
+              ]
+            )
+            .to.emit(this.rentalContract, 'Collected')
+            .withArgs([0n, 400n, 401n, 402n]);
+        });
       });
     }
   );
@@ -485,18 +485,6 @@ describe('EDUNodeKeyRental', function () {
           .withArgs(0n);
       });
 
-      it('rent a clean token', async function () {
-        const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n], [RENTAL_TYPE.CLEAN]);
-        expect(await this.rentalContract.estimateRentalFee(user1, [20n], [1000n], [])).equal(expectedCosts.reduce((acc, cost) => acc + cost, 0n));
-      });
-
-      it('rent 2 clean tokens', async function () {
-        const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
-        expect(await this.rentalContract.estimateRentalFee(user1, [20n, 21n], [1000n, 50n], [])).equal(
-          expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-        );
-      });
-
       it(`rent 2 tokens; one is clean token,
         one of the tokens rented by another account has expired and supply it as expiredTokenIds`, async function () {
         await time.increase(1000n);
@@ -527,28 +515,6 @@ describe('EDUNodeKeyRental', function () {
           .withArgs(400n);
       });
 
-      it('rent 2 tokens; one is clean token, and extend a token an non-expired token', async function () {
-        await this.rentalContract.connect(user1).rent(user1, [0n], [1000n], [], 0n);
-        await time.increase(500n);
-        const expectedCosts = calculateFees(this.initialRentalsDuration + 1000n, [500n, 1000n], [RENTAL_TYPE.EXTENSION, RENTAL_TYPE.CLEAN]);
-        expect(await this.rentalContract.estimateRentalFee(user1, [0n, 1n], [500n, 1000n], [])).equal(
-          expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-        );
-      });
-
-      it('rent 2 tokens; one is clean token, and extend a token an non-expired token, while collecting 2 expired tokens', async function () {
-        await this.rentalContract.connect(user1).rent(user1, [10n], [5000n], [], 0n);
-        await time.increase(1500n);
-        const expectedCosts = calculateFees(
-          this.initialRentalsDuration + 5000n - 2n * 1000n,
-          [1000n, 50n],
-          [RENTAL_TYPE.EXTENSION, RENTAL_TYPE.CLEAN]
-        );
-        expect(await this.rentalContract.estimateRentalFee(user1, [10n, 0n], [1000n, 50n], [400n, 401n])).equal(
-          expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-        );
-      });
-
       it('rent 2 tokens; one is clean token, another token is currently rented by another account', async function () {
         await expect(this.rentalContract.estimateRentalFee(user1, [0n, 403n], [50n, 1000n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
@@ -568,6 +534,42 @@ describe('EDUNodeKeyRental', function () {
         await expect(this.rentalContract.estimateRentalFee(user1, [1n, 0n], [1000n, 1n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
           .withArgs(0n, this.maxRentalDuration + 1n);
+      });
+
+      context('when successful', function () {
+        it('rent a clean token', async function () {
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n], [RENTAL_TYPE.CLEAN]);
+          expect(await this.rentalContract.estimateRentalFee(user1, [20n], [1000n], [])).equal(expectedCosts.reduce((acc, cost) => acc + cost, 0n));
+        });
+
+        it('rent 2 clean tokens', async function () {
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+          expect(await this.rentalContract.estimateRentalFee(user1, [20n, 21n], [1000n, 50n], [])).equal(
+            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+          );
+        });
+
+        it('rent 2 tokens; one is clean token, and extend a token an non-expired token', async function () {
+          await this.rentalContract.connect(user1).rent(user1, [0n], [1000n], [], 0n);
+          await time.increase(500n);
+          const expectedCosts = calculateFees(this.initialRentalsDuration + 1000n, [500n, 1000n], [RENTAL_TYPE.EXTENSION, RENTAL_TYPE.CLEAN]);
+          expect(await this.rentalContract.estimateRentalFee(user1, [0n, 1n], [500n, 1000n], [])).equal(
+            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+          );
+        });
+
+        it('rent 2 tokens; one is clean token, and extend a token an non-expired token, while collecting 2 expired tokens', async function () {
+          await this.rentalContract.connect(user1).rent(user1, [10n], [5000n], [], 0n);
+          await time.increase(1500n);
+          const expectedCosts = calculateFees(
+            this.initialRentalsDuration + 5000n - 2n * 1000n,
+            [1000n, 50n],
+            [RENTAL_TYPE.EXTENSION, RENTAL_TYPE.CLEAN]
+          );
+          expect(await this.rentalContract.estimateRentalFee(user1, [10n, 0n], [1000n, 50n], [400n, 401n])).equal(
+            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+          );
+        });
       });
     }
   );
