@@ -213,12 +213,20 @@ describe('EDUNodeKeyRental', function () {
           .withArgs(403n);
       });
 
-      // TODO: confirm the behavior of rented by current renter and another account
       it('one of the tokenIds is expired and rented by another account, not being supplied to expiredTokenIds', async function () {
         await this.rentalContract.connect(user2).rent(user2, [0n], [1000n], [], 0n);
-        await time.increase(2000n);
+        await time.increase(1000n);
 
         await expect(this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 50n], [], 0n))
+          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
+          .withArgs(0n);
+      });
+
+      it('one of the tokenIds is expired, not being supplied to expiredTokenIds', async function () {
+        await this.rentalContract.connect(user2).rent(user2, [0n], [1000n], [], 0n);
+        await time.increase(1000n);
+
+        await expect(this.rentalContract.connect(user2).rent(user2, [0n, 1n], [1000n, 50n], [], 0n))
           .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
           .withArgs(0n);
       });
@@ -322,10 +330,9 @@ describe('EDUNodeKeyRental', function () {
             );
         });
 
-        // TODO: confirm the behavior if not putting the expired token in expiredTokenIds
         it('successfully rent 2 node keys; 1 clean node key, and extend the rental on an expired node key.', async function () {
           await this.rentalContract.connect(user1).rent(user1, [0n], [1000n], [], 0n);
-          await time.increase(2000n);
+          await time.increase(1000n);
 
           const tx = await this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 50n], [0n], 0n);
           const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
@@ -353,7 +360,7 @@ describe('EDUNodeKeyRental', function () {
 
       it('successfully rent 2 node keys; one is clean token, another is expired node key that rented by another account', async function () {
         await this.rentalContract.connect(user2).rent(user2, [0n], [1000n], [], 0n);
-        await time.increase(2000n);
+        await time.increase(1000n);
 
         const tx = await this.rentalContract.connect(user1).rent(user1, [0n, 1n], [1000n, 50n], [0n], 0n);
         const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
@@ -490,10 +497,32 @@ describe('EDUNodeKeyRental', function () {
         );
       });
 
-      // TODO: confirm if it's expected to throw error anyways if the token to be rented is expired, no matter it's included in expiredTokenIds
-      it('rent 2 tokens; one is clean token, one of the tokens rented by another account has expired', async function () {
+      it(`rent 2 tokens; one is clean token,
+        one of the tokens rented by another account has expired and supply it as expiredTokenIds`, async function () {
         await time.increase(1000n);
         await expect(this.rentalContract.estimateRentalFee(user2, [20n, 400n], [50, 1000n], [400n]))
+          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
+          .withArgs(400n);
+      });
+
+      it(`rent 2 tokens; one is clean token,
+      one of the tokens rented by another account has expired and not supply it as expiredTokenIds`, async function () {
+        await time.increase(1000n);
+        await expect(this.rentalContract.estimateRentalFee(user2, [20n, 400n], [50, 1000n], []))
+          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
+          .withArgs(400n);
+      });
+
+      it('rent 2 tokens; one is clean token, one of the tokens has expired and supply it as expiredTokenIds', async function () {
+        await time.increase(1000n);
+        await expect(this.rentalContract.estimateRentalFee(user1, [20n, 400n], [50, 1000n], [400n]))
+          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
+          .withArgs(400n);
+      });
+
+      it('rent 2 tokens; one is clean token, one of the tokens has expired and not supply it as expiredTokenIds', async function () {
+        await time.increase(1000n);
+        await expect(this.rentalContract.estimateRentalFee(user1, [20n, 400n], [50, 1000n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
           .withArgs(400n);
       });
@@ -525,21 +554,6 @@ describe('EDUNodeKeyRental', function () {
           .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
           .withArgs(403n);
       });
-
-      // TODO: confirm the behavior if put/ not putting the expired token in expiredTokenIds
-      // it(`rent 2 tokens; one is clean token, another has expired and not provided in expiredTokenIds,while collecting 2 other tokens`,
-      //   async function () {
-      //   await time.increase(1000n);
-      //   const expiredTokensTime = 1000n + 1000n;
-      //   const expectedCosts = calculateFees(
-      //     this.initialRentalsDuration - expiredTokensTime,
-      //     [50n, 1000n],
-      //     [RENTAL_TYPE.CLEAN, RENTAL_TYPE.EXTENSION]
-      //   );
-      //   expect(await this.rentalContract.estimateRentalFee(user1, [0n, 400n], [50, 1000n], [401n, 402n])).equal(
-      //     expectedCosts.reduce((acc, cost) => acc + cost, 0n)
-      //   );
-      // });
 
       it('rent 2 tokens; one is clean token, another token reaches the maximum rental duration', async function () {
         await expect(this.rentalContract.estimateRentalFee(user1, [1n, 0n], [1000n, this.maxRentalDuration + 1n], []))

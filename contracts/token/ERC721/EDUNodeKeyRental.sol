@@ -13,7 +13,7 @@ import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/i
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-import "@openzeppelin/contracts/utils/math/Math.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryContext {
     using AccessControlStorage for AccessControlStorage.Layout;
@@ -32,8 +32,8 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     /// @notice The reason code for consuming points
     bytes32 public constant RENTAL_CONSUME_CODE = keccak256("NODE_KEY_RENTAL");
 
-    uint256 constant POWER_10_18 = 10 ** 18;
-    uint256 constant LN2_WITH_POWER_10_18 = 693147180559945309; // ln(2) * 10^18 for fixed-point arithmetic
+    uint256 internal constant POWER_10_18 = 10 ** 18;
+    uint256 internal constant LN2_WITH_POWER_10_18 = 693147180559945309; // ln(2) * 10^18 for fixed-point arithmetic
 
     Points public immutable POINTS;
     IEDUNodeKey public immutable NODE_KEY;
@@ -113,6 +113,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             revert InconsistentArrayLengths();
         }
 
+        uint256 currentTime = block.timestamp;
         uint256 elapsedTime = calculateElapsedTimeForExpiredTokens(expiredTokenIds);
         uint256 nodeKeyPrice = _estimateNodeKeyPrice(totalEffectiveRentalTime - elapsedTime);
         uint256 totalFee;
@@ -134,7 +135,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 }
 
                 totalFee += nodeKeyPrice;
-            } else if (NODE_KEY.ownerOf(tokenId) == account) {
+            } else if (NODE_KEY.ownerOf(tokenId) == account && currentTime < rental.endDate) {
                 if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
                     revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);
                 }
@@ -196,7 +197,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 uint256 fee = nodeKeyPrice + maintenanceFee * duration;
                 rental.fee = fee;
                 totalFee += fee;
-            } else if (account_ == NODE_KEY.ownerOf(tokenId)) {
+            } else if (account_ == NODE_KEY.ownerOf(tokenId) && currentTime < rental.endDate) {
                 if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
                     revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);
                 }
@@ -282,10 +283,6 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
     function _estimateNodeKeyPrice(uint256 totalEffectiveRentalTime_) internal pure returns (uint256) {
         // ln(x) + ln(x / 100) * 500
         return ((Math.log2(totalEffectiveRentalTime_) + Math.log2(totalEffectiveRentalTime_ / 100)) * 500 * LN2_WITH_POWER_10_18) / POWER_10_18;
-    }
-
-    function estimateNodeKeyPriceTest(uint256 totalEffectiveRentalTime_) public pure returns (uint256) {
-        return _estimateNodeKeyPrice(totalEffectiveRentalTime_);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
