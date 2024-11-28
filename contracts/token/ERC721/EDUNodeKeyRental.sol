@@ -37,8 +37,8 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
     Points public immutable POINTS;
     IEDUNodeKey public immutable NODE_KEY;
-    uint256 public immutable NODE_KEY_SUPPLY;
 
+    uint256 public maxTokenSupply;
     uint256 public maintenanceFee;
     uint256 public maxRentalDuration;
     uint256 public maxRentalCountPerCall;
@@ -49,6 +49,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
 
     event Rental(address indexed renter, uint256[] tokenIds, RentalInfo[] rentals);
     event Collected(uint256[] tokenIds);
+    event MaxTokenSupplyUpdated(uint256 newMaxTokenSupply);
     event MaintenanceFeeUpdated(uint256 newMaintenanceFee);
     event MaxRentalDurationUpdated(uint256 newMaxRentalDuration);
     event MaxRentalCountPerCallUpdated(uint256 newMaxRentalCountPerCall);
@@ -69,7 +70,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         uint256 maintenanceFee_,
         uint256 maxRentalDuration_,
         uint256 maxRentalCountPerCall_,
-        uint256 nodeKeySupply,
+        uint256 maxTokenSupply_,
         IForwarderRegistry forwarderRegistry
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
         NODE_KEY = IEDUNodeKey(nodeKeyAddress);
@@ -77,7 +78,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         maintenanceFee = maintenanceFee_;
         maxRentalDuration = maxRentalDuration_;
         maxRentalCountPerCall = maxRentalCountPerCall_;
-        NODE_KEY_SUPPLY = nodeKeySupply;
+        maxTokenSupply = maxTokenSupply_;
     }
 
     function calculateElapsedTimeForExpiredTokens(uint256[] calldata tokenIds) public view returns (uint256 elapsedTime) {
@@ -124,7 +125,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 revert ZeroRentalDuration(tokenId);
             }
 
-            if (tokenId >= NODE_KEY_SUPPLY) {
+            if (tokenId >= maxTokenSupply) {
                 revert UnsupportedTokenId(tokenId);
             }
 
@@ -181,7 +182,7 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 revert ZeroRentalDuration(tokenId);
             }
 
-            if (tokenId >= NODE_KEY_SUPPLY) {
+            if (tokenId >= maxTokenSupply) {
                 revert UnsupportedTokenId(tokenId);
             }
 
@@ -230,6 +231,12 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
         } else {
             revert TokenNotRented(tokenId);
         }
+    }
+
+    function setMaxTokenSupply(uint256 newMaxTokenSupply) external {
+        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
+        maxTokenSupply = newMaxTokenSupply;
+        emit MaxTokenSupplyUpdated(newMaxTokenSupply);
     }
 
     function setMaintenanceFee(uint256 newMaintenanceFee) external {
