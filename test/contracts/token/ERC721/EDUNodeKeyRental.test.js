@@ -626,6 +626,20 @@ describe('EDUNodeKeyRental', function () {
     });
   });
 
+  context('setMaxTokenSupply(uint256 newMaxTokenSupply) external', function() {
+    it('Success', async function() {
+      await expect(this.rentalContract.connect(rentalOperator).setMaxTokenSupply(1000n))
+      .to.emit(this.rentalContract, 'MaxTokenSupplyUpdated')
+      .withArgs(1000n);
+    });
+
+    it('Failure because it set by non operator wallet', async function () {
+      await expect(this.rentalContract.connect(user1).setMaxTokenSupply(1000n))
+        .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
+        .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
+    });
+  });
+
   context('setMaintenanceFee(uint256 newMaintenanceFee) external', function () {
     it('Success', async function () {
       await expect(this.rentalContract.connect(rentalOperator).setMaintenanceFee(2n))
