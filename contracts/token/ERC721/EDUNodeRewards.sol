@@ -17,7 +17,7 @@ contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
     // batchNumber => nodeKeyId => nodeKeyOwner
     mapping(uint256 => mapping(uint256 => address)) public rewardsRecipients;
 
-    event LogSetRewardPerSecond(uint256 rewardPerSecond);
+    event RewardPerSecondUpdated(uint256 rewardPerSecond);
 
     constructor(uint256 maxRewardTimeWindow, address referee, address nodeKey, address rewardToken) NodeRewardsBase(referee, nodeKey, rewardToken) {
         _disableInitializers();
@@ -35,7 +35,7 @@ contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
 
     function setRewardPerSecond(uint256 rewardPerSecond_) external onlyRole(REWARDS_CONTROLLER_ROLE) {
         rewardPerSecond = rewardPerSecond_;
-        emit LogSetRewardPerSecond(rewardPerSecond_);
+        emit RewardPerSecondUpdated(rewardPerSecond_);
     }
 
     function _onAttest(uint256 batchNumber, uint256 nodeKeyId) internal override {

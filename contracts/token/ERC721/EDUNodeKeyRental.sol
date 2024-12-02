@@ -125,6 +125,10 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
                 revert ZeroRentalDuration(tokenId);
             }
 
+            if (tokenId == 0) {
+                revert UnsupportedTokenId(0);
+            }
+
             if (tokenId >= maxTokenSupply) {
                 revert UnsupportedTokenId(tokenId);
             }
@@ -180,6 +184,10 @@ contract EDUNodeKeyRental is AccessControl, TokenRecovery, ForwarderRegistryCont
             uint256 duration = durations_[i];
             if (duration == 0) {
                 revert ZeroRentalDuration(tokenId);
+            }
+
+            if (tokenId == 0) {
+                revert UnsupportedTokenId(0);
             }
 
             if (tokenId >= maxTokenSupply) {
