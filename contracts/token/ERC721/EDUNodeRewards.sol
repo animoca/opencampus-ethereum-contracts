@@ -22,67 +22,67 @@ contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
     event LogSetRewardPerSecond(uint256 rewardPerSecond);
 
     constructor(
-        uint256 _maxRewardTimeWindow,
-        address _referee,
-        address _nodeKey,
-        address _rewardToken
-    ) NodeRewardsBase(_referee, _nodeKey, _rewardToken) {
+        uint256 maxRewardTimeWindow,
+        address referee,
+        address nodeKey,
+        address rewardToken
+    ) NodeRewardsBase(referee, nodeKey, rewardToken) {
         _disableInitializers();
-        MAX_REWARD_TIME_WINDOW = _maxRewardTimeWindow;
+        MAX_REWARD_TIME_WINDOW = maxRewardTimeWindow;
     }
 
     function initialize(
-        uint256 _rewardPerSecond,
-        address _rewardsController,
-        address _adminKycController
+        uint256 rewardPerSecond_,
+        address rewardsController,
+        address adminKycController
     ) external initializer {
-        rewardPerSecond = _rewardPerSecond;
+        rewardPerSecond = rewardPerSecond_;
 
         _setRoleAdmin(REWARDS_CONTROLLER_ROLE, ADMIN_REWARDS_CONTROLLER_ROLE);
-        _grantRole(ADMIN_REWARDS_CONTROLLER_ROLE, _rewardsController);
+        _grantRole(ADMIN_REWARDS_CONTROLLER_ROLE, rewardsController);
 
-        __RewardsKYC_init(_adminKycController);
+        __RewardsKYC_init(adminKycController);
     }
 
     function setRewardPerSecond(
-        uint256 _rewardPerSecond
+        uint256 rewardPerSecond_
     ) external onlyRole(REWARDS_CONTROLLER_ROLE) {
-        rewardPerSecond = _rewardPerSecond;
+        rewardPerSecond = rewardPerSecond_;
 
-        emit LogSetRewardPerSecond(_rewardPerSecond);
+        emit LogSetRewardPerSecond(rewardPerSecond_);
     }
 
-    function _onAttest(uint256 _batchNumber, uint256 _nodeKeyId) internal override {
-        rewardsRecipients[_batchNumber][_nodeKeyId] = NODE_KEY.ownerOf(_nodeKeyId);
+    function _onAttest(uint256 batchNumber, uint256 nodeKeyId) internal override {
+        rewardsRecipients[batchNumber][nodeKeyId] = NODE_KEY.ownerOf(nodeKeyId);
     }
 
     function _onFinalize(
-        uint256 _batchNumber,
-        uint256 _l1NodeConfirmedTimestamp,
-        uint256 _prevL1NodeConfirmedTimestamp,
-        uint256 _nrOfSuccessfulAttestations
+        uint256 batchNumber,
+        uint256 l1NodeConfirmedTimestamp,
+        uint256 prevL1NodeConfirmedTimestamp,
+        uint256 nrOfSuccessfulAttestations
     ) internal override {
-        if (_nrOfSuccessfulAttestations > 0) {
+        if (nrOfSuccessfulAttestations > 0) {
             uint256 rewardTimeWindow = Math.min(
-                _l1NodeConfirmedTimestamp - _prevL1NodeConfirmedTimestamp,
+                l1NodeConfirmedTimestamp - prevL1NodeConfirmedTimestamp,
                 MAX_REWARD_TIME_WINDOW
             );
 
-            rewardPerNodeKeyOfBatch[_batchNumber] =
+            rewardPerNodeKeyOfBatch[batchNumber] =
                 (rewardTimeWindow * rewardPerSecond) /
-                _nrOfSuccessfulAttestations;
+                nrOfSuccessfulAttestations;
         }
     }
 
     function _claimReward(
-        uint256 _nodeKeyId,
-        uint256[] calldata _batchNumbers
+        uint256 nodeKeyId,
+        uint256[] calldata batchNumbers
     ) internal override {
-        for (uint256 i; i < _batchNumbers.length; i++) {
-            uint256 batchNumber = _batchNumbers[i];
+        for (uint256 i; i < batchNumbers.length; i++) {
+            uint256 batchNumber = batchNumbers[i];
             if (batchNumber != 0) {
-                address nodeKeyOwner = rewardsRecipients[batchNumber][_nodeKeyId];
-                delete rewardsRecipients[batchNumber][_nodeKeyId];
+                address nodeKeyOwner = rewardsRecipients[batchNumber][nodeKeyId];
+                delete rewardsRecipients[batchNumber][nodeKeyId];
                 _onlyKycWallet(nodeKeyOwner);
                 _payReward(nodeKeyOwner, rewardPerNodeKeyOfBatch[batchNumber]);
             }
