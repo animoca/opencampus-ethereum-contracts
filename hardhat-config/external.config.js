@@ -12,7 +12,7 @@ module.exports = {
       },
       {
         artifacts: 'node_modules/gelatonetwork-node-sale-contracts/artifacts',
-      }
+      },
     ],
   },
 };

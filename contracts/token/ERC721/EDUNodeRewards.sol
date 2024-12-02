@@ -6,10 +6,8 @@ import {NodeRewardsBase} from "gelatonetwork-node-sale-contracts/contracts/NodeR
 import {RewardsKYC} from "gelatonetwork-node-sale-contracts/contracts/RewardsKYC.sol";
 
 contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
-    bytes32 public constant ADMIN_REWARDS_CONTROLLER_ROLE =
-        keccak256("ADMIN_REWARDS_CONTROLLER_ROLE");
-    bytes32 public constant REWARDS_CONTROLLER_ROLE =
-        keccak256("REWARDS_CONTROLLER_ROLE");
+    bytes32 public constant ADMIN_REWARDS_CONTROLLER_ROLE = keccak256("ADMIN_REWARDS_CONTROLLER_ROLE");
+    bytes32 public constant REWARDS_CONTROLLER_ROLE = keccak256("REWARDS_CONTROLLER_ROLE");
     uint256 public immutable MAX_REWARD_TIME_WINDOW;
 
     uint256 public rewardPerSecond;
@@ -21,21 +19,12 @@ contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
 
     event LogSetRewardPerSecond(uint256 rewardPerSecond);
 
-    constructor(
-        uint256 maxRewardTimeWindow,
-        address referee,
-        address nodeKey,
-        address rewardToken
-    ) NodeRewardsBase(referee, nodeKey, rewardToken) {
+    constructor(uint256 maxRewardTimeWindow, address referee, address nodeKey, address rewardToken) NodeRewardsBase(referee, nodeKey, rewardToken) {
         _disableInitializers();
         MAX_REWARD_TIME_WINDOW = maxRewardTimeWindow;
     }
 
-    function initialize(
-        uint256 rewardPerSecond_,
-        address rewardsController,
-        address adminKycController
-    ) external initializer {
+    function initialize(uint256 rewardPerSecond_, address rewardsController, address adminKycController) external initializer {
         rewardPerSecond = rewardPerSecond_;
 
         _setRoleAdmin(REWARDS_CONTROLLER_ROLE, ADMIN_REWARDS_CONTROLLER_ROLE);
@@ -44,11 +33,8 @@ contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
         __RewardsKYC_init(adminKycController);
     }
 
-    function setRewardPerSecond(
-        uint256 rewardPerSecond_
-    ) external onlyRole(REWARDS_CONTROLLER_ROLE) {
+    function setRewardPerSecond(uint256 rewardPerSecond_) external onlyRole(REWARDS_CONTROLLER_ROLE) {
         rewardPerSecond = rewardPerSecond_;
-
         emit LogSetRewardPerSecond(rewardPerSecond_);
     }
 
@@ -63,21 +49,12 @@ contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
         uint256 nrOfSuccessfulAttestations
     ) internal override {
         if (nrOfSuccessfulAttestations > 0) {
-            uint256 rewardTimeWindow = Math.min(
-                l1NodeConfirmedTimestamp - prevL1NodeConfirmedTimestamp,
-                MAX_REWARD_TIME_WINDOW
-            );
-
-            rewardPerNodeKeyOfBatch[batchNumber] =
-                (rewardTimeWindow * rewardPerSecond) /
-                nrOfSuccessfulAttestations;
+            uint256 rewardTimeWindow = Math.min(l1NodeConfirmedTimestamp - prevL1NodeConfirmedTimestamp, MAX_REWARD_TIME_WINDOW);
+            rewardPerNodeKeyOfBatch[batchNumber] = (rewardTimeWindow * rewardPerSecond) / nrOfSuccessfulAttestations;
         }
     }
 
-    function _claimReward(
-        uint256 nodeKeyId,
-        uint256[] calldata batchNumbers
-    ) internal override {
+    function _claimReward(uint256 nodeKeyId, uint256[] calldata batchNumber) internal override {
         for (uint256 i; i < batchNumbers.length; i++) {
             uint256 batchNumber = batchNumbers[i];
             if (batchNumber != 0) {
