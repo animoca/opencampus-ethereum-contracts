@@ -54,7 +54,7 @@ contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
         }
     }
 
-    function _claimReward(uint256 nodeKeyId, uint256[] calldata batchNumber) internal override {
+    function _claimReward(uint256 nodeKeyId, uint256[] calldata batchNumbers) internal override {
         for (uint256 i; i < batchNumbers.length; i++) {
             uint256 batchNumber = batchNumbers[i];
             if (batchNumber != 0) {
