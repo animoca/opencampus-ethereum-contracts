@@ -82,6 +82,7 @@ contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
             uint256 batchNumber = _batchNumbers[i];
             if (batchNumber != 0) {
                 address nodeKeyOwner = rewardsRecipients[batchNumber][_nodeKeyId];
+                delete rewardsRecipients[batchNumber][_nodeKeyId];
                 _onlyKycWallet(nodeKeyOwner);
                 _payReward(nodeKeyOwner, rewardPerNodeKeyOfBatch[batchNumber]);
             }
