@@ -1,6 +1,7 @@
 const {ethers} = require('hardhat');
 const {expect} = require('chai');
 const {parseUnits, parseEther, MaxInt256, keccak256, toUtf8Bytes, ZeroHash} = require('ethers');
+const {mine} = require('@nomicfoundation/hardhat-network-helpers');
 
 const {deployContract, deployContractFromPath} = require('@animoca/ethereum-contract-helpers/src/test/deploy');
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
@@ -8,11 +9,9 @@ const {getForwarderRegistryAddress, getTokenMetadataResolverPerTokenAddress} = r
 
 describe('EDUNodeRewards', function () {
   const REWARDS_CONTROLLER_ROLE = keccak256(toUtf8Bytes('REWARDS_CONTROLLER_ROLE'));
-  const KYC_CONTROLLER_ROLE = keccak256(toUtf8Bytes('KYC_CONTROLLER_ROLE'));
-
   const DELEGATE_REGISTRY_ADDRESS = '0x00000000000000447e69651d841bD8D104Bed493';
 
-  const attestationPeriod = 20n * 60n; // 20 minutes
+  const attestationPeriod = 20n * 60n;
   const maxRewardTimeWindow = attestationPeriod;
   const rewardPerSecond = parseUnits('10000', 'gwei');
 
@@ -28,7 +27,7 @@ describe('EDUNodeRewards', function () {
 
     this.nodeKeyContract = await deployContract('EDUNodeKey', 'EDU Principal Node Key', 'EDUKey', metadataResolverAddress, forwarderRegistryAddress);
     await this.nodeKeyContract.grantRole(await this.nodeKeyContract.OPERATOR_ROLE(), deployer.address);
-    await this.nodeKeyContract.connect(deployer).batchMint(kycUser.address, [0n, 1n, 2n]);
+    await this.nodeKeyContract.connect(deployer).batchMint(kycUser.address, [1n, 2n, 3n]);
     await this.nodeKeyContract.connect(deployer).batchMint(nonKycUser.address, [10n, 11n, 12n]);
 
     this.rewardToken = await deployContract('ERC20FixedSupply', 'EDU', 'EDU', 18, [deployer], [MaxInt256], forwarderRegistryAddress);
@@ -49,33 +48,22 @@ describe('EDUNodeRewards', function () {
       )
     );
 
-    const nodeRewardsImplementation = await deployContract(
+    this.nodeRewardsContract = await deployContract(
       'EDUNodeRewards',
       maxRewardTimeWindow,
       this.refereeContract,
       this.nodeKeyContract,
-      this.rewardToken
-    );
-    this.nodeRewardsContract = await ethers.getContractAt(
-      'EDUNodeRewards',
-      await deployContractFromPath(
-        'EIP173ProxyWithReceive',
-        'node_modules/hardhat-deploy/extendedArtifacts',
-        nodeRewardsImplementation,
-        deployer,
-        nodeRewardsImplementation.interface.encodeFunctionData('initialize', [
-          rewardPerSecond,
-          adminRewardController.address,
-          adminKycController.address,
-        ])
-      )
+      this.rewardToken,
+      rewardPerSecond,
+      adminRewardController.address,
+      adminKycController.address,
+      rewardController.address,
+      kycController.address
     );
 
     // TODO: confirm if we should include mock delegate registry in the repo
     this.delegateRegistry = await ethers.getContractAt('IDelegateRegistry', DELEGATE_REGISTRY_ADDRESS);
 
-    await this.nodeRewardsContract.connect(adminRewardController).grantRole(REWARDS_CONTROLLER_ROLE, rewardController.address);
-    await this.nodeRewardsContract.connect(adminKycController).grantRole(KYC_CONTROLLER_ROLE, kycController.address);
     await this.nodeRewardsContract.connect(kycController).addKycWallets([kycUser.address]);
 
     await this.rewardToken.connect(deployer).transfer(this.nodeRewardsContract, parseEther('10'));
@@ -103,7 +91,7 @@ describe('EDUNodeRewards', function () {
 
   context('onAttest(uint256 _batchNumber, uint256 _nodeKeyId) external', function () {
     const batchNumber = 1n;
-    const nodeKeyId = 0n;
+    const nodeKeyId = 1n;
     const validL2StateRoot = keccak256('0x000001');
 
     it('successfully set reward recipient as node key owner', async function () {
@@ -120,7 +108,6 @@ describe('EDUNodeRewards', function () {
 
   context('onBatchAttest(uint256 _batchNumber, uint256[] calldata _nodeKeyIds) external', function () {
     const batchNumber = 1n;
-    // TODO: confirm if we token id 0 should be able to attest
     const nodeKeyIds = [1n, 2n];
     const validL2StateRoot = keccak256('0x000001');
 
@@ -153,8 +140,14 @@ describe('EDUNodeRewards', function () {
         prevL1NodeConfirmedTimestamp = (await this.refereeContract.getBatchInfo(latestFinalizedBatchNumber))[1];
       });
 
+      it('reverts if called by non referee', async function () {
+        await expect(
+          this.nodeRewardsContract.connect(deployer).onFinalize(batchNumber, l1NodeConfirmedTimestamp, prevL1NodeConfirmedTimestamp, 1)
+        ).to.be.revertedWithCustomError(this.nodeRewardsContract, 'OnlyReferee');
+      });
+
       it('successfully set reward amount', async function () {
-        const nodeKeyId = 0n;
+        const nodeKeyId = 1n;
 
         await this.refereeContract.connect(kycUser).attest(batchNumber, validL2StateRoot, nodeKeyId);
         await this.refereeContract.connect(oracle).finalize(batchNumber, l1NodeConfirmedTimestamp, validL2StateRoot);
@@ -167,7 +160,7 @@ describe('EDUNodeRewards', function () {
       });
 
       it('successfully set reward amount for multiple successful attestations', async function () {
-        const nodeKeyIds = [0n, 1n, 2n];
+        const nodeKeyIds = [1n, 2n, 3n];
         for (const nodeKeyId of nodeKeyIds) {
           await this.refereeContract.connect(kycUser).attest(batchNumber, validL2StateRoot, nodeKeyId);
         }
@@ -183,10 +176,33 @@ describe('EDUNodeRewards', function () {
         await this.refereeContract.connect(oracle).finalize(batchNumber, l1NodeConfirmedTimestamp, validL2StateRoot);
         expect(await this.nodeRewardsContract.rewardPerNodeKeyOfBatch(batchNumber)).to.equal(0);
       });
+
+      it('should assign reward time window to the minimum between L1 timestamp and the maximum reward window', async function () {
+        const nodeKeyId = 1n;
+        await this.refereeContract.connect(kycUser).attest(batchNumber, validL2StateRoot, nodeKeyId);
+        await this.refereeContract.connect(oracle).finalize(batchNumber, l1NodeConfirmedTimestamp, validL2StateRoot);
+        await mine(maxRewardTimeWindow - 10n);
+
+        const latestBatchNumber = 2n;
+        const latestL1NodeConfirmedTimestamp = BigInt((await ethers.provider.getBlock('latest')).timestamp);
+        await this.refereeContract.connect(kycUser).attest(latestBatchNumber, validL2StateRoot, nodeKeyId);
+        await this.refereeContract.connect(oracle).finalize(latestBatchNumber, latestL1NodeConfirmedTimestamp, validL2StateRoot);
+        const rewardTimeWindow = latestL1NodeConfirmedTimestamp - l1NodeConfirmedTimestamp;
+        const reward = rewardTimeWindow * rewardPerSecond;
+
+        expect(await this.nodeRewardsContract.rewardPerNodeKeyOfBatch(latestBatchNumber)).to.equal(reward);
+      });
     }
   );
 
   context('claimReward(uint256 _nodeKeyId, uint256[] calldata _batchNumbers) external', function () {
+    it('reverts if called by non referee', async function () {
+      await expect(this.nodeRewardsContract.connect(deployer).claimReward(1n, [1n])).to.be.revertedWithCustomError(
+        this.nodeRewardsContract,
+        'OnlyReferee'
+      );
+    });
+
     it('reverts if the recipient is not a KYC wallet', async function () {
       const batchNumber = 1n;
       const nodeKeyId = 10n;
@@ -233,7 +249,7 @@ describe('EDUNodeRewards', function () {
       });
 
       it('pay reward to a KYC wallet', async function () {
-        const nodeKeyId = 0n;
+        const nodeKeyId = 1n;
 
         await this.refereeContract.connect(kycUser).attest(batchNumber, validL2StateRoot, nodeKeyId);
         await this.refereeContract.connect(oracle).finalize(batchNumber, l1NodeConfirmedTimestamp, validL2StateRoot);
@@ -246,7 +262,7 @@ describe('EDUNodeRewards', function () {
       });
 
       it('pay reward to the node key owner instead of the delegated wallet', async function () {
-        const nodeKeyId = 0n;
+        const nodeKeyId = 1n;
 
         await this.delegateRegistry
           .connect(kycUser)
@@ -262,7 +278,7 @@ describe('EDUNodeRewards', function () {
       });
 
       it('pay the node key owner at attestation, even if the key is transferred before claiming', async function () {
-        const nodeKeyId = 0n;
+        const nodeKeyId = 1n;
 
         await this.refereeContract.connect(kycUser).attest(batchNumber, validL2StateRoot, nodeKeyId);
         await this.refereeContract.connect(oracle).finalize(batchNumber, l1NodeConfirmedTimestamp, validL2StateRoot);
@@ -278,7 +294,7 @@ describe('EDUNodeRewards', function () {
       });
 
       it('pay the node key owner at attestation, even if the key is burned before claiming', async function () {
-        const nodeKeyId = 0n;
+        const nodeKeyId = 1n;
 
         await this.refereeContract.connect(kycUser).attest(batchNumber, validL2StateRoot, nodeKeyId);
         await this.refereeContract.connect(oracle).finalize(batchNumber, l1NodeConfirmedTimestamp, validL2StateRoot);

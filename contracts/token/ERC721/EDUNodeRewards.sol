@@ -19,18 +19,27 @@ contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
 
     event RewardPerSecondUpdated(uint256 rewardPerSecond);
 
-    constructor(uint256 maxRewardTimeWindow, address referee, address nodeKey, address rewardToken) NodeRewardsBase(referee, nodeKey, rewardToken) {
-        _disableInitializers();
+    constructor(
+        uint256 maxRewardTimeWindow,
+        address referee,
+        address nodeKey,
+        address rewardToken,
+        uint256 rewardPerSecond_,
+        address adminRewardsController,
+        address adminKycController,
+        address rewardsController,
+        address kycController
+    ) NodeRewardsBase(referee, nodeKey, rewardToken) {
         MAX_REWARD_TIME_WINDOW = maxRewardTimeWindow;
-    }
-
-    function initialize(uint256 rewardPerSecond_, address rewardsController, address adminKycController) external initializer {
         rewardPerSecond = rewardPerSecond_;
 
         _setRoleAdmin(REWARDS_CONTROLLER_ROLE, ADMIN_REWARDS_CONTROLLER_ROLE);
-        _grantRole(ADMIN_REWARDS_CONTROLLER_ROLE, rewardsController);
+        _grantRole(ADMIN_REWARDS_CONTROLLER_ROLE, adminRewardsController);
+        _grantRole(REWARDS_CONTROLLER_ROLE, rewardsController);
 
-        __RewardsKYC_init(adminKycController);
+        _setRoleAdmin(KYC_CONTROLLER_ROLE, ADMIN_KYC_CONTROLLER_ROLE);
+        _grantRole(ADMIN_KYC_CONTROLLER_ROLE, adminKycController);
+        _grantRole(KYC_CONTROLLER_ROLE, kycController);
     }
 
     function setRewardPerSecond(uint256 rewardPerSecond_) external onlyRole(REWARDS_CONTROLLER_ROLE) {
@@ -57,12 +66,10 @@ contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
     function _claimReward(uint256 nodeKeyId, uint256[] calldata batchNumbers) internal override {
         for (uint256 i; i < batchNumbers.length; i++) {
             uint256 batchNumber = batchNumbers[i];
-            if (batchNumber != 0) {
-                address nodeKeyOwner = rewardsRecipients[batchNumber][nodeKeyId];
-                delete rewardsRecipients[batchNumber][nodeKeyId];
-                _onlyKycWallet(nodeKeyOwner);
-                _payReward(nodeKeyOwner, rewardPerNodeKeyOfBatch[batchNumber]);
-            }
+            address nodeKeyOwner = rewardsRecipients[batchNumber][nodeKeyId];
+            delete rewardsRecipients[batchNumber][nodeKeyId];
+            _onlyKycWallet(nodeKeyOwner);
+            _payReward(nodeKeyOwner, rewardPerNodeKeyOfBatch[batchNumber]);
         }
     }
 }
