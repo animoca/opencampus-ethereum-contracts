@@ -1,6 +1,6 @@
 const {ethers} = require('hardhat');
 const {expect} = require('chai');
-const {parseUnits, parseEther, MaxInt256, keccak256, toUtf8Bytes, ZeroHash} = require('ethers');
+const {parseUnits, parseEther, keccak256, toUtf8Bytes} = require('ethers');
 const {mine} = require('@nomicfoundation/hardhat-network-helpers');
 
 const {deployContract, deployContractFromPath} = require('@animoca/ethereum-contract-helpers/src/test/deploy');
@@ -9,7 +9,6 @@ const {getForwarderRegistryAddress, getTokenMetadataResolverPerTokenAddress} = r
 
 describe('EDUNodeRewards', function () {
   const REWARDS_CONTROLLER_ROLE = keccak256(toUtf8Bytes('REWARDS_CONTROLLER_ROLE'));
-  const DELEGATE_REGISTRY_ADDRESS = '0x00000000000000447e69651d841bD8D104Bed493';
   const REWARD_TOKEN = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
   const attestationPeriod = 20n * 60n;
@@ -60,9 +59,6 @@ describe('EDUNodeRewards', function () {
       kycController.address
     );
 
-    // TODO: confirm if we should include mock delegate registry in the repo
-    this.delegateRegistry = await ethers.getContractAt('IDelegateRegistry', DELEGATE_REGISTRY_ADDRESS);
-
     await this.nodeRewardsContract.connect(kycController).addKycWallets([kycUser.address]);
 
     await deployer.sendTransaction({to: this.nodeRewardsContract, value: parseEther('10')});
@@ -94,12 +90,6 @@ describe('EDUNodeRewards', function () {
     const validL2StateRoot = keccak256('0x000001');
 
     it('successfully set reward recipient as node key owner', async function () {
-      await this.refereeContract.connect(kycUser).attest(batchNumber, validL2StateRoot, nodeKeyId);
-      expect(await this.nodeRewardsContract.rewardsRecipients(batchNumber, nodeKeyId)).to.equal(kycUser.address);
-    });
-
-    it('successfully set reward recipient as node key owner instead of the delegated wallet', async function () {
-      await this.delegateRegistry.connect(kycUser).delegateERC721(other.address, await this.nodeKeyContract.getAddress(), nodeKeyId, ZeroHash, true);
       await this.refereeContract.connect(kycUser).attest(batchNumber, validL2StateRoot, nodeKeyId);
       expect(await this.nodeRewardsContract.rewardsRecipients(batchNumber, nodeKeyId)).to.equal(kycUser.address);
     });
@@ -251,30 +241,6 @@ describe('EDUNodeRewards', function () {
         const nodeKeyId = 1n;
 
         await this.refereeContract.connect(kycUser).attest(batchNumber, validL2StateRoot, nodeKeyId);
-        await this.refereeContract.connect(oracle).finalize(batchNumber, l1NodeConfirmedTimestamp, validL2StateRoot);
-        const dt = l1NodeConfirmedTimestamp - prevL1NodeConfirmedTimestamp;
-        const rewardTimeWindow = maxRewardTimeWindow > dt ? dt : maxRewardTimeWindow;
-        const reward = rewardTimeWindow * rewardPerSecond;
-
-        const prevBalance = await ethers.provider.getBalance(kycUser.address);
-        const tx = await this.refereeContract.connect(kycUser).claimReward(nodeKeyId, 1);
-        const receipt = await tx.wait();
-        const newBalance = await ethers.provider.getBalance(kycUser.address);
-
-        const gasUsed = receipt.gasUsed;
-        const gasPrice = receipt.gasPrice;
-        const gasCost = gasUsed * gasPrice;
-
-        expect(newBalance - prevBalance).to.equal(reward - gasCost);
-      });
-
-      it('pay reward to the node key owner instead of the delegated wallet', async function () {
-        const nodeKeyId = 1n;
-
-        await this.delegateRegistry
-          .connect(kycUser)
-          .delegateERC721(other.address, await this.nodeKeyContract.getAddress(), nodeKeyId, ZeroHash, true);
-        await this.refereeContract.connect(other).attest(batchNumber, validL2StateRoot, nodeKeyId);
         await this.refereeContract.connect(oracle).finalize(batchNumber, l1NodeConfirmedTimestamp, validL2StateRoot);
         const dt = l1NodeConfirmedTimestamp - prevL1NodeConfirmedTimestamp;
         const rewardTimeWindow = maxRewardTimeWindow > dt ? dt : maxRewardTimeWindow;
