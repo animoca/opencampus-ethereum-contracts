@@ -3,7 +3,7 @@ pragma solidity 0.8.22;
 
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
 import {ITokenMetadataResolver} from "@animoca/ethereum-contracts/contracts/token/metadata/interfaces/ITokenMetadataResolver.sol";
-import {EDULand} from "../../../token/ERC721/EDULand.sol";
+import {EDULand} from "../../../land/EDULand.sol";
 
 contract EDULandMock is EDULand {
     constructor(
