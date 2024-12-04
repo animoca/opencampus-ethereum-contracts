@@ -10,6 +10,7 @@ const {getForwarderRegistryAddress, getTokenMetadataResolverPerTokenAddress} = r
 describe('EDUNodeRewards', function () {
   const REWARDS_CONTROLLER_ROLE = keccak256(toUtf8Bytes('REWARDS_CONTROLLER_ROLE'));
   const DELEGATE_REGISTRY_ADDRESS = '0x00000000000000447e69651d841bD8D104Bed493';
+  const REWARD_TOKEN = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
   const attestationPeriod = 20n * 60n;
   const maxRewardTimeWindow = attestationPeriod;
@@ -29,8 +30,6 @@ describe('EDUNodeRewards', function () {
     await this.nodeKeyContract.grantRole(await this.nodeKeyContract.OPERATOR_ROLE(), deployer.address);
     await this.nodeKeyContract.connect(deployer).batchMint(kycUser.address, [1n, 2n, 3n]);
     await this.nodeKeyContract.connect(deployer).batchMint(nonKycUser.address, [10n, 11n, 12n]);
-
-    this.rewardToken = await deployContract('ERC20FixedSupply', 'EDU', 'EDU', 18, [deployer], [MaxInt256], forwarderRegistryAddress);
 
     const refereeImplementation = await deployContract('RefereeMock');
     this.refereeContract = await ethers.getContractAt(
@@ -53,7 +52,7 @@ describe('EDUNodeRewards', function () {
       maxRewardTimeWindow,
       this.refereeContract,
       this.nodeKeyContract,
-      this.rewardToken,
+      REWARD_TOKEN,
       rewardPerSecond,
       adminRewardController.address,
       adminKycController.address,
@@ -66,7 +65,7 @@ describe('EDUNodeRewards', function () {
 
     await this.nodeRewardsContract.connect(kycController).addKycWallets([kycUser.address]);
 
-    await this.rewardToken.connect(deployer).transfer(this.nodeRewardsContract, parseEther('10'));
+    await deployer.sendTransaction({to: this.nodeRewardsContract, value: parseEther('10')});
 
     await this.refereeContract.setNodeRewards(this.nodeRewardsContract);
     await this.refereeContract.setOracle(oracle, true);
@@ -257,8 +256,16 @@ describe('EDUNodeRewards', function () {
         const rewardTimeWindow = maxRewardTimeWindow > dt ? dt : maxRewardTimeWindow;
         const reward = rewardTimeWindow * rewardPerSecond;
 
+        const prevBalance = await ethers.provider.getBalance(kycUser.address);
         const tx = await this.refereeContract.connect(kycUser).claimReward(nodeKeyId, 1);
-        await expect(tx).to.emit(this.rewardToken, 'Transfer').withArgs(this.nodeRewardsContract, kycUser, reward);
+        const receipt = await tx.wait();
+        const newBalance = await ethers.provider.getBalance(kycUser.address);
+
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = receipt.gasPrice;
+        const gasCost = gasUsed * gasPrice;
+
+        expect(newBalance - prevBalance).to.equal(reward - gasCost);
       });
 
       it('pay reward to the node key owner instead of the delegated wallet', async function () {
@@ -273,8 +280,16 @@ describe('EDUNodeRewards', function () {
         const rewardTimeWindow = maxRewardTimeWindow > dt ? dt : maxRewardTimeWindow;
         const reward = rewardTimeWindow * rewardPerSecond;
 
+        const prevBalance = await ethers.provider.getBalance(kycUser.address);
         const tx = await this.refereeContract.connect(kycUser).claimReward(nodeKeyId, 1);
-        await expect(tx).to.emit(this.rewardToken, 'Transfer').withArgs(this.nodeRewardsContract, kycUser, reward);
+        const receipt = await tx.wait();
+        const newBalance = await ethers.provider.getBalance(kycUser.address);
+
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = receipt.gasPrice;
+        const gasCost = gasUsed * gasPrice;
+
+        expect(newBalance - prevBalance).to.equal(reward - gasCost);
       });
 
       it('pay the node key owner at attestation, even if the key is transferred before claiming', async function () {
@@ -288,9 +303,17 @@ describe('EDUNodeRewards', function () {
 
         await this.nodeKeyContract.connect(deployer).transferFrom(kycUser.address, other.address, nodeKeyId);
 
+        const prevBalance = await ethers.provider.getBalance(kycUser.address);
         const tx = await this.refereeContract.connect(kycUser).claimReward(nodeKeyId, 1);
+        const receipt = await tx.wait();
+        const newBalance = await ethers.provider.getBalance(kycUser.address);
+
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = receipt.gasPrice;
+        const gasCost = gasUsed * gasPrice;
+
         expect(await this.nodeKeyContract.ownerOf(nodeKeyId)).to.equal(other.address);
-        await expect(tx).to.emit(this.rewardToken, 'Transfer').withArgs(this.nodeRewardsContract, kycUser, reward);
+        expect(newBalance - prevBalance).to.equal(reward - gasCost);
       });
 
       it('pay the node key owner at attestation, even if the key is burned before claiming', async function () {
@@ -304,8 +327,16 @@ describe('EDUNodeRewards', function () {
 
         await this.nodeKeyContract.connect(deployer).burnFrom(kycUser.address, nodeKeyId);
 
+        const prevBalance = await ethers.provider.getBalance(kycUser.address);
         const tx = await this.refereeContract.connect(kycUser).claimReward(nodeKeyId, 1);
-        await expect(tx).to.emit(this.rewardToken, 'Transfer').withArgs(this.nodeRewardsContract, kycUser, reward);
+        const receipt = await tx.wait();
+        const newBalance = await ethers.provider.getBalance(kycUser.address);
+
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = receipt.gasPrice;
+        const gasCost = gasUsed * gasPrice;
+
+        expect(newBalance - prevBalance).to.equal(reward - gasCost);
       });
     });
   });
