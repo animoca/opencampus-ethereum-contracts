@@ -3605,9 +3605,9 @@ functions-have-names@^1.2.2, functions-have-names@^1.2.3:
   resolved "https://registry.yarnpkg.com/functions-have-names/-/functions-have-names-1.2.3.tgz#0404fe4ee2ba2f607f0e0ec3c80bae994133b834"
   integrity sha512-xckBUXyTIqT97tq2x2AMb+g163b5JFysYk0x4qxNFwbfQkmNZoiRHb6sPzI9/QV33WeuvVYBUIiD4NzNIyqaRQ==
 
-gelatonetwork-node-sale-contracts@gelatodigital/node-sale-rewards#ef8ee3056b21e6090be5e8e5cbd7656df623c544:
+gelatonetwork-node-sale-contracts@gelatodigital/node-sale-rewards#baf7d94c2fac954dc14371e680d89f7f1f0ddea7:
   version "1.0.0"
-  resolved "https://codeload.github.com/gelatodigital/node-sale-rewards/tar.gz/ef8ee3056b21e6090be5e8e5cbd7656df623c544"
+  resolved "https://codeload.github.com/gelatodigital/node-sale-rewards/tar.gz/baf7d94c2fac954dc14371e680d89f7f1f0ddea7"
   dependencies:
     "@gelatonetwork/automate-sdk" "^3.0.2"
     "@gelatonetwork/web3-functions-sdk" "^2.4.1"
