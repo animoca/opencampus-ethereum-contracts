@@ -81,7 +81,7 @@ describe('EDULandRental', function () {
     await this.ocp.deposit(user2, initialOCPAmount, ocpReasonCode);
     await this.ocp.deposit(user3, initialOCPAmount, ocpReasonCode);
 
-    this.rentalFeeHelper = await deployContract('EDULandRentalFeeHelper');
+    this.rentalFeeHelper = await deployContract('EDULandPriceHelper');
     this.rentalContract = await deployContract(
       'EDULandRentalMock',
       this.nodeKeyContract.target,
@@ -642,15 +642,15 @@ describe('EDULandRental', function () {
     });
   });
 
-  context('setRentalFeeHelper(address newRentalFeeHelper) external', function () {
+  context('setLandPriceHelper(address newRentalFeeHelper) external', function () {
     it('Success', async function () {
-      await expect(this.rentalContract.connect(rentalOperator).setRentalFeeHelper(ZeroAddress))
-        .to.emit(this.rentalContract, 'RentalFeeHelperUpdated')
+      await expect(this.rentalContract.connect(rentalOperator).setLandPriceHelper(ZeroAddress))
+        .to.emit(this.rentalContract, 'LandPriceHelperUpdated')
         .withArgs(ZeroAddress);
     });
 
     it('Failure because it set by non operator wallet', async function () {
-      await expect(this.rentalContract.connect(user1).setRentalFeeHelper(ZeroAddress))
+      await expect(this.rentalContract.connect(user1).setLandPriceHelper(ZeroAddress))
         .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
         .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
     });
