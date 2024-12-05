@@ -411,7 +411,10 @@ function behavesLikeERC721({deploy, mint, errors}, operatorFilterRegistryAddress
       });
     });
 
-    supportsInterfaces(['IERC165', 'IERC721']);
+    supportsInterfaces([
+      '@animoca/ethereum-contracts/contracts/introspection/interfaces/IERC165.sol:IERC165',
+      '@animoca/ethereum-contracts/contracts/token/ERC721/interfaces/IERC721.sol:IERC721',
+    ]);
   });
 }
 
