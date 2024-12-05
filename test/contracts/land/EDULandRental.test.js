@@ -81,10 +81,12 @@ describe('EDULandRental', function () {
     await this.ocp.deposit(user2, initialOCPAmount, ocpReasonCode);
     await this.ocp.deposit(user3, initialOCPAmount, ocpReasonCode);
 
+    this.rentalFeeHelper = await deployContract('EDULandRentalFeeHelper');
     this.rentalContract = await deployContract(
       'EDULandRentalMock',
       this.nodeKeyContract.target,
       this.ocp.target,
+      this.rentalFeeHelper.target,
       DEFAULT_MAINTENANCE_FEE,
       this.maxRentalDuration,
       this.maxRentalCountPerCall,
@@ -636,6 +638,20 @@ describe('EDULandRental', function () {
       await expect(this.rentalContract.calculateElapsedTimeForExpiredTokens([400n, 401n, 402n, 403n]))
         .to.be.revertedWithCustomError(this.rentalContract, 'TokenNotExpired')
         .withArgs(403n);
+    });
+  });
+
+  context('setRentalFeeHelper(address newRentalFeeHelper) external', function () {
+    it('Success', async function () {
+      await expect(this.rentalContract.connect(rentalOperator).setRentalFeeHelper(ZeroAddress))
+        .to.emit(this.rentalContract, 'RentalFeeHelperUpdated')
+        .withArgs(ZeroAddress);
+    });
+
+    it('Failure because it set by non operator wallet', async function () {
+      await expect(this.rentalContract.connect(user1).setRentalFeeHelper(ZeroAddress))
+        .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
+        .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
     });
   });
 
