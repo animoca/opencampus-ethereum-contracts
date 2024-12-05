@@ -10,12 +10,24 @@ contract EDULandRentalMock is EDULandRental {
     constructor(
         address nodeKeyAddress,
         address pointsAddress,
+        address rentalFeeHelperAddress,
         uint256 maintenceFee_,
         uint256 maxRentalDuration_,
         uint256 maxRentalCountPerCall_,
         uint256 maxTokenSupply_,
         IForwarderRegistry forwarderRegistry
-    ) EDULandRental(nodeKeyAddress, pointsAddress, maintenceFee_, maxRentalDuration_, maxRentalCountPerCall_, maxTokenSupply_, forwarderRegistry) {}
+    )
+        EDULandRental(
+            nodeKeyAddress,
+            pointsAddress,
+            rentalFeeHelperAddress,
+            maintenceFee_,
+            maxRentalDuration_,
+            maxRentalCountPerCall_,
+            maxTokenSupply_,
+            forwarderRegistry
+        )
+    {}
 
     function __msgData() external view returns (bytes calldata) {
         return _msgData();
