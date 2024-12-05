@@ -2,11 +2,7 @@
 pragma solidity 0.8.22;
 
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
-<<<<<<< HEAD:contracts/mocks/token/ERC721/EDULandRentalMock.sol
-import {EDULandRental} from "../../../land/EDULandRental.sol";
-=======
 import {EDULandRental} from "../../land/EDULandRental.sol";
->>>>>>> 4a5593bf7741627c6cef946c7959691cb4f43d5e:contracts/mocks/land/EDULandRentalMock.sol
 
 contract EDULandRentalMock is EDULandRental {
     bytes public msgData;
