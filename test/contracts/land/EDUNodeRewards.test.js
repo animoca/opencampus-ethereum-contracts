@@ -10,6 +10,7 @@ const {getForwarderRegistryAddress, getTokenMetadataResolverPerTokenAddress} = r
 describe('EDUNodeRewards', function () {
   const REWARDS_CONTROLLER_ROLE = keccak256(toUtf8Bytes('REWARDS_CONTROLLER_ROLE'));
   const KYC_CONTROLLER_ROLE = keccak256(toUtf8Bytes('KYC_CONTROLLER_ROLE'));
+  const OWNER_ROLE = keccak256(toUtf8Bytes('OWNER_ROLE'));
   const REWARD_TOKEN = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
   const attestationPeriod = 20n * 60n;
@@ -65,6 +66,44 @@ describe('EDUNodeRewards', function () {
 
   beforeEach(async function () {
     await loadFixture(fixture, this);
+  });
+
+  describe('constructor', function () {
+    it('sets the max reward time window', async function () {
+      expect(await this.nodeRewardsContract.MAX_REWARD_TIME_WINDOW()).to.be.equal(maxRewardTimeWindow);
+    });
+
+    it('sets the reward per second', async function () {
+      expect(await this.nodeRewardsContract.rewardPerSecond()).to.be.equal(rewardPerSecond);
+    });
+
+    it('sets the referee contract', async function () {
+      expect(await this.nodeRewardsContract.REFEREE()).to.be.equal(await this.refereeContract.getAddress());
+    });
+
+    it('sets the node key contract', async function () {
+      expect(await this.nodeRewardsContract.NODE_KEY()).to.be.equal(await this.nodeKeyContract.getAddress());
+    });
+
+    it('sets the reward token contract', async function () {
+      expect(await this.nodeRewardsContract.REWARD_TOKEN()).to.be.equal(REWARD_TOKEN);
+    });
+
+    it('sets the owner', async function () {
+      expect(await this.nodeRewardsContract.hasRole(OWNER_ROLE, deployer.address)).to.be.true;
+    });
+
+    it("sets the owner role's admin to be owner role", async function () {
+      expect(await this.nodeRewardsContract.getRoleAdmin(OWNER_ROLE)).to.equal(OWNER_ROLE);
+    });
+
+    it("sets the reward controller role's admin to be owner role", async function () {
+      expect(await this.nodeRewardsContract.getRoleAdmin(REWARDS_CONTROLLER_ROLE)).to.equal(OWNER_ROLE);
+    });
+
+    it("sets the kyc controller role's admin to be owner role", async function () {
+      expect(await this.nodeRewardsContract.getRoleAdmin(KYC_CONTROLLER_ROLE)).to.equal(OWNER_ROLE);
+    });
   });
 
   context('setRewardPerSecond(uint256)', function () {
