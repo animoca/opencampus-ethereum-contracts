@@ -11,10 +11,7 @@ const {ZeroAddress} = require('ethers');
 const DEFAULT_MAINTENANCE_FEE = 1n;
 const DEFAULT_MAINTENANCE_FEE_DENOMINATOR = 1n;
 
-const LN2_WITH_POWER_10_18 = 693147180559945309n;
-const POWER_10_18 = BigInt(10 ** 18);
-
-function log2(n) {
+function bigIntLog2(n) {
   if (n <= 0n) {
     throw new Error('Input must be greater than zero');
   }
@@ -33,8 +30,10 @@ function log2(n) {
 
 const DIVIDER = 100n;
 const STARTING_PRICE = 500n;
+const MIN_PRICE = 5000n;
 function calculateNodeKeyPrice(totalEffectiveRentalTime) {
-  return ((log2(totalEffectiveRentalTime) + log2(totalEffectiveRentalTime / DIVIDER)) * STARTING_PRICE * LN2_WITH_POWER_10_18) / POWER_10_18;
+  const val = bigIntLog2(totalEffectiveRentalTime / DIVIDER) * STARTING_PRICE;
+  return val > MIN_PRICE ? val : MIN_PRICE;
 }
 
 const RENTAL_TYPE = {
