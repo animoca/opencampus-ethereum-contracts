@@ -9,16 +9,16 @@ const {getForwarderRegistryAddress, getTokenMetadataResolverPerTokenAddress} = r
 
 describe('EDUNodeRewards', function () {
   const REWARDS_CONTROLLER_ROLE = keccak256(toUtf8Bytes('REWARDS_CONTROLLER_ROLE'));
+  const KYC_CONTROLLER_ROLE = keccak256(toUtf8Bytes('KYC_CONTROLLER_ROLE'));
   const REWARD_TOKEN = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
   const attestationPeriod = 20n * 60n;
   const maxRewardTimeWindow = attestationPeriod;
   const rewardPerSecond = parseUnits('10000', 'gwei');
 
-  let deployer, adminRewardController, rewardController, adminKycController, kycController, kycUser, nonKycUser, other;
+  let deployer, rewardController, kycController, kycUser, nonKycUser, other;
   before(async function () {
-    [deployer, adminRewardController, rewardController, adminKycController, kycController, kycUser, nonKycUser, other] =
-      await ethers.getSigners();
+    [deployer, rewardController, kycController, kycUser, nonKycUser, other] = await ethers.getSigners();
   });
 
   const fixture = async function () {
@@ -49,13 +49,14 @@ describe('EDUNodeRewards', function () {
       this.nodeKeyContract,
       REWARD_TOKEN,
       rewardPerSecond,
-      adminRewardController.address,
-      adminKycController.address,
-      rewardController.address,
-      kycController.address
+      deployer
     );
-
+    // Grant NodeRewards’ KYC controller role to operator wallet
+    await this.nodeRewardsContract.connect(deployer).grantRole(KYC_CONTROLLER_ROLE, kycController.address);
     await this.nodeRewardsContract.connect(kycController).addKycWallets([kycUser.address]);
+
+    // Grant NodeRewards’ Reward controller role to operator wallet
+    await this.nodeRewardsContract.connect(deployer).grantRole(REWARDS_CONTROLLER_ROLE, rewardController.address);
 
     await deployer.sendTransaction({to: this.nodeRewardsContract, value: parseEther('10')});
 

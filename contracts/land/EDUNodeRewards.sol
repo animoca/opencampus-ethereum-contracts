@@ -6,7 +6,7 @@ import {NodeRewardsBase} from "gelatonetwork-node-sale-contracts/contracts/NodeR
 import {RewardsKYC} from "gelatonetwork-node-sale-contracts/contracts/RewardsKYC.sol";
 
 contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
-    bytes32 public constant ADMIN_REWARDS_CONTROLLER_ROLE = keccak256("ADMIN_REWARDS_CONTROLLER_ROLE");
+    bytes32 public constant OWNER_ROLE = keccak256("OWNER_ROLE");
     bytes32 public constant REWARDS_CONTROLLER_ROLE = keccak256("REWARDS_CONTROLLER_ROLE");
     uint256 public immutable MAX_REWARD_TIME_WINDOW;
 
@@ -25,21 +25,16 @@ contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
         address nodeKey,
         address rewardToken,
         uint256 rewardPerSecond_,
-        address adminRewardsController,
-        address adminKycController,
-        address rewardsController,
-        address kycController
+        address owner
     ) NodeRewardsBase(referee, nodeKey, rewardToken) {
         MAX_REWARD_TIME_WINDOW = maxRewardTimeWindow;
         rewardPerSecond = rewardPerSecond_;
 
-        _setRoleAdmin(REWARDS_CONTROLLER_ROLE, ADMIN_REWARDS_CONTROLLER_ROLE);
-        _grantRole(ADMIN_REWARDS_CONTROLLER_ROLE, adminRewardsController);
-        _grantRole(REWARDS_CONTROLLER_ROLE, rewardsController);
+        _setRoleAdmin(REWARDS_CONTROLLER_ROLE, OWNER_ROLE);
+        _setRoleAdmin(KYC_CONTROLLER_ROLE, OWNER_ROLE);
 
-        _setRoleAdmin(KYC_CONTROLLER_ROLE, ADMIN_KYC_CONTROLLER_ROLE);
-        _grantRole(ADMIN_KYC_CONTROLLER_ROLE, adminKycController);
-        _grantRole(KYC_CONTROLLER_ROLE, kycController);
+        _setRoleAdmin(OWNER_ROLE, OWNER_ROLE);
+        _grantRole(OWNER_ROLE, owner);
     }
 
     function setRewardPerSecond(uint256 rewardPerSecond_) external onlyRole(REWARDS_CONTROLLER_ROLE) {
