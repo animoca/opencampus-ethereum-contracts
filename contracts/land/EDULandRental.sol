@@ -40,6 +40,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
     uint256 public maxTokenSupply;
     uint256 public maintenanceFee;
+    uint256 public maintenanceFeeDenominator;
     uint256 public maxRentalDuration;
     uint256 public maxRentalCountPerCall;
 
@@ -51,7 +52,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     event Collected(uint256[] tokenIds);
     event RentalFeeHelperUpdated(address newRentalFeeHelper);
     event MaxTokenSupplyUpdated(uint256 newMaxTokenSupply);
-    event MaintenanceFeeUpdated(uint256 newMaintenanceFee);
+    event MaintenanceFeeUpdated(uint256 newMaintenanceFee, uint256 newMaintenanceFeeDenominator);
     event MaxRentalDurationUpdated(uint256 newMaxRentalDuration);
     event MaxRentalCountPerCallUpdated(uint256 newMaxRentalCountPerCall);
 
@@ -66,22 +67,34 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     error FeeExceeded(uint256 calculatedFee, uint256 maxFee);
 
     constructor(
-        address nodeKeyAddress,
+        address landAddress,
         address pointsAddress,
         address rentalFeeHelperAddress,
         uint256 maintenanceFee_,
+        uint256 maintenanceFeeDenominator_,
         uint256 maxRentalDuration_,
         uint256 maxRentalCountPerCall_,
         uint256 maxTokenSupply_,
         IForwarderRegistry forwarderRegistry
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
-        EDU_LAND = IEDULand(nodeKeyAddress);
+        EDU_LAND = IEDULand(landAddress);
         POINTS = Points(pointsAddress);
+
         rentalFeeHelper = IEDULandRentalFeeHelper(rentalFeeHelperAddress);
+        emit RentalFeeHelperUpdated(rentalFeeHelperAddress);
+
         maintenanceFee = maintenanceFee_;
+        maintenanceFeeDenominator = maintenanceFeeDenominator_;
+        emit MaintenanceFeeUpdated(maintenanceFee_, maintenanceFeeDenominator_);
+
         maxRentalDuration = maxRentalDuration_;
+        emit MaxRentalDurationUpdated(maxRentalDuration_);
+
         maxRentalCountPerCall = maxRentalCountPerCall_;
+        emit MaxRentalCountPerCallUpdated(maxRentalCountPerCall_);
+
         maxTokenSupply = maxTokenSupply_;
+        emit MaxTokenSupplyUpdated(maxTokenSupply_);
     }
 
     function calculateElapsedTimeForExpiredTokens(uint256[] calldata tokenIds) public view returns (uint256 elapsedTime) {
@@ -119,7 +132,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
         uint256 currentTime = block.timestamp;
         uint256 elapsedTime = calculateElapsedTimeForExpiredTokens(expiredTokenIds);
-        uint256 nodeKeyPrice = _estimateNodeKeyPrice(totalEffectiveRentalTime - elapsedTime);
+        uint256 landPrice = _estimateLandPrice(totalEffectiveRentalTime - elapsedTime);
         uint256 totalFee;
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 duration = durations[i];
@@ -142,7 +155,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                     revert RentalDurationLimitExceeded(tokenId, duration);
                 }
 
-                totalFee += nodeKeyPrice;
+                totalFee += landPrice;
             } else if (EDU_LAND.ownerOf(tokenId) == account && currentTime < rental.endDate) {
                 if (rental.endDate - rental.beginDate + duration > maxRentalDuration) {
                     revert RentalDurationLimitExceeded(tokenId, rental.endDate - rental.beginDate + duration);
@@ -151,7 +164,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 revert TokenAlreadyRented(tokenId);
             }
 
-            totalFee += duration * maintenanceFee;
+            totalFee += duration * maintenanceFee / maintenanceFeeDenominator;
         }
 
         return totalFee;
@@ -177,7 +190,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
         uint256 currentTime = block.timestamp;
         uint256 preEffectiveRentalTime = totalEffectiveRentalTime - _collectExpiredTokens(expiredTokenIds, currentTime);
-        uint256 nodeKeyPrice = _estimateNodeKeyPrice(preEffectiveRentalTime);
+        uint256 landPrice = _estimateLandPrice(preEffectiveRentalTime);
 
         RentalInfo[] memory rentalInfos = new RentalInfo[](tokenIds.length);
         uint256 totalDuration;
@@ -206,7 +219,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 EDU_LAND.safeMint(account_, tokenId, "");
                 rental.beginDate = currentTime;
                 rental.endDate = currentTime + duration;
-                uint256 fee = nodeKeyPrice + maintenanceFee * duration;
+                uint256 fee = landPrice + duration * maintenanceFee / maintenanceFeeDenominator;
                 rental.fee = fee;
                 totalFee += fee;
             } else if (account_ == EDU_LAND.ownerOf(tokenId) && currentTime < rental.endDate) {
@@ -215,7 +228,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 }
 
                 rental.endDate += duration;
-                uint256 fee = maintenanceFee * duration;
+                uint256 fee = duration * maintenanceFee / maintenanceFeeDenominator;
                 rental.fee += fee;
                 totalFee += fee;
             } else {
@@ -256,10 +269,11 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         emit MaxTokenSupplyUpdated(newMaxTokenSupply);
     }
 
-    function setMaintenanceFee(uint256 newMaintenanceFee) external {
+    function setMaintenanceFee(uint256 newMaintenanceFee, uint256 newMaintenanceFeeDenominator) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         maintenanceFee = newMaintenanceFee;
-        emit MaintenanceFeeUpdated(newMaintenanceFee);
+        maintenanceFeeDenominator = newMaintenanceFeeDenominator;
+        emit MaintenanceFeeUpdated(newMaintenanceFee, newMaintenanceFeeDenominator);
     }
 
     function setMaxRentalDuration(uint256 newMaxRentalDuration) external {
@@ -304,7 +318,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         return finishedRentalTime;
     }
 
-    function _estimateNodeKeyPrice(uint256 totalEffectiveRentalTime_) internal view returns (uint256) {
+    function _estimateLandPrice(uint256 totalEffectiveRentalTime_) internal view returns (uint256) {
         return rentalFeeHelper.calulatePrice(totalEffectiveRentalTime_);
     }
 

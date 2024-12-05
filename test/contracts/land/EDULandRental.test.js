@@ -9,6 +9,7 @@ const keccak256 = require('keccak256');
 const {ZeroAddress} = require('ethers');
 
 const DEFAULT_MAINTENANCE_FEE = 1n;
+const DEFAULT_MAINTENANCE_FEE_DENOMINATOR = 1n;
 
 const LN2_WITH_POWER_10_18 = 693147180559945309n;
 const POWER_10_18 = BigInt(10 ** 18);
@@ -40,12 +41,12 @@ const RENTAL_TYPE = {
   CLEAN: 0,
   EXTENSION: 1,
 };
-function calculateFees(totalEffectiveRentalTime, durations, types, maintenanceFee = DEFAULT_MAINTENANCE_FEE) {
+function calculateFees(totalEffectiveRentalTime, durations, types, maintenanceFee = DEFAULT_MAINTENANCE_FEE, maintenanceFeeDenominator = DEFAULT_MAINTENANCE_FEE_DENOMINATOR) {
   const totalNodeKeyPrice = calculateNodeKeyPrice(totalEffectiveRentalTime);
   return durations.map((duration, i) => {
     if (types[i] == null) throw new Error('calculateFees: Rental type must not be null.');
-    if (types[i] === RENTAL_TYPE.EXTENSION) return duration * maintenanceFee;
-    return totalNodeKeyPrice + duration * maintenanceFee;
+    if (types[i] === RENTAL_TYPE.EXTENSION) return duration * maintenanceFee / maintenanceFeeDenominator;
+    return totalNodeKeyPrice + duration * maintenanceFee / maintenanceFeeDenominator;
   });
 }
 
@@ -88,6 +89,7 @@ describe('EDULandRental', function () {
       this.ocp.target,
       this.rentalFeeHelper.target,
       DEFAULT_MAINTENANCE_FEE,
+      DEFAULT_MAINTENANCE_FEE_DENOMINATOR,
       this.maxRentalDuration,
       this.maxRentalCountPerCall,
       this.nodeKeyContractTotalSupply,
@@ -669,15 +671,15 @@ describe('EDULandRental', function () {
     });
   });
 
-  context('setMaintenanceFee(uint256 newMaintenanceFee) external', function () {
+  context('setMaintenanceFee(uint256 newMaintenanceFee, uint256 newMaintenanceFeeDenominator) external', function () {
     it('Success', async function () {
-      await expect(this.rentalContract.connect(rentalOperator).setMaintenanceFee(2n))
+      await expect(this.rentalContract.connect(rentalOperator).setMaintenanceFee(5n, 2n))
         .to.emit(this.rentalContract, 'MaintenanceFeeUpdated')
-        .withArgs(2n);
+        .withArgs(5n, 2n);
     });
 
     it('Failure because it set by non operator wallet', async function () {
-      await expect(this.rentalContract.connect(user1).setMaintenanceFee(2n))
+      await expect(this.rentalContract.connect(user1).setMaintenanceFee(5n, 2n))
         .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
         .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
     });
