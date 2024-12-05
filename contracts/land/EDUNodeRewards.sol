@@ -2,8 +2,8 @@
 pragma solidity 0.8.22;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {NodeRewardsBase} from "gelatonetwork-node-sale-contracts/contracts/NodeRewardsBase.sol";
-import {RewardsKYC} from "gelatonetwork-node-sale-contracts/contracts/RewardsKYC.sol";
+import {NodeRewardsBase} from "@gelatonetwork/node-sale-contracts/contracts/NodeRewardsBase.sol";
+import {RewardsKYC} from "@gelatonetwork/node-sale-contracts/contracts/RewardsKYC.sol";
 
 contract EDUNodeRewards is NodeRewardsBase, RewardsKYC {
     bytes32 public constant OWNER_ROLE = keccak256("OWNER_ROLE");

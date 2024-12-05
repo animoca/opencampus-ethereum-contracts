@@ -11,7 +11,7 @@ module.exports = {
         artifacts: 'node_modules/@animoca/anichess-ethereum-contracts-2.2.3/artifacts',
       },
       {
-        artifacts: 'node_modules/gelatonetwork-node-sale-contracts/artifacts',
+        artifacts: 'node_modules/@gelatonetwork/node-sale-contracts/artifacts',
       },
     ],
   },
