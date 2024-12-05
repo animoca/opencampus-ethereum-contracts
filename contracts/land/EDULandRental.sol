@@ -14,7 +14,7 @@ import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/me
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {IEDULandRentalFeeHelper} from "./interfaces/IEDULandRentalFeeHelper.sol";
+import {IEDULandPriceHelper} from "./interfaces/IEDULandPriceHelper.sol";
 
 contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext {
     using AccessControlStorage for AccessControlStorage.Layout;
@@ -36,7 +36,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     Points public immutable POINTS;
     IEDULand public immutable EDU_LAND;
 
-    IEDULandRentalFeeHelper public rentalFeeHelper;
+    IEDULandPriceHelper public landPriceHelper;
 
     uint256 public maxTokenSupply;
     uint256 public maintenanceFee;
@@ -50,7 +50,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
     event Rental(address indexed renter, uint256[] tokenIds, RentalInfo[] rentals);
     event Collected(uint256[] tokenIds);
-    event RentalFeeHelperUpdated(address newRentalFeeHelper);
+    event LandPriceHelperUpdated(address newRentalFeeHelper);
     event MaxTokenSupplyUpdated(uint256 newMaxTokenSupply);
     event MaintenanceFeeUpdated(uint256 newMaintenanceFee, uint256 newMaintenanceFeeDenominator);
     event MaxRentalDurationUpdated(uint256 newMaxRentalDuration);
@@ -69,7 +69,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     constructor(
         address landAddress,
         address pointsAddress,
-        address rentalFeeHelperAddress,
+        address landPriceHelperAddress,
         uint256 maintenanceFee_,
         uint256 maintenanceFeeDenominator_,
         uint256 maxRentalDuration_,
@@ -80,8 +80,8 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         EDU_LAND = IEDULand(landAddress);
         POINTS = Points(pointsAddress);
 
-        rentalFeeHelper = IEDULandRentalFeeHelper(rentalFeeHelperAddress);
-        emit RentalFeeHelperUpdated(rentalFeeHelperAddress);
+        landPriceHelper = IEDULandPriceHelper(landPriceHelperAddress);
+        emit LandPriceHelperUpdated(landPriceHelperAddress);
 
         maintenanceFee = maintenanceFee_;
         maintenanceFeeDenominator = maintenanceFeeDenominator_;
@@ -257,10 +257,10 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         }
     }
 
-    function setRentalFeeHelper(address newRentalFeeHelper) external {
+    function setLandPriceHelper(address newLandPriceHelper) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
-        rentalFeeHelper = IEDULandRentalFeeHelper(newRentalFeeHelper);
-        emit RentalFeeHelperUpdated(newRentalFeeHelper);
+        landPriceHelper = IEDULandPriceHelper(newLandPriceHelper);
+        emit LandPriceHelperUpdated(newLandPriceHelper);
     }
 
     function setMaxTokenSupply(uint256 newMaxTokenSupply) external {
@@ -319,7 +319,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     }
 
     function _estimateLandPrice(uint256 totalEffectiveRentalTime_) internal view returns (uint256) {
-        return rentalFeeHelper.calulatePrice(totalEffectiveRentalTime_);
+        return landPriceHelper.calculatePrice(totalEffectiveRentalTime_);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
