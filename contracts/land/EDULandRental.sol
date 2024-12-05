@@ -40,6 +40,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
     uint256 public maxTokenSupply;
     uint256 public maintenanceFee;
+    uint256 public maintenanceFeeDenominator;
     uint256 public maxRentalDuration;
     uint256 public maxRentalCountPerCall;
 
@@ -51,7 +52,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     event Collected(uint256[] tokenIds);
     event RentalFeeHelperUpdated(address newRentalFeeHelper);
     event MaxTokenSupplyUpdated(uint256 newMaxTokenSupply);
-    event MaintenanceFeeUpdated(uint256 newMaintenanceFee);
+    event MaintenanceFeeUpdated(uint256 newMaintenanceFee, uint256 newMaintenanceFeeDenominator);
     event MaxRentalDurationUpdated(uint256 newMaxRentalDuration);
     event MaxRentalCountPerCallUpdated(uint256 newMaxRentalCountPerCall);
 
@@ -70,6 +71,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         address pointsAddress,
         address rentalFeeHelperAddress,
         uint256 maintenanceFee_,
+        uint256 maintenanceFeeDenominator_,
         uint256 maxRentalDuration_,
         uint256 maxRentalCountPerCall_,
         uint256 maxTokenSupply_,
@@ -77,11 +79,22 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
         EDU_LAND = IEDULand(landAddress);
         POINTS = Points(pointsAddress);
+
         rentalFeeHelper = IEDULandRentalFeeHelper(rentalFeeHelperAddress);
+        emit RentalFeeHelperUpdated(rentalFeeHelperAddress);
+
         maintenanceFee = maintenanceFee_;
+        maintenanceFeeDenominator = maintenanceFeeDenominator_;
+        emit MaintenanceFeeUpdated(maintenanceFee_, maintenanceFeeDenominator_);
+
         maxRentalDuration = maxRentalDuration_;
+        emit MaxRentalDurationUpdated(maxRentalDuration_);
+
         maxRentalCountPerCall = maxRentalCountPerCall_;
+        emit MaxRentalCountPerCallUpdated(maxRentalCountPerCall_);
+
         maxTokenSupply = maxTokenSupply_;
+        emit MaxTokenSupplyUpdated(maxTokenSupply_);
     }
 
     function calculateElapsedTimeForExpiredTokens(uint256[] calldata tokenIds) public view returns (uint256 elapsedTime) {
@@ -151,7 +164,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 revert TokenAlreadyRented(tokenId);
             }
 
-            totalFee += duration * maintenanceFee;
+            totalFee += duration * maintenanceFee / maintenanceFeeDenominator;
         }
 
         return totalFee;
@@ -206,7 +219,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 EDU_LAND.safeMint(account_, tokenId, "");
                 rental.beginDate = currentTime;
                 rental.endDate = currentTime + duration;
-                uint256 fee = landPrice + maintenanceFee * duration;
+                uint256 fee = landPrice + duration * maintenanceFee / maintenanceFeeDenominator;
                 rental.fee = fee;
                 totalFee += fee;
             } else if (account_ == EDU_LAND.ownerOf(tokenId) && currentTime < rental.endDate) {
@@ -215,7 +228,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 }
 
                 rental.endDate += duration;
-                uint256 fee = maintenanceFee * duration;
+                uint256 fee = duration * maintenanceFee / maintenanceFeeDenominator;
                 rental.fee += fee;
                 totalFee += fee;
             } else {
@@ -256,10 +269,11 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         emit MaxTokenSupplyUpdated(newMaxTokenSupply);
     }
 
-    function setMaintenanceFee(uint256 newMaintenanceFee) external {
+    function setMaintenanceFee(uint256 newMaintenanceFee, uint256 newMaintenanceFeeDenominator) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         maintenanceFee = newMaintenanceFee;
-        emit MaintenanceFeeUpdated(newMaintenanceFee);
+        maintenanceFeeDenominator = newMaintenanceFeeDenominator;
+        emit MaintenanceFeeUpdated(newMaintenanceFee, newMaintenanceFeeDenominator);
     }
 
     function setMaxRentalDuration(uint256 newMaxRentalDuration) external {
