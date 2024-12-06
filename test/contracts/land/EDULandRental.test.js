@@ -40,12 +40,18 @@ const RENTAL_TYPE = {
   CLEAN: 0,
   EXTENSION: 1,
 };
-function calculateFees(totalEffectiveRentalTime, durations, types, maintenanceFee = DEFAULT_MAINTENANCE_FEE, maintenanceFeeDenominator = DEFAULT_MAINTENANCE_FEE_DENOMINATOR) {
+function calculateFees(
+  totalEffectiveRentalTime,
+  durations,
+  types,
+  maintenanceFee = DEFAULT_MAINTENANCE_FEE,
+  maintenanceFeeDenominator = DEFAULT_MAINTENANCE_FEE_DENOMINATOR
+) {
   const totalNodeKeyPrice = calculateNodeKeyPrice(totalEffectiveRentalTime);
   return durations.map((duration, i) => {
     if (types[i] == null) throw new Error('calculateFees: Rental type must not be null.');
-    if (types[i] === RENTAL_TYPE.EXTENSION) return duration * maintenanceFee / maintenanceFeeDenominator;
-    return totalNodeKeyPrice + duration * maintenanceFee / maintenanceFeeDenominator;
+    if (types[i] === RENTAL_TYPE.EXTENSION) return (duration * maintenanceFee) / maintenanceFeeDenominator;
+    return totalNodeKeyPrice + (duration * maintenanceFee) / maintenanceFeeDenominator;
   });
 }
 
