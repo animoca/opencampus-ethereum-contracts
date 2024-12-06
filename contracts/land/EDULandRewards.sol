@@ -24,17 +24,18 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
         address referee,
         address landAddress,
         address rewardToken,
-        uint256 rewardPerSecond_,
-        address owner
+        uint256 rewardPerSecond_
     ) NodeRewardsBase(referee, landAddress, rewardToken) {
         MAX_REWARD_TIME_WINDOW = maxRewardTimeWindow;
+
         rewardPerSecond = rewardPerSecond_;
+        emit RewardPerSecondUpdated(rewardPerSecond_);
 
         _setRoleAdmin(REWARDS_CONTROLLER_ROLE, OWNER_ROLE);
         _setRoleAdmin(KYC_CONTROLLER_ROLE, OWNER_ROLE);
 
         _setRoleAdmin(OWNER_ROLE, OWNER_ROLE);
-        _grantRole(OWNER_ROLE, owner);
+        _grantRole(OWNER_ROLE, msg.sender);
     }
 
     function setRewardPerSecond(uint256 rewardPerSecond_) external onlyRole(REWARDS_CONTROLLER_ROLE) {
