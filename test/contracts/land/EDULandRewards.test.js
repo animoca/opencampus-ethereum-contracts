@@ -7,7 +7,7 @@ const {deployContract, deployContractFromPath} = require('@animoca/ethereum-cont
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
 const {getForwarderRegistryAddress, getTokenMetadataResolverPerTokenAddress} = require('@animoca/ethereum-contracts/test/helpers/registries');
 
-describe('EDUNodeRewards', function () {
+describe('EDULandRewards', function () {
   const REWARDS_CONTROLLER_ROLE = keccak256(toUtf8Bytes('REWARDS_CONTROLLER_ROLE'));
   const KYC_CONTROLLER_ROLE = keccak256(toUtf8Bytes('KYC_CONTROLLER_ROLE'));
   const OWNER_ROLE = keccak256(toUtf8Bytes('OWNER_ROLE'));
@@ -44,7 +44,7 @@ describe('EDUNodeRewards', function () {
     );
 
     this.nodeRewardsContract = await deployContract(
-      'EDUNodeRewards',
+      'EDULandRewards',
       maxRewardTimeWindow,
       this.refereeContract,
       this.nodeKeyContract,
@@ -173,7 +173,7 @@ describe('EDUNodeRewards', function () {
         const rewardTimeWindow = maxRewardTimeWindow > dt ? dt : maxRewardTimeWindow;
         const reward = rewardTimeWindow * rewardPerSecond;
 
-        expect(await this.nodeRewardsContract.rewardPerNodeKeyOfBatch(batchNumber)).to.equal(reward);
+        expect(await this.nodeRewardsContract.rewardPerLandOfBatch(batchNumber)).to.equal(reward);
       });
 
       it('successfully set reward amount for multiple successful attestations', async function () {
@@ -186,12 +186,12 @@ describe('EDUNodeRewards', function () {
         const rewardTimeWindow = maxRewardTimeWindow > dt ? dt : maxRewardTimeWindow;
         const reward = (rewardTimeWindow * rewardPerSecond) / BigInt(nodeKeyIds.length);
 
-        expect(await this.nodeRewardsContract.rewardPerNodeKeyOfBatch(batchNumber)).to.equal(reward);
+        expect(await this.nodeRewardsContract.rewardPerLandOfBatch(batchNumber)).to.equal(reward);
       });
 
       it('not setting reward amount if no successful attestations', async function () {
         await this.refereeContract.finalize();
-        expect(await this.nodeRewardsContract.rewardPerNodeKeyOfBatch(batchNumber)).to.equal(0);
+        expect(await this.nodeRewardsContract.rewardPerLandOfBatch(batchNumber)).to.equal(0);
       });
 
       it('should assign reward time window to the minimum between L1 timestamp and the maximum reward window', async function () {
@@ -207,7 +207,7 @@ describe('EDUNodeRewards', function () {
         const rewardTimeWindow = latestL1NodeConfirmedTimestamp - l1NodeConfirmedTimestamp;
         const reward = rewardTimeWindow * rewardPerSecond;
 
-        expect(await this.nodeRewardsContract.rewardPerNodeKeyOfBatch(latestBatchNumber)).to.equal(reward);
+        expect(await this.nodeRewardsContract.rewardPerLandOfBatch(latestBatchNumber)).to.equal(reward);
       });
     }
   );
