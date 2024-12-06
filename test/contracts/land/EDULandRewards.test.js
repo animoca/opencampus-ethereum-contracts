@@ -1,6 +1,6 @@
 const {ethers} = require('hardhat');
 const {expect} = require('chai');
-const {parseUnits, parseEther, keccak256, toUtf8Bytes} = require('ethers');
+const {parseEther, keccak256, toUtf8Bytes} = require('ethers');
 const {mine} = require('@nomicfoundation/hardhat-network-helpers');
 
 const {deployContract, deployContractFromPath} = require('@animoca/ethereum-contract-helpers/src/test/deploy');
@@ -13,9 +13,8 @@ describe('EDULandRewards', function () {
   const OWNER_ROLE = keccak256(toUtf8Bytes('OWNER_ROLE'));
   const REWARD_TOKEN = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
-  const attestationPeriod = 20n * 60n;
-  const maxRewardTimeWindow = attestationPeriod;
-  const rewardPerSecond = parseUnits('10000', 'gwei');
+  const maxRewardTimeWindow = 20n * 60n; // 20 minutes
+  const rewardPerSecond = 1n;
 
   let deployer, rewardController, kycController, kycUser, nonKycUser, other;
   before(async function () {
@@ -168,10 +167,7 @@ describe('EDULandRewards', function () {
 
         await this.refereeContract.connect(kycUser).attest(batchNumber, nodeKeyId);
         await this.refereeContract.finalize();
-
-        const dt = l1NodeConfirmedTimestamp - prevL1NodeConfirmedTimestamp;
-        const rewardTimeWindow = maxRewardTimeWindow > dt ? dt : maxRewardTimeWindow;
-        const reward = rewardTimeWindow * rewardPerSecond;
+        const reward = maxRewardTimeWindow * rewardPerSecond;
 
         expect(await this.nodeRewardsContract.rewardPerLandOfBatch(batchNumber)).to.equal(reward);
       });
@@ -182,9 +178,7 @@ describe('EDULandRewards', function () {
           await this.refereeContract.connect(kycUser).attest(batchNumber, nodeKeyId);
         }
         await this.refereeContract.finalize();
-        const dt = l1NodeConfirmedTimestamp - prevL1NodeConfirmedTimestamp;
-        const rewardTimeWindow = maxRewardTimeWindow > dt ? dt : maxRewardTimeWindow;
-        const reward = (rewardTimeWindow * rewardPerSecond) / BigInt(nodeKeyIds.length);
+        const reward = (maxRewardTimeWindow * rewardPerSecond) / BigInt(nodeKeyIds.length);
 
         expect(await this.nodeRewardsContract.rewardPerLandOfBatch(batchNumber)).to.equal(reward);
       });
@@ -251,9 +245,7 @@ describe('EDULandRewards', function () {
 
         await this.refereeContract.connect(kycUser).attest(batchNumber, nodeKeyId);
         await this.refereeContract.finalize();
-        const dt = l1NodeConfirmedTimestamp - prevL1NodeConfirmedTimestamp;
-        const rewardTimeWindow = maxRewardTimeWindow > dt ? dt : maxRewardTimeWindow;
-        const reward = rewardTimeWindow * rewardPerSecond;
+        const reward = maxRewardTimeWindow * rewardPerSecond;
 
         const prevBalance = await ethers.provider.getBalance(kycUser.address);
         const tx = await this.refereeContract.connect(kycUser).claimReward(nodeKeyId, 1);
@@ -272,9 +264,7 @@ describe('EDULandRewards', function () {
 
         await this.refereeContract.connect(kycUser).attest(batchNumber, nodeKeyId);
         await this.refereeContract.finalize();
-        const dt = l1NodeConfirmedTimestamp - prevL1NodeConfirmedTimestamp;
-        const rewardTimeWindow = maxRewardTimeWindow > dt ? dt : maxRewardTimeWindow;
-        const reward = rewardTimeWindow * rewardPerSecond;
+        const reward = maxRewardTimeWindow * rewardPerSecond;
 
         await this.nodeKeyContract.connect(deployer).transferFrom(kycUser.address, other.address, nodeKeyId);
 
@@ -296,9 +286,7 @@ describe('EDULandRewards', function () {
 
         await this.refereeContract.connect(kycUser).attest(batchNumber, nodeKeyId);
         await this.refereeContract.finalize();
-        const dt = l1NodeConfirmedTimestamp - prevL1NodeConfirmedTimestamp;
-        const rewardTimeWindow = maxRewardTimeWindow > dt ? dt : maxRewardTimeWindow;
-        const reward = rewardTimeWindow * rewardPerSecond;
+        const reward = maxRewardTimeWindow * rewardPerSecond;
 
         await this.nodeKeyContract.connect(deployer).burnFrom(kycUser.address, nodeKeyId);
 
