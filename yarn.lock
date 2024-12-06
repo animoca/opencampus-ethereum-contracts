@@ -642,7 +642,7 @@
     ethers "^5.5.2"
     siwe "^1.1.6"
 
-"@gelatonetwork/node-sale-contracts@gelatodigital/node-sale-rewards#baf7d94c2fac954dc14371e680d89f7f1f0ddea7":
+"@gelatonetwork/node-sale-rewards@gelatodigital/node-sale-rewards#baf7d94c2fac954dc14371e680d89f7f1f0ddea7":
   version "1.0.0"
   resolved "https://codeload.github.com/gelatodigital/node-sale-rewards/tar.gz/baf7d94c2fac954dc14371e680d89f7f1f0ddea7"
   dependencies:
