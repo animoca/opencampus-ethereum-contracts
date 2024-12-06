@@ -164,7 +164,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 revert TokenAlreadyRented(tokenId);
             }
 
-            totalFee += duration * maintenanceFee / maintenanceFeeDenominator;
+            totalFee += (duration * maintenanceFee) / maintenanceFeeDenominator;
         }
 
         return totalFee;
@@ -219,7 +219,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 EDU_LAND.safeMint(account_, tokenId, "");
                 rental.beginDate = currentTime;
                 rental.endDate = currentTime + duration;
-                uint256 fee = landPrice + duration * maintenanceFee / maintenanceFeeDenominator;
+                uint256 fee = landPrice + (duration * maintenanceFee) / maintenanceFeeDenominator;
                 rental.fee = fee;
                 totalFee += fee;
             } else if (account_ == EDU_LAND.ownerOf(tokenId) && currentTime < rental.endDate) {
@@ -228,7 +228,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 }
 
                 rental.endDate += duration;
-                uint256 fee = duration * maintenanceFee / maintenanceFeeDenominator;
+                uint256 fee = (duration * maintenanceFee) / maintenanceFeeDenominator;
                 rental.fee += fee;
                 totalFee += fee;
             } else {
