@@ -209,7 +209,7 @@ describe('EDULandRental', function () {
 
       it('one of the tokenIds reaches the maximum rental duration', async function () {
         await expect(this.rentalContract.connect(user1).rent(user1, [2n, 1n], [1000n, this.maxRentalDuration + 1n], [], 0n))
-          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
+          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooHigh')
           .withArgs(1n, this.maxRentalDuration + 1n, this.maxRentalDuration);
       });
 
@@ -218,7 +218,7 @@ describe('EDULandRental', function () {
         const blockTimestamp = await getBlockTimestamp(tx);
         await time.setNextBlockTimestamp(blockTimestamp + 200n);
         await expect(this.rentalContract.connect(user1).rent(user1, [2n, 1n], [1000n, 300n], [], 0n))
-          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
+          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooHigh')
           .withArgs(1n, 300n, 200n);
       });
 
@@ -545,7 +545,7 @@ describe('EDULandRental', function () {
 
       it('rent 2 tokens; one is clean token, another token reaches the maximum rental duration', async function () {
         await expect(this.rentalContract.estimateRentalFee(user1, [1n, 2n], [1000n, this.maxRentalDuration + 1n], []))
-          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
+          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooHigh')
           .withArgs(2n, this.maxRentalDuration + 1n, this.maxRentalDuration);
       });
 
@@ -554,7 +554,7 @@ describe('EDULandRental', function () {
         await time.increase(200n);
 
         await expect(this.rentalContract.estimateRentalFee(user1, [2n, 1n], [1000n, 300n], []))
-          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationLimitExceeded')
+          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooHigh')
           .withArgs(1n, 300n, 200n);
       });
 

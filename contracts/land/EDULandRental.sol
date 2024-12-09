@@ -41,6 +41,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     uint256 public maxTokenSupply;
     uint256 public maintenanceFee;
     uint256 public maintenanceFeeDenominator;
+    uint256 public minRentalDuration;
     uint256 public maxRentalDuration;
     uint256 public maxRentalCountPerCall;
 
@@ -53,12 +54,13 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     event LandPriceHelperUpdated(address newRentalFeeHelper);
     event MaxTokenSupplyUpdated(uint256 newMaxTokenSupply);
     event MaintenanceFeeUpdated(uint256 newMaintenanceFee, uint256 newMaintenanceFeeDenominator);
+    event MinRentalDurationUpdated(uint256 newMinRentalDuration);
     event MaxRentalDurationUpdated(uint256 newMaxRentalDuration);
     event MaxRentalCountPerCallUpdated(uint256 newMaxRentalCountPerCall);
 
     error InvalidTokenIdsParam();
-    error ZeroRentalDuration(uint256 tokenId);
-    error RentalDurationLimitExceeded(uint256 tokenId, uint256 duration, uint256 limit);
+    error RentalDurationTooLow(uint256 tokenId, uint256 duration, uint256 limit);
+    error RentalDurationTooHigh(uint256 tokenId, uint256 duration, uint256 limit);
     error RentalCountPerCallLimitExceeded();
     error TokenAlreadyRented(uint256 tokenId);
     error TokenNotRented(uint256 tokenId);
@@ -72,6 +74,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         address landPriceHelperAddress,
         uint256 maintenanceFee_,
         uint256 maintenanceFeeDenominator_,
+        uint256 minRentalDuration_,
         uint256 maxRentalDuration_,
         uint256 maxRentalCountPerCall_,
         uint256 maxTokenSupply_,
@@ -86,6 +89,9 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         maintenanceFee = maintenanceFee_;
         maintenanceFeeDenominator = maintenanceFeeDenominator_;
         emit MaintenanceFeeUpdated(maintenanceFee_, maintenanceFeeDenominator_);
+
+        minRentalDuration = minRentalDuration_;
+        emit MinRentalDurationUpdated(minRentalDuration_);
 
         maxRentalDuration = maxRentalDuration_;
         emit MaxRentalDurationUpdated(maxRentalDuration_);
@@ -137,9 +143,6 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 duration = durations[i];
             uint256 tokenId = tokenIds[i];
-            if (duration == 0) {
-                revert ZeroRentalDuration(tokenId);
-            }
 
             if (tokenId == 0) {
                 revert UnsupportedTokenId(0);
@@ -149,16 +152,20 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 revert UnsupportedTokenId(tokenId);
             }
 
+            if (duration < minRentalDuration) {
+                revert RentalDurationTooLow(tokenId, duration, minRentalDuration);
+            }
+
             RentalInfo memory rental = rentals[tokenId];
             if (rental.endDate == 0) {
                 if (duration > maxRentalDuration) {
-                    revert RentalDurationLimitExceeded(tokenId, duration, maxRentalDuration);
+                    revert RentalDurationTooHigh(tokenId, duration, maxRentalDuration);
                 }
 
                 totalFee += landPrice;
             } else if (EDU_LAND.ownerOf(tokenId) == account && currentTime < rental.endDate) {
                 if (duration > currentTime - rental.beginDate) {
-                    revert RentalDurationLimitExceeded(tokenId, duration, currentTime - rental.beginDate);
+                    revert RentalDurationTooHigh(tokenId, duration, currentTime - rental.beginDate);
                 }
             } else {
                 revert TokenAlreadyRented(tokenId);
@@ -210,10 +217,14 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 revert UnsupportedTokenId(tokenId);
             }
 
+            if (duration < minRentalDuration) {
+                revert RentalDurationTooLow(tokenId, duration, minRentalDuration);
+            }
+
             RentalInfo storage rental = rentals[tokenId];
             if (rental.endDate == 0) {
                 if (duration > maxRentalDuration) {
-                    revert RentalDurationLimitExceeded(tokenId, duration, maxRentalDuration);
+                    revert RentalDurationTooHigh(tokenId, duration, maxRentalDuration);
                 }
 
                 EDU_LAND.safeMint(account_, tokenId, "");
@@ -224,7 +235,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 totalFee += fee;
             } else if (account_ == EDU_LAND.ownerOf(tokenId) && currentTime < rental.endDate) {
                 if (duration > currentTime - rental.beginDate) {
-                    revert RentalDurationLimitExceeded(tokenId, duration, currentTime - rental.beginDate);
+                    revert RentalDurationTooHigh(tokenId, duration, currentTime - rental.beginDate);
                 }
 
                 rental.endDate += duration;
@@ -274,6 +285,12 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         maintenanceFee = newMaintenanceFee;
         maintenanceFeeDenominator = newMaintenanceFeeDenominator;
         emit MaintenanceFeeUpdated(newMaintenanceFee, newMaintenanceFeeDenominator);
+    }
+
+    function setMinRentalDuration(uint256 newMinRentalDuration) external {
+        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
+        minRentalDuration = newMinRentalDuration;
+        emit MinRentalDurationUpdated(newMinRentalDuration);
     }
 
     function setMaxRentalDuration(uint256 newMaxRentalDuration) external {
