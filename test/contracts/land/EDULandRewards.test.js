@@ -105,7 +105,20 @@ describe('EDULandRewards', function () {
     });
   });
 
-  context('setRewardPerSecond(uint256)', function () {
+  context('addKycWallets(address[] calldata _wallets) external', function () {
+    it('reverts if called by non reward controller', async function () {
+      await expect(this.nodeRewardsContract.connect(deployer).addKycWallets([other])).to.be.revertedWith(
+        `AccessControl: account ${deployer.address.toLowerCase()} is missing role ${KYC_CONTROLLER_ROLE}`
+      );
+    });
+
+    it('successfully sets reward per second', async function () {
+      await this.nodeRewardsContract.connect(kycController).addKycWallets([other]);
+      expect(await this.nodeRewardsContract.getKycWallets()).to.include(other.address);
+    });
+  });
+
+  context('setRewardPerSecond(uint256 rewardPerSecond_) external', function () {
     it('reverts if called by non reward controller', async function () {
       await expect(this.nodeRewardsContract.connect(deployer).setRewardPerSecond(1000)).to.be.revertedWith(
         `AccessControl: account ${deployer.address.toLowerCase()} is missing role ${REWARDS_CONTROLLER_ROLE}`
