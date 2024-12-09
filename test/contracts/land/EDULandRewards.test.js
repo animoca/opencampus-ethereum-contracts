@@ -153,9 +153,10 @@ describe('EDULandRewards', function () {
       });
 
       it('reverts if called by non referee', async function () {
-        await expect(
-          this.nodeRewardsContract.connect(deployer).onFinalize(batchNumber, 2n, 1n, 1)
-        ).to.be.revertedWithCustomError(this.nodeRewardsContract, 'OnlyReferee');
+        await expect(this.nodeRewardsContract.connect(deployer).onFinalize(batchNumber, 2n, 1n, 1)).to.be.revertedWithCustomError(
+          this.nodeRewardsContract,
+          'OnlyReferee'
+        );
       });
 
       it('successfully set reward amount', async function () {
