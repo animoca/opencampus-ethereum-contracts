@@ -14,7 +14,7 @@ describe('EDULandRewards', function () {
   const REWARD_TOKEN = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
   const maxRewardTimeWindow = 20n * 60n; // 20 minutes
-  const rewardPerSecond = 1n;
+  const rewardPerSecond = parseEther('0.1');
 
   let deployer, rewardController, kycController, kycUser, nonKycUser, other;
   before(async function () {
@@ -58,7 +58,7 @@ describe('EDULandRewards', function () {
     // Grant NodeRewards’ Reward controller role to operator wallet
     await this.nodeRewardsContract.connect(deployer).grantRole(REWARDS_CONTROLLER_ROLE, rewardController.address);
 
-    await deployer.sendTransaction({to: this.nodeRewardsContract, value: parseEther('10')});
+    await deployer.sendTransaction({to: this.nodeRewardsContract, value: parseEther('1000')});
 
     await this.refereeContract.setNodeRewards(this.nodeRewardsContract);
   };
