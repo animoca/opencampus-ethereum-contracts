@@ -18,6 +18,7 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     mapping(uint256 => mapping(uint256 => address)) public rewardsRecipients;
 
     event RewardPerSecondUpdated(uint256 rewardPerSecond);
+    event Claimed(address indexed account, uint256 batchNumber, uint256 tokenId, uint256 amount);
 
     constructor(
         uint256 maxRewardTimeWindow,
@@ -62,10 +63,14 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     function _claimReward(uint256 tokenId, uint256[] calldata batchNumbers) internal override {
         for (uint256 i; i < batchNumbers.length; i++) {
             uint256 batchNumber = batchNumbers[i];
+            uint256 amount = rewardPerLandOfBatch[batchNumber];
+
             address tokenOwner = rewardsRecipients[batchNumber][tokenId];
             delete rewardsRecipients[batchNumber][tokenId];
+
             _onlyKycWallet(tokenOwner);
-            _payReward(tokenOwner, rewardPerLandOfBatch[batchNumber]);
+            _payReward(tokenOwner, amount);
+            emit Claimed(tokenOwner, batchNumber, tokenId, amount);
         }
     }
 }
