@@ -73,6 +73,7 @@ describe('EDULandRental', function () {
     await this.nodeKeyContract.grantRole(await this.nodeKeyContract.OPERATOR_ROLE(), deployer.address);
 
     this.nodeKeyContractTotalSupply = 5000n;
+    this.minRentalDuration = 1n;
     this.maxRentalDuration = 5184000n;
     this.maxRentalCountPerCall = 20n;
 
@@ -95,6 +96,7 @@ describe('EDULandRental', function () {
       this.rentalFeeHelper.target,
       DEFAULT_MAINTENANCE_FEE,
       DEFAULT_MAINTENANCE_FEE_DENOMINATOR,
+      this.minRentalDuration,
       this.maxRentalDuration,
       this.maxRentalCountPerCall,
       this.nodeKeyContractTotalSupply,
@@ -201,10 +203,10 @@ describe('EDULandRental', function () {
           .withArgs(this.nodeKeyContractTotalSupply);
       });
 
-      it('one of the tokenIds has 0 duration', async function () {
-        await expect(this.rentalContract.connect(user1).rent(user1, [1n, 2n], [0n, 1000n], [], 0n))
-          .to.be.revertedWithCustomError(this.rentalContract, 'ZeroRentalDuration')
-          .withArgs(1n);
+      it('one of the tokenIds is lower than the minium duration', async function () {
+        await expect(this.rentalContract.connect(user1).rent(user1, [1n, 2n], [this.minRentalDuration - 1n, 1000n], [], 0n))
+          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
+          .withArgs(1n, this.minRentalDuration - 1n, this.minRentalDuration);
       });
 
       it('one of the tokenIds reaches the maximum rental duration', async function () {
@@ -269,14 +271,17 @@ describe('EDULandRental', function () {
 
       context('when successful', function () {
         it('successfully rent 1 clean node key', async function () {
-          const tx = await this.rentalContract.connect(user1).rent(user1, [1n], [1000n], [], 0n);
-          const expectedCost = calculateFees(this.initialRentalsDuration, [1000n], [RENTAL_TYPE.CLEAN]).reduce((acc, cost) => acc + cost, 0n);
+          const tx = await this.rentalContract.connect(user1).rent(user1, [1n], [this.minRentalDuration], [], 0n);
+          const expectedCost = calculateFees(this.initialRentalsDuration, [this.minRentalDuration], [RENTAL_TYPE.CLEAN]).reduce(
+            (acc, cost) => acc + cost,
+            0n
+          );
           const blockTimestamp = await getBlockTimestamp(tx);
           await expect(tx)
             .to.emit(this.ocp, 'Consumed')
             .withArgs(this.rentalContract, this.rentalReasonCode, user1, expectedCost)
             .to.emit(this.rentalContract, 'Rental')
-            .withArgs(user1, [1n], [[blockTimestamp, blockTimestamp + 1000n, expectedCost]]);
+            .withArgs(user1, [1n], [[blockTimestamp, blockTimestamp + this.minRentalDuration, expectedCost]]);
         });
 
         it('successfully rent 1 clean node key that being paid by another account', async function () {
@@ -496,9 +501,9 @@ describe('EDULandRental', function () {
       });
 
       it('one of the tokenIds has 0 duration', async function () {
-        await expect(this.rentalContract.estimateRentalFee(user1, [1n, 2n], [0n, 1000n], []))
-          .to.be.revertedWithCustomError(this.rentalContract, 'ZeroRentalDuration')
-          .withArgs(1n);
+        await expect(this.rentalContract.estimateRentalFee(user1, [1n, 2n], [this.minRentalDuration - 1n, 1000n], []))
+          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
+          .withArgs(1n, this.minRentalDuration - 1n, this.minRentalDuration);
       });
 
       it('one of the tokenId is 0', async function () {
@@ -685,6 +690,20 @@ describe('EDULandRental', function () {
 
     it('Failure because it set by non operator wallet', async function () {
       await expect(this.rentalContract.connect(user1).setMaintenanceFee(5n, 2n))
+        .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
+        .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
+    });
+  });
+
+  context('setMinRentalDuration(uint256 newMinRentalDuration) external', function () {
+    it('Success', async function () {
+      await expect(this.rentalContract.connect(rentalOperator).setMinRentalDuration(100n))
+        .to.emit(this.rentalContract, 'MinRentalDurationUpdated')
+        .withArgs(100n);
+    });
+
+    it('Failure because it set by non operator wallet', async function () {
+      await expect(this.rentalContract.connect(user1).setMinRentalDuration(100n))
         .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
         .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
     });

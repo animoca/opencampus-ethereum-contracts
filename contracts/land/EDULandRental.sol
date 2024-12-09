@@ -205,9 +205,6 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         for (uint256 i = 0; i < tokenIds_.length; i++) {
             uint256 tokenId = tokenIds_[i];
             uint256 duration = durations_[i];
-            if (duration == 0) {
-                revert ZeroRentalDuration(tokenId);
-            }
 
             if (tokenId == 0) {
                 revert UnsupportedTokenId(0);
