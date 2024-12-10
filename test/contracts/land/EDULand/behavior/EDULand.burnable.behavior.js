@@ -14,7 +14,7 @@ function behavesLikeERC721Burnable({deploy, mint, errors, interfaces, methods}) 
   } = methods || {};
 
   describe('like an ERC721 Burnable', function () {
-    let accounts, deployer, owner, approved, approvedAll, other, operatorRoleHolder;
+    let accounts, deployer, owner, other, operatorRoleHolder;
     let nft1 = 1;
     let nft2 = 2;
     let nft3 = 3;
@@ -23,7 +23,7 @@ function behavesLikeERC721Burnable({deploy, mint, errors, interfaces, methods}) 
 
     before(async function () {
       accounts = await ethers.getSigners();
-      [deployer, minter, owner, other, approved, approvedAll, operatorRoleHolder] = accounts;
+      [deployer, minter, owner, other, operatorRoleHolder] = accounts;
     });
 
     const fixture = async function () {
@@ -32,11 +32,6 @@ function behavesLikeERC721Burnable({deploy, mint, errors, interfaces, methods}) 
       await mint(this.token, owner.address, nft2, 1, operatorRoleHolder);
       await mint(this.token, owner.address, nft3, 1, operatorRoleHolder);
       await mint(this.token, owner.address, nft4, 1, operatorRoleHolder);
-
-      // NOTE: approve/ setApprovalForAll should have no effect on the token burning
-      await this.token.connect(owner).approve(approved.address, nft1);
-      await this.token.connect(owner).approve(approved.address, nft2);
-      await this.token.connect(owner).setApprovalForAll(approvedAll.address, true);
 
       this.nftBalance = await this.token.balanceOf(owner.address);
     };
@@ -71,24 +66,6 @@ function behavesLikeERC721Burnable({deploy, mint, errors, interfaces, methods}) 
             await expectRevert(burnFunction.call(this, nft1), this.token, errors.NotOperator, {
               role: this.token.OPERATOR_ROLE(),
               account: owner,
-            });
-          });
-
-          it('reverts if called by a wallet with single token approval', async function () {
-            this.sender = approved;
-            this.from = other.address;
-            await expectRevert(burnFunction.call(this, nft1), this.token, errors.NotOperator, {
-              role: this.token.OPERATOR_ROLE(),
-              account: approved,
-            });
-          });
-
-          it('reverts if called by a wallet all tokens approval', async function () {
-            this.sender = approvedAll;
-            this.from = other.address;
-            await expectRevert(burnFunction.call(this, nft1), this.token, errors.NotOperator, {
-              role: this.token.OPERATOR_ROLE(),
-              account: approvedAll,
             });
           });
         });
@@ -136,12 +113,6 @@ function behavesLikeERC721Burnable({deploy, mint, errors, interfaces, methods}) 
       it('clears the ownership of the token(s)', async function () {
         for (const id of ids) {
           await expectRevert(this.token.ownerOf(id), this.token, errors.NonExistingToken, {tokenId: id});
-        }
-      });
-
-      it('clears the approval for the token(s)', async function () {
-        for (const id of ids) {
-          await expectRevert(this.token.getApproved(id), this.token, errors.NonExistingToken, {tokenId: id});
         }
       });
 

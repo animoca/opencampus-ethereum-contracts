@@ -5,7 +5,7 @@ const {mine} = require('@nomicfoundation/hardhat-network-helpers');
 
 const {deployContract, deployContractFromPath} = require('@animoca/ethereum-contract-helpers/src/test/deploy');
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
-const {getForwarderRegistryAddress, getTokenMetadataResolverPerTokenAddress} = require('@animoca/ethereum-contracts/test/helpers/registries');
+const {deployTokenMetadataResolverWithBaseURI} = require('@animoca/ethereum-contracts/test/helpers/registries');
 
 describe('EDULandRewards', function () {
   const REWARDS_CONTROLLER_ROLE = keccak256(toUtf8Bytes('REWARDS_CONTROLLER_ROLE'));
@@ -22,10 +22,9 @@ describe('EDULandRewards', function () {
   });
 
   const fixture = async function () {
-    const metadataResolverAddress = await getTokenMetadataResolverPerTokenAddress();
-    const forwarderRegistryAddress = await getForwarderRegistryAddress();
+    const metadataResolverAddress = await deployTokenMetadataResolverWithBaseURI();
 
-    this.nodeKeyContract = await deployContract('EDULand', 'EDU Principal Node Key', 'EDUKey', metadataResolverAddress, forwarderRegistryAddress);
+    this.nodeKeyContract = await deployContract('EDULand', 'EDU Land', 'EDULand', metadataResolverAddress);
     await this.nodeKeyContract.grantRole(await this.nodeKeyContract.OPERATOR_ROLE(), deployer.address);
     await this.nodeKeyContract.connect(deployer).batchMint(kycUser.address, [1n, 2n, 3n]);
     await this.nodeKeyContract.connect(deployer).batchMint(nonKycUser.address, [10n, 11n, 12n]);

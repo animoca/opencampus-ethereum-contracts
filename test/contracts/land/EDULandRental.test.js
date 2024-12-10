@@ -3,7 +3,7 @@ const {expect} = require('chai');
 const {expectRevert} = require('@animoca/ethereum-contract-helpers/src/test/revert');
 const {deployContract} = require('@animoca/ethereum-contract-helpers/src/test/deploy');
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
-const {getForwarderRegistryAddress, getTokenMetadataResolverPerTokenAddress} = require('@animoca/ethereum-contracts/test/helpers/registries');
+const {getForwarderRegistryAddress, deployTokenMetadataResolverWithBaseURI} = require('@animoca/ethereum-contracts/test/helpers/registries');
 const {time} = require('@nomicfoundation/hardhat-network-helpers');
 const keccak256 = require('keccak256');
 const {ZeroAddress} = require('ethers');
@@ -66,10 +66,10 @@ describe('EDULandRental', function () {
   });
 
   const fixture = async function () {
-    const metadataResolverAddress = await getTokenMetadataResolverPerTokenAddress();
+    const metadataResolverAddress = await deployTokenMetadataResolverWithBaseURI();
     const forwarderRegistryAddress = await getForwarderRegistryAddress();
 
-    this.nodeKeyContract = await deployContract('EDULand', 'EDU Principal Node Key', 'EDUKey', metadataResolverAddress, forwarderRegistryAddress);
+    this.nodeKeyContract = await deployContract('EDULand', 'EDU Land', 'EDULand', metadataResolverAddress);
     await this.nodeKeyContract.grantRole(await this.nodeKeyContract.OPERATOR_ROLE(), deployer.address);
 
     this.nodeKeyContractTotalSupply = 5000n;
@@ -79,7 +79,7 @@ describe('EDULandRental', function () {
 
     const initialOCPAmount = ethers.MaxUint256 / 2n;
 
-    this.ocp = await deployContract('Points', await getForwarderRegistryAddress());
+    this.ocp = await deployContract('Points', forwarderRegistryAddress);
     await this.ocp.grantRole(await this.ocp.DEPOSITOR_ROLE(), deployer);
 
     const ocpReasonCode = keccak256('TEST');

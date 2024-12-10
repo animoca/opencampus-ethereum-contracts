@@ -1,37 +1,24 @@
-const {runBehaviorTests} = require('@animoca/ethereum-contract-helpers/src/test/run');
-const {getForwarderRegistryAddress, getTokenMetadataResolverWithBaseURIAddress} = require('@animoca/ethereum-contracts/test/helpers/registries');
+const {deployContract} = require('@animoca/ethereum-contract-helpers/src/test/deploy');
+const {deployTokenMetadataResolverWithBaseURI} = require('@animoca/ethereum-contracts/test/helpers/registries');
 const {behavesLikeERC721} = require('./behavior/EDULand.behavior');
 const {behavesLikeERC721BatchTransfer} = require('./behavior/EDULand.batchtransfer.behavior');
 const {behavesLikeERC721Burnable} = require('./behavior/EDULand.burnable.behavior');
 const {behavesLikeERC721Mintable} = require('./behavior/EDULand.mintable.behavior');
 const {behavesLikeERC721Metadata} = require('./behavior/EDULand.metadata.behavior');
 
-const name = 'EDU Land';
-const symbol = 'EDULand';
-
-const config = {
-  immutable: {
-    name: 'EDULandMock',
-    ctorArguments: ['name', 'symbol', 'metadataResolver', 'forwarderRegistry'],
-    testMsgData: true,
-  },
-  defaultArguments: {
-    forwarderRegistry: getForwarderRegistryAddress,
-    metadataResolver: getTokenMetadataResolverWithBaseURIAddress,
-    name,
-    symbol,
-  },
-};
-
-runBehaviorTests('EDULandMock', config, function (deployFn) {
+describe('EDULand', function () {
+  const name = 'EDU Land';
+  const symbol = 'EDULand';
+  const deployFn = async function () {
+    const metadataResolverAddress = await deployTokenMetadataResolverWithBaseURI();
+    const contract = await deployContract('EDULand', name, symbol, metadataResolverAddress);
+    return contract;
+  };
   const implementation = {
     name,
     symbol,
     errors: {
       // ERC721
-      SelfApproval: {custom: true, error: 'ERC721SelfApproval', args: ['account']},
-      SelfApprovalForAll: {custom: true, error: 'ERC721SelfApprovalForAll', args: ['account']},
-      NonApprovedForApproval: {custom: true, error: 'ERC721NonApprovedForApproval', args: ['sender', 'owner', 'tokenId']},
       TransferToAddressZero: {custom: true, error: 'ERC721TransferToAddressZero'},
       NonExistingToken: {custom: true, error: 'ERC721NonExistingToken', args: ['tokenId']},
       NonOwnedToken: {custom: true, error: 'ERC721NonOwnedToken', args: ['account', 'tokenId']},
@@ -46,6 +33,7 @@ runBehaviorTests('EDULandMock', config, function (deployFn) {
       InconsistentArrayLengths: {custom: true, error: 'InconsistentArrayLengths'},
       NotTransferable: {custom: true, error: 'NotTransferable'},
       NotOperator: {custom: true, error: 'NotRoleHolder', args: ['role', 'account']},
+      ApprovalNotAllowed: {custom: true, error: 'ApprovalNotAllowed'},
     },
     features: {
       MetadataResolver: true,

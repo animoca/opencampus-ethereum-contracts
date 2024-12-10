@@ -7,8 +7,6 @@ import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/Access
 import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
 import {TokenRecovery} from "@animoca/ethereum-contracts/contracts/security/TokenRecovery.sol";
-import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
-import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
 import {ITokenMetadataResolver} from "@animoca/ethereum-contracts/contracts/token/metadata/interfaces/ITokenMetadataResolver.sol";
 // solhint-disable-next-line max-line-length
@@ -24,7 +22,8 @@ import {IEDULand} from "./interfaces/IEDULand.sol";
 /// @title EDULand
 /// @notice A contract that implements the ERC721 standard with metadata, minting, burning and transfer operations.
 /// @notice Minting, Burning and Transfer operations can only be performed by accounts with the operator role.
-contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery, ForwarderRegistryContext {
+/// @notice Approval related operations always revert.
+contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     using Address for address;
     using ERC721Storage for ERC721Storage.Layout;
     using AccessControlStorage for AccessControlStorage.Layout;
@@ -36,32 +35,31 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery, Forw
     /// @notice This magic number is used as the owner's value to indicate that the token has been burnt
     uint256 internal constant BURNT_TOKEN_OWNER_VALUE = 0xdead000000000000000000000000000000000000000000000000000000000000;
 
+    /// @notice Approval related operations always revert with this message.
+    error ApprovalNotAllowed();
+
     /// @notice Constructor
     /// @notice Marks the following ERC165 interface(s) as supported: ERC721, ERC721Mintable, ERC721Burnable, ERC721BatchTransfer
     /// @param tokenName The name of the token.
     /// @param tokenSymbol The symbol of the token.
     /// @param metadataResolver The address of the metadata resolver contract.
-    /// @param forwarderRegistry The address of the forwarder registry contract.
     constructor(
         string memory tokenName,
         string memory tokenSymbol,
-        ITokenMetadataResolver metadataResolver,
-        IForwarderRegistry forwarderRegistry
-    ) ContractOwnership(msg.sender) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) ForwarderRegistryContext(forwarderRegistry) {
+        ITokenMetadataResolver metadataResolver
+    ) ContractOwnership(msg.sender) ERC721Metadata(tokenName, tokenSymbol, metadataResolver) {
         ERC721Storage.init();
         ERC721Storage.initERC721Mintable();
         ERC721Storage.initERC721Burnable();
         ERC721Storage.initERC721BatchTransfer();
     }
 
-    /// @inheritdoc IERC721
-    function approve(address to, uint256 tokenId) external {
-        ERC721Storage.layout().approve(_msgSender(), to, tokenId);
+    function approve(address, uint256) external pure {
+        revert ApprovalNotAllowed();
     }
 
-    /// @inheritdoc IERC721
-    function setApprovalForAll(address operator, bool approved) external {
-        ERC721Storage.layout().setApprovalForAll(_msgSender(), operator, approved);
+    function setApprovalForAll(address, bool) external pure {
+        revert ApprovalNotAllowed();
     }
 
     /// @inheritdoc IERC721Mintable
@@ -216,14 +214,12 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery, Forw
         return ERC721Storage.layout().ownerOf(tokenId);
     }
 
-    /// @inheritdoc IERC721
-    function getApproved(uint256 tokenId) external view returns (address approved) {
-        return ERC721Storage.layout().getApproved(tokenId);
+    function getApproved(uint256) external pure returns (address) {
+        revert ApprovalNotAllowed();
     }
 
-    /// @inheritdoc IERC721
-    function isApprovedForAll(address owner, address operator) external view returns (bool approvedForAll) {
-        return ERC721Storage.layout().isApprovedForAll(owner, operator);
+    function isApprovedForAll(address, address) external pure returns (bool) {
+        revert ApprovalNotAllowed();
     }
 
     /// @notice Unsafely transfers the ownership of a token to a recipient by a sender.
@@ -256,15 +252,5 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery, Forw
             }
         }
         emit Transfer(from, to, tokenId);
-    }
-
-    /// @inheritdoc ForwarderRegistryContextBase
-    function _msgSender() internal view virtual override(Context, ForwarderRegistryContextBase) returns (address) {
-        return ForwarderRegistryContextBase._msgSender();
-    }
-
-    /// @inheritdoc ForwarderRegistryContextBase
-    function _msgData() internal view virtual override(Context, ForwarderRegistryContextBase) returns (bytes calldata) {
-        return ForwarderRegistryContextBase._msgData();
     }
 }

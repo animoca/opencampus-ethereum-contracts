@@ -8,11 +8,11 @@ function behavesLikeERC721BatchTransfer({deploy, mint, interfaces, errors, metho
   const {'batchTransferFrom(address,address,uint256[])': batchTransferFrom_ERC721} = methods || {};
 
   describe('like an BatchTransfer', function () {
-    let accounts, deployer, owner, approved, approvedAll, other, operatorRoleHolder;
+    let accounts, deployer, owner, other, operatorRoleHolder;
 
     before(async function () {
       accounts = await ethers.getSigners();
-      [deployer, owner, approved, approvedAll, other, operatorRoleHolder] = accounts;
+      [deployer, owner, other, operatorRoleHolder] = accounts;
     });
 
     const nft1 = 1;
@@ -25,11 +25,6 @@ function behavesLikeERC721BatchTransfer({deploy, mint, interfaces, errors, metho
       await mint(this.token, owner.address, nft1, 1, operatorRoleHolder);
       await mint(this.token, owner.address, nft2, 1, operatorRoleHolder);
       await mint(this.token, owner.address, nft3, 1, operatorRoleHolder);
-
-      // NOTE: approve should have no effect on the batchTransferFrom
-      await this.token.connect(owner).approve(approved.address, nft1);
-      await this.token.connect(owner).approve(approved.address, nft2);
-      await this.token.connect(owner).setApprovalForAll(approvedAll.address, true);
 
       this.nftBalance = await this.token.balanceOf(owner.address);
     };
@@ -52,12 +47,6 @@ function behavesLikeERC721BatchTransfer({deploy, mint, interfaces, errors, metho
           }
         });
       }
-
-      it('clears the approval for the token(s)', async function () {
-        for (const tokenId of tokenIds) {
-          expect(await this.token.getApproved(tokenId)).to.equal(ethers.ZeroAddress);
-        }
-      });
 
       it('emits Transfer event(s)', async function () {
         for (const tokenId of tokenIds) {
@@ -146,25 +135,6 @@ function behavesLikeERC721BatchTransfer({deploy, mint, interfaces, errors, metho
               role: this.token.OPERATOR_ROLE(),
               account: owner.address,
             });
-          });
-
-          it('reverts if called by a wallet with single token approval', async function () {
-            await expectRevert(batchTransferFrom_ERC721(this.token, owner.address, other.address, [nft1], approved), this.token, errors.NotOperator, {
-              role: this.token.OPERATOR_ROLE(),
-              account: approved.address,
-            });
-          });
-
-          it('reverts if called by a wallet all tokens approval', async function () {
-            await expectRevert(
-              batchTransferFrom_ERC721(this.token, owner.address, other.address, [nft1], approvedAll),
-              this.token,
-              errors.NotOperator,
-              {
-                role: this.token.OPERATOR_ROLE(),
-                account: approvedAll.address,
-              }
-            );
           });
         });
       });
