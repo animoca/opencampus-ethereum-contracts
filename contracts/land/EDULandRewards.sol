@@ -18,7 +18,7 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     mapping(uint256 => mapping(uint256 => address)) public rewardsRecipients;
 
     event RewardPerSecondUpdated(uint256 rewardPerSecond);
-    event Claimed(address indexed account, uint256 batchNumber, uint256 tokenId, uint256 amount);
+    event Claimed(address indexed account, uint256 indexed batchNumber, uint256 indexed tokenId, uint256 amount);
 
     constructor(
         uint256 maxRewardTimeWindow,
