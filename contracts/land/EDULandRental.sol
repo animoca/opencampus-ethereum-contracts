@@ -108,15 +108,9 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
             RentalInfo storage rental = rentals[tokenId];
-            if (rental.endDate == 0) {
-                revert TokenNotRented(tokenId);
+            if (rental.endDate != 0 && currentTime >= rental.endDate) {
+                elapsedTime += rental.endDate - rental.beginDate;
             }
-
-            if (currentTime < rental.endDate) {
-                revert TokenNotExpired(tokenId);
-            }
-
-            elapsedTime += rental.endDate - rental.beginDate;
         }
 
         return elapsedTime;
@@ -162,7 +156,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
             RentalInfo memory rental = rentals[tokenId];
             if (rental.endDate == 0) {
                 totalFee += landPrice + (duration * maintenanceFee) / maintenanceFeeDenominator;
-            } else if (EDU_LAND.ownerOf(tokenId) == _msgSender && currentTime < rental.endDate) {
+            } else if (EDU_LAND.ownerOf(tokenId) == _msgSender() && currentTime < rental.endDate) {
                 uint256 extendedDuration = currentTime + duration - rental.endDate;
                 totalFee += (extendedDuration * maintenanceFee) / maintenanceFeeDenominator;
             } else {
@@ -186,7 +180,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         uint256[] memory durations_ = durations;
 
         uint256 currentTime = block.timestamp;
-        uint256 postCollectionTotalOngoingRentalTime = totalOngoingRentalTime - _collectExpiredTokens(expiredTokenIds, currentTime);
+        uint256 postCollectionTotalOngoingRentalTime = totalOngoingRentalTime - _collectExpiredTokens(expiredTokenIds, currentTime, false);
         uint256 landPrice = _estimateLandPrice(postCollectionTotalOngoingRentalTime);
 
         RentalInfo[] memory rentalInfos = new RentalInfo[](tokenIds.length);
@@ -291,11 +285,17 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     }
 
     function collectExpiredTokens(uint256[] calldata tokenIds) public {
-        uint256 finishedRentalTime = _collectExpiredTokens(tokenIds, block.timestamp);
+        uint256 finishedRentalTime = _collectExpiredTokens(tokenIds, block.timestamp, true);
         totalOngoingRentalTime -= finishedRentalTime;
     }
 
-    function _collectExpiredTokens(uint256[] calldata tokenIds, uint256 blockTime) internal returns (uint256 finishedRentalTime) {
+    function _collectExpiredTokens(
+        uint256[] calldata tokenIds,
+        uint256 blockTime,
+        bool revertOnCollectionFailed
+    ) internal returns (uint256 finishedRentalTime) {
+        uint256[] memory collectedTokenIds = new uint256[](tokenIds.length);
+        bool hasExpiredToken = false;
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
             RentalInfo storage rental = rentals[tokenId];
@@ -308,13 +308,15 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
                 address currentOwner = EDU_LAND.ownerOf(tokenId);
                 EDU_LAND.burnFrom(currentOwner, tokenId);
-            } else {
+                collectedTokenIds[i] = tokenId;
+                hasExpiredToken = true;
+            } else if (revertOnCollectionFailed) {
                 revert TokenNotExpired(tokenId);
             }
         }
 
-        if (tokenIds.length > 0) {
-            emit Collected(tokenIds);
+        if (hasExpiredToken) {
+            emit Collected(collectedTokenIds);
         }
 
         return finishedRentalTime;
