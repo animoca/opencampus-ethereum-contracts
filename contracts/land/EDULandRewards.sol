@@ -18,6 +18,7 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     mapping(uint256 => mapping(uint256 => address)) public rewardsRecipients;
 
     event RewardPerSecondUpdated(uint256 rewardPerSecond);
+    event BatchFinalized(uint256 indexed batchNumber, uint256 rewardPerLand);
     event Claimed(address indexed account, uint256 indexed batchNumber, uint256 indexed tokenId, uint256 amount);
 
     constructor(
@@ -56,7 +57,9 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     ) internal override {
         if (nrOfSuccessfulAttestations > 0) {
             uint256 rewardTimeWindow = Math.min(l1NodeConfirmedTimestamp - prevL1NodeConfirmedTimestamp, MAX_REWARD_TIME_WINDOW);
-            rewardPerLandOfBatch[batchNumber] = (rewardTimeWindow * rewardPerSecond) / nrOfSuccessfulAttestations;
+            uint256 rewardPerLand = (rewardTimeWindow * rewardPerSecond) / nrOfSuccessfulAttestations;
+            rewardPerLandOfBatch[batchNumber] = rewardPerLand;
+            emit BatchFinalized(batchNumber, rewardPerLand);
         }
     }
 

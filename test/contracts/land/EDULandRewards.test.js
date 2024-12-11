@@ -14,7 +14,7 @@ describe('EDULandRewards', function () {
   const REWARD_TOKEN = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
   const maxRewardTimeWindow = 20n * 60n; // 20 minutes
-  const rewardPerSecond = parseEther('0.1');
+  const rewardPerSecond = parseEther('0.01');
 
   let deployer, rewardController, kycController, kycUser, nonKycUser, other;
   before(async function () {
@@ -57,7 +57,7 @@ describe('EDULandRewards', function () {
     // Grant NodeRewards’ Reward controller role to operator wallet
     await this.nodeRewardsContract.connect(deployer).grantRole(REWARDS_CONTROLLER_ROLE, rewardController.address);
 
-    await deployer.sendTransaction({to: this.nodeRewardsContract, value: parseEther('1000')});
+    await deployer.sendTransaction({to: this.nodeRewardsContract, value: parseEther('100')});
 
     await this.refereeContract.setNodeRewards(this.nodeRewardsContract);
   };
@@ -179,6 +179,17 @@ describe('EDULandRewards', function () {
         const reward = maxRewardTimeWindow * rewardPerSecond;
 
         expect(await this.nodeRewardsContract.rewardPerLandOfBatch(batchNumber)).to.equal(reward);
+      });
+
+      it('emits BatchFinalized event', async function () {
+        const nodeKeyId = 1n;
+
+        await this.refereeContract.connect(kycUser).attest(batchNumber, nodeKeyId);
+        const reward = maxRewardTimeWindow * rewardPerSecond;
+
+        await expect(this.refereeContract.finalize())
+          .to.emit(this.nodeRewardsContract, 'BatchFinalized')
+          .withArgs(batchNumber, reward);
       });
 
       it('successfully set reward amount for multiple successful attestations', async function () {
