@@ -47,7 +47,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
     mapping(uint256 => RentalInfo) public rentals;
 
-    uint256 public totalEffectiveRentalTime;
+    uint256 public totalOngoingRentalTime;
 
     event Rental(address indexed renter, uint256[] tokenIds, RentalInfo[] rentals);
     event Collected(uint256[] tokenIds);
@@ -137,7 +137,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
         uint256 currentTime = block.timestamp;
         uint256 elapsedTime = calculateElapsedTimeForExpiredTokens(expiredTokenIds);
-        uint256 landPrice = _estimateLandPrice(totalEffectiveRentalTime - elapsedTime);
+        uint256 landPrice = _estimateLandPrice(totalOngoingRentalTime - elapsedTime);
         uint256 totalFee;
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 duration = durations[i];
@@ -189,8 +189,8 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         uint256[] memory durations_ = durations;
 
         uint256 currentTime = block.timestamp;
-        uint256 preEffectiveRentalTime = totalEffectiveRentalTime - _collectExpiredTokens(expiredTokenIds, currentTime);
-        uint256 landPrice = _estimateLandPrice(preEffectiveRentalTime);
+        uint256 postCollectionTotalOngoingRentalTime = totalOngoingRentalTime - _collectExpiredTokens(expiredTokenIds, currentTime);
+        uint256 landPrice = _estimateLandPrice(postCollectionTotalOngoingRentalTime);
 
         RentalInfo[] memory rentalInfos = new RentalInfo[](tokenIds.length);
         uint256 totalDuration;
@@ -244,7 +244,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
             revert FeeExceeded(totalFee, maxFee);
         }
 
-        totalEffectiveRentalTime = preEffectiveRentalTime + totalDuration;
+        totalOngoingRentalTime = postCollectionTotalOngoingRentalTime + totalDuration;
 
         POINTS.consume(account, totalFee, RENTAL_CONSUME_CODE);
         emit Rental(account, tokenIds_, rentalInfos);
@@ -297,7 +297,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
     function collectExpiredTokens(uint256[] calldata tokenIds) public {
         uint256 finishedRentalTime = _collectExpiredTokens(tokenIds, block.timestamp);
-        totalEffectiveRentalTime -= finishedRentalTime;
+        totalOngoingRentalTime -= finishedRentalTime;
     }
 
     function _collectExpiredTokens(uint256[] calldata tokenIds, uint256 blockTime) internal returns (uint256 finishedRentalTime) {
@@ -325,8 +325,8 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         return finishedRentalTime;
     }
 
-    function _estimateLandPrice(uint256 totalEffectiveRentalTime_) internal view returns (uint256) {
-        return landPriceHelper.calculatePrice(totalEffectiveRentalTime_);
+    function _estimateLandPrice(uint256 totalOngoingRentalTime_) internal view returns (uint256) {
+        return landPriceHelper.calculatePrice(totalOngoingRentalTime_);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase

@@ -31,8 +31,8 @@ function bigIntLog2(n) {
 const DIVIDER = 100n;
 const STARTING_PRICE = 500n;
 const MIN_PRICE = 5000n;
-function calculateNodeKeyPrice(totalEffectiveRentalTime) {
-  const val = bigIntLog2(totalEffectiveRentalTime / DIVIDER) * STARTING_PRICE;
+function calculateNodeKeyPrice(totalOngoingRentalTime) {
+  const val = bigIntLog2(totalOngoingRentalTime / DIVIDER) * STARTING_PRICE;
   return val > MIN_PRICE ? val : MIN_PRICE;
 }
 
@@ -41,13 +41,13 @@ const RENTAL_TYPE = {
   EXTENSION: 1,
 };
 function calculateFees(
-  totalEffectiveRentalTime,
+  totalOngoingRentalTime,
   durations,
   types,
   maintenanceFee = DEFAULT_MAINTENANCE_FEE,
   maintenanceFeeDenominator = DEFAULT_MAINTENANCE_FEE_DENOMINATOR
 ) {
-  const totalNodeKeyPrice = calculateNodeKeyPrice(totalEffectiveRentalTime);
+  const totalNodeKeyPrice = calculateNodeKeyPrice(totalOngoingRentalTime);
   return durations.map((duration, i) => {
     if (types[i] == null) throw new Error('calculateFees: Rental type must not be null.');
     if (types[i] === RENTAL_TYPE.EXTENSION) return (duration * maintenanceFee) / maintenanceFeeDenominator;

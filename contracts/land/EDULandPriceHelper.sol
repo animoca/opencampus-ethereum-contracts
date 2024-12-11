@@ -8,7 +8,7 @@ import {IEDULandPriceHelper} from "./interfaces/IEDULandPriceHelper.sol";
 /// @notice A helper contract to calulate the rental price of a EDULand based on the total effective rental time.
 contract EDULandPriceHelper is IEDULandPriceHelper {
     /// @inheritdoc IEDULandPriceHelper
-    function calculatePrice(uint256 totalEffectiveRentalTime) external pure returns (uint256) {
-        return Math.max(5000, Math.log2(totalEffectiveRentalTime / 100) * 300);
+    function calculatePrice(uint256 totalOngoingRentalTime) external pure returns (uint256) {
+        return Math.max(5000, Math.log2(totalOngoingRentalTime / 100) * 300);
     }
 }
