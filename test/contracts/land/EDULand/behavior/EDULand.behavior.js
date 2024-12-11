@@ -234,8 +234,15 @@ function behavesLikeERC721({deploy, mint, errors}, operatorFilterRegistryAddress
     });
 
     describe('getApproved(uint256)', function () {
-      it('always reverts', async function () {
-        await expectRevert(this.token.getApproved(nft1), this.token, errors.ApprovalNotAllowed);
+      it('reverts if the token does not exist', async function () {
+        await expectRevert(this.token.getApproved(unknownNFT), this.token, errors.NonExistingToken, {
+          tokenId: unknownNFT,
+        });
+      });
+
+      it('returns the zero address', async function () {
+        await expectRevert(this.token.connect(owner).approve(other.address, nft1), this.token, errors.ApprovalNotAllowed);
+        expect(await this.token.getApproved(nft1)).to.equal(ethers.ZeroAddress);
       });
     });
 
@@ -252,8 +259,9 @@ function behavesLikeERC721({deploy, mint, errors}, operatorFilterRegistryAddress
     });
 
     describe('isApprovedForAll(address,address)', function () {
-      it('always reverts', async function () {
-        await expectRevert(this.token.isApprovedForAll(owner.address, other.address), this.token, errors.ApprovalNotAllowed);
+      it('returns false', async function () {
+        await expectRevert(this.token.connect(owner).setApprovalForAll(other.address, true), this.token, errors.ApprovalNotAllowed);
+        expect(await this.token.isApprovedForAll(owner.address, other.address)).to.equal(false);
       });
     });
 

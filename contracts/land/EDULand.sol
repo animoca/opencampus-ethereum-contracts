@@ -22,7 +22,7 @@ import {IEDULand} from "./interfaces/IEDULand.sol";
 /// @title EDULand
 /// @notice A contract that implements the ERC721 standard with metadata, minting, burning and transfer operations.
 /// @notice Minting, Burning and Transfer operations can only be performed by accounts with the operator role.
-/// @notice Approval related operations always revert.
+/// @notice approve and setApprovalForAll operations are not allowed.
 contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     using Address for address;
     using ERC721Storage for ERC721Storage.Layout;
@@ -35,7 +35,7 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     /// @notice This magic number is used as the owner's value to indicate that the token has been burnt
     uint256 internal constant BURNT_TOKEN_OWNER_VALUE = 0xdead000000000000000000000000000000000000000000000000000000000000;
 
-    /// @notice Approval related operations always revert with this message.
+    /// @notice error message for approve and setApprovalForAll operations
     error ApprovalNotAllowed();
 
     /// @notice Constructor
@@ -214,12 +214,14 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
         return ERC721Storage.layout().ownerOf(tokenId);
     }
 
-    function getApproved(uint256) external pure returns (address) {
-        revert ApprovalNotAllowed();
+    /// @inheritdoc IERC721
+    function getApproved(uint256 tokenId) external view returns (address approved) {
+        return ERC721Storage.layout().getApproved(tokenId);
     }
 
-    function isApprovedForAll(address, address) external pure returns (bool) {
-        revert ApprovalNotAllowed();
+    /// @inheritdoc IERC721
+    function isApprovedForAll(address owner, address operator) external view returns (bool approvedForAll) {
+        return ERC721Storage.layout().isApprovedForAll(owner, operator);
     }
 
     /// @notice Unsafely transfers the ownership of a token to a recipient by a sender.

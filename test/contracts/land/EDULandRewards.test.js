@@ -187,9 +187,7 @@ describe('EDULandRewards', function () {
         await this.refereeContract.connect(kycUser).attest(batchNumber, nodeKeyId);
         const reward = maxRewardTimeWindow * rewardPerSecond;
 
-        await expect(this.refereeContract.finalize())
-          .to.emit(this.nodeRewardsContract, 'BatchFinalized')
-          .withArgs(batchNumber, reward);
+        await expect(this.refereeContract.finalize()).to.emit(this.nodeRewardsContract, 'BatchFinalized').withArgs(batchNumber, reward);
       });
 
       it('successfully set reward amount for multiple successful attestations', async function () {
