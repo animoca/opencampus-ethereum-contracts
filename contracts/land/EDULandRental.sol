@@ -155,22 +155,19 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 revert RentalDurationTooLow(tokenId, duration, minRentalDuration);
             }
 
+            if (duration > maxRentalDuration) {
+                revert RentalDurationTooHigh(tokenId, duration, maxRentalDuration);
+            }
+
             RentalInfo memory rental = rentals[tokenId];
             if (rental.endDate == 0) {
-                if (duration > maxRentalDuration) {
-                    revert RentalDurationTooHigh(tokenId, duration, maxRentalDuration);
-                }
-
-                totalFee += landPrice;
+                totalFee += landPrice + (duration * maintenanceFee) / maintenanceFeeDenominator;
             } else if (EDU_LAND.ownerOf(tokenId) == _msgSender && currentTime < rental.endDate) {
-                if (duration > currentTime - rental.beginDate) {
-                    revert RentalDurationTooHigh(tokenId, duration, currentTime - rental.beginDate);
-                }
+                uint256 extendedDuration = currentTime + duration - rental.endDate;
+                totalFee += (extendedDuration * maintenanceFee) / maintenanceFeeDenominator;
             } else {
                 revert TokenAlreadyRented(tokenId);
             }
-
-            totalFee += (duration * maintenanceFee) / maintenanceFeeDenominator;
         }
 
         return totalFee;
@@ -211,12 +208,12 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 revert RentalDurationTooLow(tokenId, duration, minRentalDuration);
             }
 
+            if (duration > maxRentalDuration) {
+                revert RentalDurationTooHigh(tokenId, duration, maxRentalDuration);
+            }
+
             RentalInfo storage rental = rentals[tokenId];
             if (rental.endDate == 0) {
-                if (duration > maxRentalDuration) {
-                    revert RentalDurationTooHigh(tokenId, duration, maxRentalDuration);
-                }
-
                 EDU_LAND.safeMint(account, tokenId, "");
                 rental.beginDate = currentTime;
                 rental.endDate = currentTime + duration;
@@ -224,12 +221,10 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 rental.fee = fee;
                 totalFee += fee;
             } else if (account == EDU_LAND.ownerOf(tokenId) && currentTime < rental.endDate) {
-                if (duration > currentTime - rental.beginDate) {
-                    revert RentalDurationTooHigh(tokenId, duration, currentTime - rental.beginDate);
-                }
-
-                rental.endDate += duration;
-                uint256 fee = (duration * maintenanceFee) / maintenanceFeeDenominator;
+                uint256 newEndDate = currentTime + duration;
+                uint256 extendedDuration = newEndDate - rental.endDate;
+                rental.endDate = newEndDate;
+                uint256 fee = (extendedDuration * maintenanceFee) / maintenanceFeeDenominator;
                 rental.fee += fee;
                 totalFee += fee;
             } else {
