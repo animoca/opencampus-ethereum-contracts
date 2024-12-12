@@ -36,23 +36,14 @@ function calculateNodeKeyPrice(totalOngoingRentalTime) {
   return val > MIN_PRICE ? val : MIN_PRICE;
 }
 
-const RENTAL_TYPE = {
-  CLEAN: 0,
-  EXTENSION: 1,
-};
 function calculateFees(
   totalOngoingRentalTime,
   durations,
-  types,
   maintenanceFee = DEFAULT_MAINTENANCE_FEE,
   maintenanceFeeDenominator = DEFAULT_MAINTENANCE_FEE_DENOMINATOR
 ) {
   const totalNodeKeyPrice = calculateNodeKeyPrice(totalOngoingRentalTime);
-  return durations.map((duration, i) => {
-    if (types[i] == null) throw new Error('calculateFees: Rental type must not be null.');
-    if (types[i] === RENTAL_TYPE.EXTENSION) return (duration * maintenanceFee) / maintenanceFeeDenominator;
-    return totalNodeKeyPrice + (duration * maintenanceFee) / maintenanceFeeDenominator;
-  });
+  return durations.map((duration) => totalNodeKeyPrice + (duration * maintenanceFee) / maintenanceFeeDenominator);
 }
 
 async function getBlockTimestamp(tx) {
@@ -257,7 +248,7 @@ describe('EDULandRental', function () {
       });
 
       it('signer does not have enough balance to rent', async function () {
-        const expectedCosts = calculateFees(this.initialRentalsDuration, [2000n, 1000n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+        const expectedCosts = calculateFees(this.initialRentalsDuration, [2000n, 1000n]);
         await expect(this.rentalContract.connect(user4).rent([1n, 2n], [2000n, 1000n], [], 0n))
           .to.be.revertedWithCustomError(this.ocp, 'InsufficientBalance')
           .withArgs(
@@ -267,10 +258,7 @@ describe('EDULandRental', function () {
       });
 
       it('the fee is higher than the maxFee', async function () {
-        const fee = calculateFees(this.initialRentalsDuration, [1000n, 1000n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]).reduce(
-          (acc, cost) => acc + cost,
-          0n
-        );
+        const fee = calculateFees(this.initialRentalsDuration, [1000n, 1000n]).reduce((acc, cost) => acc + cost, 0n);
         const maxFee = fee - 1n;
         await expect(this.rentalContract.connect(user1).rent([1n, 2n], [1000n, 1000n], [], maxFee))
           .to.be.revertedWithCustomError(this.rentalContract, 'FeeExceeded')
@@ -280,10 +268,7 @@ describe('EDULandRental', function () {
       context('when successful', function () {
         it('successfully rent 1 clean node key', async function () {
           const tx = await this.rentalContract.connect(user1).rent([1n], [this.minRentalDuration], [], 0n);
-          const expectedCost = calculateFees(this.initialRentalsDuration, [this.minRentalDuration], [RENTAL_TYPE.CLEAN]).reduce(
-            (acc, cost) => acc + cost,
-            0n
-          );
+          const expectedCost = calculateFees(this.initialRentalsDuration, [this.minRentalDuration]).reduce((acc, cost) => acc + cost, 0n);
           const blockTimestamp = await getBlockTimestamp(tx);
           await expect(tx)
             .to.emit(this.ocp, 'Consumed')
@@ -294,7 +279,7 @@ describe('EDULandRental', function () {
 
         it('successfully rent 2 clean node key', async function () {
           const tx = await this.rentalContract.connect(user1).rent([1n, 2n], [1000n, 2000n], [], 0n);
-          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 2000n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 2000n]);
           const blockTimestamp = await getBlockTimestamp(tx);
           await expect(tx)
             .to.emit(this.ocp, 'Consumed')
@@ -320,7 +305,7 @@ describe('EDULandRental', function () {
           const initialRentDuration = 1000n;
           const tx1 = await this.rentalContract.connect(user1).rent([1n], [initialRentDuration], [], 0n);
           const blockTimestamp1 = await getBlockTimestamp(tx1);
-          const initialRentCost = calculateFees(this.initialRentalsDuration, [initialRentDuration], [RENTAL_TYPE.CLEAN])[0];
+          const initialRentCost = calculateFees(this.initialRentalsDuration, [initialRentDuration])[0];
           await time.increase(200n);
 
           // extend 1n for maxRentalDuration, and rent 2n for 1000s
@@ -331,16 +316,12 @@ describe('EDULandRental', function () {
           const initialExpiry = blockTimestamp1 + initialRentDuration;
           const newExpiry = blockTimestamp2 + extendDuration;
 
-          const expectedCosts = calculateFees(
-            this.initialRentalsDuration + 1000n,
-            [
-              // NOTE: The actual extension period is equal to new expiry date - old expiry date,
-              // and this actual extension period will be used to calculate the maintenance fee.
-              newExpiry - initialExpiry,
-              1000n,
-            ],
-            [RENTAL_TYPE.EXTENSION, RENTAL_TYPE.CLEAN]
-          );
+          const expectedCosts = calculateFees(this.initialRentalsDuration + 1000n, [
+            // NOTE: The actual extension period is equal to new expiry date - old expiry date,
+            // and this actual extension period will be used to calculate the maintenance fee.
+            newExpiry - initialExpiry,
+            1000n,
+          ]);
 
           await expect(tx2)
             .to.emit(this.ocp, 'Consumed')
@@ -367,7 +348,7 @@ describe('EDULandRental', function () {
           await time.increase(1000n);
 
           const tx = await this.rentalContract.connect(user1).rent([1n, 2n], [1000n, 50n], [1n], 0n);
-          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n]);
           const blockTimestamp = await getBlockTimestamp(tx);
 
           await expect(tx)
@@ -394,7 +375,7 @@ describe('EDULandRental', function () {
           await time.increase(1000n);
 
           const tx = await this.rentalContract.connect(user1).rent([1n, 2n], [1000n, 50n], [1n], 0n);
-          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n]);
           const blockTimestamp = await getBlockTimestamp(tx);
 
           await expect(tx)
@@ -423,7 +404,7 @@ describe('EDULandRental', function () {
 
           const tx = await this.rentalContract.connect(user1).rent([1n, 2n], [1000n, 50n], [1n, 400n, 401n, 402n], 0n);
           const expiredTokensTime = 1000n + 1000n + 1000n;
-          const expectedCosts = calculateFees(this.initialRentalsDuration - expiredTokensTime, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+          const expectedCosts = calculateFees(this.initialRentalsDuration - expiredTokensTime, [1000n, 50n]);
           const blockTimestamp = await getBlockTimestamp(tx);
 
           await expect(tx)
@@ -451,7 +432,7 @@ describe('EDULandRental', function () {
           with collecting all expired tokens and silently skip non-rented/ non-expired token in collect token list`, async function () {
           await time.increase(1000n);
           const tx = await this.rentalContract.connect(user1).rent([1n], [this.minRentalDuration], [400n, 401n, 402n, 403n, 15n], 0n);
-          const expectedCost = calculateFees(this.initialRentalsDuration + 1000n * 3n, [this.minRentalDuration], [RENTAL_TYPE.CLEAN]).reduce(
+          const expectedCost = calculateFees(this.initialRentalsDuration + 1000n * 3n, [this.minRentalDuration]).reduce(
             (acc, cost) => acc + cost,
             0n
           );
@@ -601,12 +582,12 @@ describe('EDULandRental', function () {
 
       context('when successful', function () {
         it('rent a clean token', async function () {
-          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n], [RENTAL_TYPE.CLEAN]);
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n]);
           expect(await this.rentalContract.estimateRentalFee([20n], [1000n], [])).equal(expectedCosts.reduce((acc, cost) => acc + cost, 0n));
         });
 
         it('rent 2 clean tokens', async function () {
-          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n], [RENTAL_TYPE.CLEAN, RENTAL_TYPE.CLEAN]);
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 50n]);
           expect(await this.rentalContract.estimateRentalFee([20n, 21n], [1000n, 50n], [])).equal(
             expectedCosts.reduce((acc, cost) => acc + cost, 0n)
           );
@@ -620,11 +601,10 @@ describe('EDULandRental', function () {
 
           const extendDuration = 1000n;
           const expiryTimestampAfterExtend = BigInt((await ethers.provider.getBlock()).timestamp) + extendDuration;
-          const expectedCosts = calculateFees(
-            this.initialRentalsDuration + firstRentDuration,
-            [500n, expiryTimestampAfterExtend - firstRentExpiryTimestamp],
-            [RENTAL_TYPE.EXTENSION, RENTAL_TYPE.CLEAN]
-          );
+          const expectedCosts = calculateFees(this.initialRentalsDuration + firstRentDuration, [
+            500n,
+            expiryTimestampAfterExtend - firstRentExpiryTimestamp,
+          ]);
 
           expect(await this.rentalContract.connect(user1).estimateRentalFee([2n, 1n], [500n, extendDuration], [])).equal(
             expectedCosts.reduce((acc, cost) => acc + cost, 0n)
@@ -639,11 +619,10 @@ describe('EDULandRental', function () {
 
           const extendDuration = 1000n;
           const expiryTimestampAfterExtend = BigInt((await ethers.provider.getBlock()).timestamp) + extendDuration;
-          const expectedCosts = calculateFees(
-            this.initialRentalsDuration + firstRentDuration - 2n * 1000n,
-            [500n, expiryTimestampAfterExtend - firstRentExpiryTimestamp],
-            [RENTAL_TYPE.EXTENSION, RENTAL_TYPE.CLEAN]
-          );
+          const expectedCosts = calculateFees(this.initialRentalsDuration + firstRentDuration - 2n * 1000n, [
+            500n,
+            expiryTimestampAfterExtend - firstRentExpiryTimestamp,
+          ]);
 
           expect(await this.rentalContract.connect(user1).estimateRentalFee([2n, 1n], [500n, extendDuration], [400n, 401n])).equal(
             expectedCosts.reduce((acc, cost) => acc + cost, 0n)
