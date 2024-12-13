@@ -49,7 +49,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
     uint256 public totalOngoingRentalTime;
 
-    event Rental(address indexed renter, uint256[] tokenIds, RentalInfo[] rentals);
+    event Rental(address indexed renter, uint256[] tokenIds, uint256[] beginDates, uint256[] endDates, uint256[] fees);
     event Collected(uint256[] tokenIds);
     event LandPriceHelperUpdated(address newRentalFeeHelper);
     event MaxTokenSupplyUpdated(uint256 newMaxTokenSupply);
@@ -173,23 +173,25 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         return totalFee;
     }
 
-    function rent(uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredTokenIds, uint256 maxFee) public {
-        if (tokenIds.length > maxRentalCountPerCall) {
-            revert RentalCountPerCallLimitExceeded();
-        }
-        if (tokenIds.length != durations.length) {
-            revert InconsistentArrayLengths();
-        }
-
+    function rent(uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredTokenIds, uint256 maxFee) public {            
         address account = _msgSender();
         uint256[] memory tokenIds_ = tokenIds;
         uint256[] memory durations_ = durations;
+
+        if (tokenIds_.length > maxRentalCountPerCall) {
+            revert RentalCountPerCallLimitExceeded();
+        }
+        if (tokenIds_.length != durations_.length) {
+            revert InconsistentArrayLengths();
+        }
 
         uint256 currentTime = block.timestamp;
         uint256 postCollectionTotalOngoingRentalTime = totalOngoingRentalTime - _collectExpiredTokens(expiredTokenIds, currentTime, false);
         uint256 landPrice = _estimateLandPrice(postCollectionTotalOngoingRentalTime);
 
-        RentalInfo[] memory rentalInfos = new RentalInfo[](tokenIds.length);
+        uint256[] memory beginDates = new uint256[](tokenIds_.length);
+        uint256[] memory endDates = new uint256[](tokenIds_.length);
+        uint256[] memory fees = new uint256[](tokenIds_.length);
         uint256 totalDuration;
         uint256 totalFee;
         for (uint256 i = 0; i < tokenIds_.length; i++) {
@@ -216,26 +218,35 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
                 EDU_LAND.safeMint(account, tokenId, "");
                 rental.beginDate = currentTime;
-                rental.endDate = currentTime + duration;
+                uint256 endDate = currentTime + duration;
+                rental.endDate = endDate;
                 uint256 fee = landPrice + (duration * maintenanceFee) / maintenanceFeeDenominator;
                 rental.fee = fee;
                 totalFee += fee;
+
+                beginDates[i] = currentTime;
+                endDates[i] = endDate;
+                fees[i] = fee;
             } else if (account == EDU_LAND.ownerOf(tokenId) && currentTime < rental.endDate) {
                 uint256 newEndDate = currentTime + duration;
-                if (newEndDate - minRentalDuration < rental.endDate) {
+                uint256 oldEndDate = rental.endDate;
+                if (newEndDate - minRentalDuration < oldEndDate) {
                     revert RentalDurationTooLow(tokenId);
                 }
 
-                uint256 extendedDuration = newEndDate - rental.endDate;
+                uint256 extendedDuration = newEndDate - oldEndDate;
                 rental.endDate = newEndDate;
                 uint256 fee = landPrice + (extendedDuration * maintenanceFee) / maintenanceFeeDenominator;
                 rental.fee += fee;
                 totalFee += fee;
+
+                beginDates[i] = oldEndDate;
+                endDates[i] = newEndDate;
+                fees[i] = fee;
             } else {
                 revert TokenAlreadyRented(tokenId);
             }
 
-            rentalInfos[i] = rental;
             totalDuration += duration;
         }
 
@@ -246,7 +257,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         totalOngoingRentalTime = postCollectionTotalOngoingRentalTime + totalDuration;
 
         POINTS.consume(account, totalFee, RENTAL_CONSUME_CODE);
-        emit Rental(account, tokenIds_, rentalInfos);
+        emit Rental(account, tokenIds_, beginDates, endDates, fees);
     }
 
     function renterOf(uint256 tokenId) public view returns (address) {
