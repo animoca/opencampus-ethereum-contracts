@@ -121,7 +121,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         uint256[] calldata durations,
         uint256[] calldata expiredTokenIds
     ) public view returns (uint256 fee) {
-        if (tokenIds.length >= maxRentalCountPerCall) {
+        if (tokenIds.length > maxRentalCountPerCall) {
             revert RentalCountPerCallLimitExceeded();
         }
 
@@ -174,7 +174,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     }
 
     function rent(uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredTokenIds, uint256 maxFee) public {
-        if (tokenIds.length >= maxRentalCountPerCall) {
+        if (tokenIds.length > maxRentalCountPerCall) {
             revert RentalCountPerCallLimitExceeded();
         }
         if (tokenIds.length != durations.length) {
