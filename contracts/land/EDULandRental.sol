@@ -65,6 +65,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     error TokenAlreadyRented(uint256 tokenId);
     error TokenNotRented(uint256 tokenId);
     error TokenNotExpired(uint256 tokenId);
+    error NoTokenCollected();
     error UnsupportedTokenId(uint256 tokenId);
     error FeeExceeded(uint256 calculatedFee, uint256 maxFee);
 
@@ -114,6 +115,10 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         }
 
         return elapsedTime;
+    }
+
+    function estimateLandPrice(uint256 totalOngoingRentalTime_) public view returns (uint256) {
+        return landPriceHelper.calculatePrice(totalOngoingRentalTime_);
     }
 
     function estimateRentalFee(
@@ -339,13 +344,11 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
         if (hasExpiredToken) {
             emit Collected(collectedTokenIds);
+        } else if (revertOnCollectionFailed) {
+            revert NoTokenCollected();
         }
 
         return finishedRentalTime;
-    }
-
-    function estimateLandPrice(uint256 totalOngoingRentalTime_) public view returns (uint256) {
-        return landPriceHelper.calculatePrice(totalOngoingRentalTime_);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
