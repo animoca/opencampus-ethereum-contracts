@@ -141,7 +141,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 revert UnsupportedTokenId(0);
             }
 
-            if (tokenId >= maxTokenSupply) {
+            if (tokenId > maxTokenSupply) {
                 revert UnsupportedTokenId(tokenId);
             }
 
@@ -192,7 +192,6 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         uint256[] memory beginDates = new uint256[](tokenIds_.length);
         uint256[] memory endDates = new uint256[](tokenIds_.length);
         uint256[] memory fees = new uint256[](tokenIds_.length);
-        uint256 totalDuration;
         uint256 totalFee;
         for (uint256 i = 0; i < tokenIds_.length; i++) {
             uint256 tokenId = tokenIds_[i];
@@ -202,7 +201,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 revert UnsupportedTokenId(0);
             }
 
-            if (tokenId >= maxTokenSupply) {
+            if (tokenId > maxTokenSupply) {
                 revert UnsupportedTokenId(tokenId);
             }
 
@@ -223,6 +222,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 uint256 fee = landPrice + (duration * maintenanceFee) / maintenanceFeeDenominator;
                 rental.fee = fee;
                 totalFee += fee;
+                postCollectionTotalOngoingRentalTime += duration;
 
                 beginDates[i] = currentTime;
                 endDates[i] = endDate;
@@ -239,6 +239,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 uint256 fee = landPrice + (extendedDuration * maintenanceFee) / maintenanceFeeDenominator;
                 rental.fee += fee;
                 totalFee += fee;
+                postCollectionTotalOngoingRentalTime += extendedDuration;
 
                 beginDates[i] = oldEndDate;
                 endDates[i] = newEndDate;
@@ -246,15 +247,13 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
             } else {
                 revert TokenAlreadyRented(tokenId);
             }
-
-            totalDuration += duration;
         }
 
         if (maxFee != 0 && totalFee > maxFee) {
             revert FeeExceeded(totalFee, maxFee);
         }
 
-        totalOngoingRentalTime = postCollectionTotalOngoingRentalTime + totalDuration;
+        totalOngoingRentalTime = postCollectionTotalOngoingRentalTime;
 
         POINTS.consume(account, totalFee, RENTAL_CONSUME_CODE);
         emit Rental(account, tokenIds_, beginDates, endDates, fees);
