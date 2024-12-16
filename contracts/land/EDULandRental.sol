@@ -178,7 +178,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         return totalFee;
     }
 
-    function rent(uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredTokenIds, uint256 maxFee) public {            
+    function rent(uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredTokenIds, uint256 maxFee) public {
         uint256[] memory tokenIds_ = tokenIds;
         uint256[] memory durations_ = durations;
 
