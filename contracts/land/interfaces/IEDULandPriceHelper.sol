@@ -6,5 +6,5 @@ interface IEDULandPriceHelper {
     /// @notice Calulate the EDULand price based on the total effective rental time.
     /// @param totalOngoingRentalTime The total effective rental time.
     /// @return The calulated EDULand price.
-    function calculatePrice(uint256 totalOngoingRentalTime) external pure returns (uint256);
+    function calculatePrice(uint256 totalOngoingRentalTime) external view returns (uint256);
 }

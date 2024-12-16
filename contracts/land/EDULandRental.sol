@@ -121,17 +121,17 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         uint256[] calldata durations,
         uint256[] calldata expiredTokenIds
     ) public view returns (uint256 fee) {
-        if (tokenIds.length > maxRentalCountPerCall) {
-            revert RentalCountPerCallLimitExceeded();
-        }
-
         if (tokenIds.length != durations.length) {
             revert InconsistentArrayLengths();
         }
 
+        if (tokenIds.length > maxRentalCountPerCall) {
+            revert RentalCountPerCallLimitExceeded();
+        }
+
         uint256 currentTime = block.timestamp;
         uint256 elapsedTime = calculateElapsedTimeForExpiredTokens(expiredTokenIds);
-        uint256 landPrice = _estimateLandPrice(totalOngoingRentalTime - elapsedTime);
+        uint256 landPrice = estimateLandPrice(totalOngoingRentalTime - elapsedTime);
         uint256 totalFee;
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 duration = durations[i];
@@ -174,20 +174,22 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     }
 
     function rent(uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredTokenIds, uint256 maxFee) public {            
-        address account = _msgSender();
         uint256[] memory tokenIds_ = tokenIds;
         uint256[] memory durations_ = durations;
 
-        if (tokenIds_.length > maxRentalCountPerCall) {
-            revert RentalCountPerCallLimitExceeded();
-        }
         if (tokenIds_.length != durations_.length) {
             revert InconsistentArrayLengths();
         }
 
+        if (tokenIds_.length > maxRentalCountPerCall) {
+            revert RentalCountPerCallLimitExceeded();
+        }
+
         uint256 currentTime = block.timestamp;
         uint256 postCollectionTotalOngoingRentalTime = totalOngoingRentalTime - _collectExpiredTokens(expiredTokenIds, currentTime, false);
-        uint256 landPrice = _estimateLandPrice(postCollectionTotalOngoingRentalTime);
+        uint256 landPrice = estimateLandPrice(postCollectionTotalOngoingRentalTime);
+
+        address account = _msgSender();
 
         uint256[] memory beginDates = new uint256[](tokenIds_.length);
         uint256[] memory endDates = new uint256[](tokenIds_.length);
@@ -342,7 +344,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         return finishedRentalTime;
     }
 
-    function _estimateLandPrice(uint256 totalOngoingRentalTime_) internal view returns (uint256) {
+    function estimateLandPrice(uint256 totalOngoingRentalTime_) public view returns (uint256) {
         return landPriceHelper.calculatePrice(totalOngoingRentalTime_);
     }
 
