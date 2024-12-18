@@ -12,9 +12,9 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
 
     uint256 public rewardPerSecond;
 
-    // batchNumber => reward per land
+    /// @notice batchNumber => reward per land
     mapping(uint256 => uint256) public rewardPerLandOfBatch;
-    // batchNumber => tokenId => recipient
+    /// @notice batchNumber => tokenId => recipient
     mapping(uint256 => mapping(uint256 => address)) public rewardsRecipients;
 
     /// @notice Emitted when rewardPerSecond is updated.
