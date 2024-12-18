@@ -91,6 +91,12 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     /// @dev Reverts if the landAddress or points address is a zero address.
     /// @dev ContractOwnership is required to initiate TokenRecovery
     /// @dev ForwarderRegistryContext is required to handle meta transactions
+    /// @dev emits a {LandPriceHelperUpdated} event
+    /// @dev emits a {MaintenanceFeeUpdated} event
+    /// @dev emits a {MinRentalDurationUpdated} event
+    /// @dev emits a {MaxRentalDurationUpdated} event
+    /// @dev emits a {MaxRentalCountPerCallUpdated} event
+    /// @dev emits a {MaxTokenSupplyUpdated} event
     /// @param landAddress The land address
     /// @param pointsAddress The points address
     /// @param landPriceHelperAddress The land price helper address
@@ -147,6 +153,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
     /// @notice Calculates the elapsed time for expired tokens. Non expired tokens are considered to have 0 elapsed time.
     /// @param tokenIds The tokenIds you are going to calculate the elapsed time for
+    /// @return elapsedTime The elapsed time
     function calculateElapsedTimeForExpiredTokens(uint256[] calldata tokenIds) public view returns (uint256 elapsedTime) {
         uint256 currentTime = block.timestamp;
         for (uint256 i = 0; i < tokenIds.length; i++) {
@@ -162,7 +169,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
     /// @notice Estimates the current land price
     /// @param totalOngoingRentalTime_ The total ongoing rental time
-    /// @return The estimated land price
+    /// @return estimatedLandPrice The estimated land price
     function estimateLandPrice(uint256 totalOngoingRentalTime_) public view returns (uint256) {
         return landPriceHelper.calculatePrice(totalOngoingRentalTime_);
     }
@@ -245,8 +252,8 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     /// @dev Reverts if the duration is less than minRentalDuration
     /// @dev Reverts if the token is already rented
     /// @dev Reverts if the total fee is greater than maxFee
-    /// @dev Emits a {Rental} event.
     /// @dev Emits a {Collected} event if at least one expired token is successfully being collected via this write function.
+    /// @dev Emits a {Rental} event.
     /// @param tokenIds The tokens that you are going to rent
     /// @param durations The rental durations for each token
     /// @param expiredTokenIds The expired tokens that you are going to collect just before renting
