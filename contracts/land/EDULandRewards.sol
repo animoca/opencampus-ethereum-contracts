@@ -17,10 +17,22 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     // batchNumber => tokenId => recipient
     mapping(uint256 => mapping(uint256 => address)) public rewardsRecipients;
 
+    /// @notice Emitted when rewardPerSecond is updated.
     event RewardPerSecondUpdated(uint256 rewardPerSecond);
+
+    /// @notice Emitted when batch is finalized.
     event BatchFinalized(uint256 indexed batchNumber, uint256 rewardPerLand);
+
+    /// @notice Emitted when reward is claimed.
     event Claimed(address indexed account, uint256 indexed batchNumber, uint256 indexed tokenId, uint256 amount);
 
+    /// @notice Creates a EDU Land Rewards contract
+    /// @dev emits a {RewardPerSecondUpdated} event
+    /// @param maxRewardTimeWindow The maximum reward time window
+    /// @param referee The address of the referee contract
+    /// @param landAddress The address of the land contract
+    /// @param rewardToken The address of the reward token
+    /// @param rewardPerSecond_ The reward per second
     constructor(
         uint256 maxRewardTimeWindow,
         address referee,
@@ -40,15 +52,22 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
         _grantRole(OWNER_ROLE, msg.sender);
     }
 
-    function setRewardPerSecond(uint256 rewardPerSecond_) external onlyRole(REWARDS_CONTROLLER_ROLE) {
-        rewardPerSecond = rewardPerSecond_;
-        emit RewardPerSecondUpdated(rewardPerSecond_);
+    /// @notice Sets the max token supply
+    /// @dev Reverts with {AccessControlUnauthorizedAccount} if the sender is not the operator.
+    /// @dev Emits a {RewardPerSecondUpdated} event.
+    /// @param newRewardPerSecond The new new reward per second to be set
+    function setRewardPerSecond(uint256 newRewardPerSecond) external onlyRole(REWARDS_CONTROLLER_ROLE) {
+        rewardPerSecond = newRewardPerSecond;
+        emit RewardPerSecondUpdated(newRewardPerSecond);
     }
 
+    /// @inheritdoc NodeRewardsBase
     function _onAttest(uint256 batchNumber, uint256 tokenId) internal override {
         rewardsRecipients[batchNumber][tokenId] = NODE_KEY.ownerOf(tokenId);
     }
 
+    /// @inheritdoc NodeRewardsBase
+    /// @dev Emits a {BatchFinalized} event.
     function _onFinalize(
         uint256 batchNumber,
         uint256 l1NodeConfirmedTimestamp,
@@ -63,6 +82,8 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
         }
     }
 
+    /// @inheritdoc NodeRewardsBase
+    /// @dev Emits a {Claimed} event.
     function _claimReward(uint256 tokenId, uint256[] calldata batchNumbers) internal override {
         for (uint256 i; i < batchNumbers.length; i++) {
             uint256 batchNumber = batchNumbers[i];

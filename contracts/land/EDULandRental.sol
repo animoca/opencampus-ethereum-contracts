@@ -49,15 +49,33 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
     uint256 public totalOngoingRentalTime;
 
+    /// @notice Emitted when tokens are rented.
     event Rental(address indexed renter, uint256[] tokenIds, uint256[] beginDates, uint256[] endDates, uint256[] fees);
+
+    /// @notice Emitted when tokens are collected.
     event Collected(uint256[] tokenIds);
-    event LandPriceHelperUpdated(address newRentalFeeHelper);
+
+    /// @notice Emitted when the land price helper is updated.
+    event LandPriceHelperUpdated(address newLandPriceHelper);
+
+    /// @notice Emitted when max token supply is updated.
     event MaxTokenSupplyUpdated(uint256 newMaxTokenSupply);
+
+    /// @notice Emitted when maintenance fee or/and maintenance fee denominator is/are updated.
     event MaintenanceFeeUpdated(uint256 newMaintenanceFee, uint256 newMaintenanceFeeDenominator);
+
+    /// @notice Emitted when min rental duration is updated.
     event MinRentalDurationUpdated(uint256 newMinRentalDuration);
+
+    /// @notice Emitted when max rental duration is updated.
     event MaxRentalDurationUpdated(uint256 newMaxRentalDuration);
+
+    /// @notice Emitted when max rental count per call is updated.
     event MaxRentalCountPerCallUpdated(uint256 newMaxRentalCountPerCall);
 
+    /// Custom errors
+    error InvalidLandAddress();
+    error InvalidPointsAddress();
     error InvalidTokenIdsParam();
     error RentalDurationTooLow(uint256 tokenId);
     error RentalDurationTooHigh(uint256 tokenId);
@@ -69,6 +87,20 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     error UnsupportedTokenId(uint256 tokenId);
     error FeeExceeded(uint256 calculatedFee, uint256 maxFee);
 
+    /// @notice Creates a new land rental contract
+    /// @dev Reverts if the landAddress or points address is a zero address.
+    /// @dev ContractOwnership is required to initiate TokenRecovery
+    /// @dev ForwarderRegistryContext is required to handle meta transactions
+    /// @param landAddress The land address
+    /// @param pointsAddress The points address
+    /// @param landPriceHelperAddress The land price helper address
+    /// @param maintenanceFee_ The maintenance fee
+    /// @param maintenanceFeeDenominator_ The maintenance fee denominator
+    /// @param minRentalDuration_ The minimum rental duration
+    /// @param maxRentalDuration_ The maximum rental duration
+    /// @param maxRentalCountPerCall_ The maximum rental count per call
+    /// @param maxTokenSupply_ The maximum token supply
+    /// @param forwarderRegistry The forwarder registry
     constructor(
         address landAddress,
         address pointsAddress,
@@ -81,7 +113,16 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         uint256 maxTokenSupply_,
         IForwarderRegistry forwarderRegistry
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
+        if (landAddress == address(0)) {
+            revert InvalidLandAddress();
+        }
+
         EDU_LAND = IEDULand(landAddress);
+
+        if (pointsAddress == address(0)) {
+            revert InvalidPointsAddress();
+        }
+
         POINTS = Points(pointsAddress);
 
         landPriceHelper = IEDULandPriceHelper(landPriceHelperAddress);
@@ -104,6 +145,8 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         emit MaxTokenSupplyUpdated(maxTokenSupply_);
     }
 
+    /// @notice Calculates the elapsed time for expired tokens. Non expired tokens are considered to have 0 elapsed time.
+    /// @param tokenIds The tokenIds you are going to calculate the elapsed time for
     function calculateElapsedTimeForExpiredTokens(uint256[] calldata tokenIds) public view returns (uint256 elapsedTime) {
         uint256 currentTime = block.timestamp;
         for (uint256 i = 0; i < tokenIds.length; i++) {
@@ -117,10 +160,25 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         return elapsedTime;
     }
 
+    /// @notice Estimates the current land price
+    /// @param totalOngoingRentalTime_ The total ongoing rental time
+    /// @return The estimated land price
     function estimateLandPrice(uint256 totalOngoingRentalTime_) public view returns (uint256) {
         return landPriceHelper.calculatePrice(totalOngoingRentalTime_);
     }
 
+    /// @notice Estimates the rental fee
+    /// @dev Reverts if tokenIds and durations have inconsistent lengths
+    /// @dev Reverts if the length of tokenIds is greater than maxRentalCountPerCall
+    /// @dev Reverts if the tokenId is 0
+    /// @dev Reverts if the tokenId is greater than maxTokenSupply
+    /// @dev Reverts if the duration is greater than maxRentalDuration
+    /// @dev Reverts if the duration is less than minRentalDuration
+    /// @dev Reverts if the token is already rented
+    /// @param tokenIds The tokens that you are going to rent
+    /// @param durations The rental durations for each token
+    /// @param expiredTokenIds The expired tokens that you are going to collect just before renting
+    /// @return fee the estimated rental fee
     function estimateRentalFee(
         uint256[] calldata tokenIds,
         uint256[] calldata durations,
@@ -178,6 +236,21 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         return totalFee;
     }
 
+    /// @notice Rents the token(s)
+    /// @dev Reverts if tokenIds and durations have inconsistent lengths
+    /// @dev Reverts if the length of tokenIds is greater than maxRentalCountPerCall
+    /// @dev Reverts if the tokenId is 0
+    /// @dev Reverts if the tokenId is greater than maxTokenSupply
+    /// @dev Reverts if the duration is greater than maxRentalDuration
+    /// @dev Reverts if the duration is less than minRentalDuration
+    /// @dev Reverts if the token is already rented
+    /// @dev Reverts if the total fee is greater than maxFee
+    /// @dev Emits an {Rental} event.
+    /// @dev Emits a {Collected} event if at least one expired token is successfully being collected via this write function.
+    /// @param tokenIds The tokens that you are going to rent
+    /// @param durations The rental durations for each token
+    /// @param expiredTokenIds The expired tokens that you are going to collect just before renting
+    /// @param maxFee The maximum fee that you are going to pay
     function rent(uint256[] calldata tokenIds, uint256[] calldata durations, uint256[] calldata expiredTokenIds, uint256 maxFee) public {
         uint256[] memory tokenIds_ = tokenIds;
         uint256[] memory durations_ = durations;
@@ -266,26 +339,31 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         emit Rental(account, tokenIds_, beginDates, endDates, fees);
     }
 
-    function renterOf(uint256 tokenId) public view returns (address) {
-        if (block.timestamp < rentals[tokenId].endDate) {
-            return EDU_LAND.ownerOf(tokenId);
-        } else {
-            revert TokenNotRented(tokenId);
-        }
-    }
-
+    /// @notice Sets the land price helper address
+    /// @dev Reverts with {NotRoleHolder} if the sender is not the operator.
+    /// @dev Emits a {LandPriceHelperUpdated} event.
+    /// @param newLandPriceHelper The new land price helper address to set
     function setLandPriceHelper(address newLandPriceHelper) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         landPriceHelper = IEDULandPriceHelper(newLandPriceHelper);
         emit LandPriceHelperUpdated(newLandPriceHelper);
     }
 
+    /// @notice Sets the max token supply
+    /// @dev Reverts with {NotRoleHolder} if the sender is not the operator.
+    /// @dev Emits a {MaxTokenSupplyUpdated} event.
+    /// @param newMaxTokenSupply The new max token supply to set
     function setMaxTokenSupply(uint256 newMaxTokenSupply) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         maxTokenSupply = newMaxTokenSupply;
         emit MaxTokenSupplyUpdated(newMaxTokenSupply);
     }
 
+    /// @notice Sets the maintenance fee and maintenance fee denominator
+    /// @dev Reverts with {NotRoleHolder} if the sender is not the operator.
+    /// @dev Emits a {MaintenanceFeeUpdated} event.
+    /// @param newMaintenanceFee The new maintenance fee to set
+    /// @param newMaintenanceFeeDenominator The new maintenance fee denominator to set
     function setMaintenanceFee(uint256 newMaintenanceFee, uint256 newMaintenanceFeeDenominator) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         maintenanceFee = newMaintenanceFee;
@@ -293,41 +371,60 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         emit MaintenanceFeeUpdated(newMaintenanceFee, newMaintenanceFeeDenominator);
     }
 
+    /// @notice Sets the min rental duration
+    /// @dev Reverts with {NotRoleHolder} if the sender is not the operator.
+    /// @dev Emits a {MinRentalDurationUpdated} event.
+    /// @param newMinRentalDuration The new min rental duration to set
     function setMinRentalDuration(uint256 newMinRentalDuration) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         minRentalDuration = newMinRentalDuration;
         emit MinRentalDurationUpdated(newMinRentalDuration);
     }
 
+    /// @notice Sets the max rental duration
+    /// @dev Reverts with {NotRoleHolder} if the sender is not the operator.
+    /// @dev Emits a {MaxRentalDurationUpdated} event.
+    /// @param newMaxRentalDuration The new max rental duration to set
     function setMaxRentalDuration(uint256 newMaxRentalDuration) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         maxRentalDuration = newMaxRentalDuration;
         emit MaxRentalDurationUpdated(newMaxRentalDuration);
     }
 
+    /// @notice Sets the max rental count per call
+    /// @dev Reverts with {NotRoleHolder} if the sender is not the operator.
+    /// @dev Emits a {MaxRentalCountPerCallUpdated} event.
+    /// @param newRentalCountPerCall The new max rental count per call to set
     function setMaxRentalCountPerCall(uint256 newRentalCountPerCall) external {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         maxRentalCountPerCall = newRentalCountPerCall;
         emit MaxRentalCountPerCallUpdated(newRentalCountPerCall);
     }
 
+    /// @notice Collects the expired tokens
+    /// @dev Emits a {Collected} event.
+    /// @param tokenIds The tokens that you are going to collect
     function collectExpiredTokens(uint256[] calldata tokenIds) public {
-        uint256 finishedRentalTime = _collectExpiredTokens(tokenIds, block.timestamp, true);
-        totalOngoingRentalTime -= finishedRentalTime;
+        uint256 elapsedRentalTime = _collectExpiredTokens(tokenIds, block.timestamp, true);
+        totalOngoingRentalTime -= elapsedRentalTime;
     }
 
+    /// @notice Collects the expired tokens
+    /// @dev Emits a {Collected} event if at least one expired token is successfully being collected via this function.
+    /// @param tokenIds The tokens that you are going to collect
+    /// @return elapsedRentalTime The elapsed rental time
     function _collectExpiredTokens(
         uint256[] calldata tokenIds,
         uint256 blockTime,
         bool revertOnCollectionFailed
-    ) internal returns (uint256 finishedRentalTime) {
+    ) internal returns (uint256 elapsedRentalTime) {
         uint256[] memory collectedTokenIds = new uint256[](tokenIds.length);
         bool hasExpiredToken = false;
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
             RentalInfo storage rental = rentals[tokenId];
             if (rental.endDate != 0 && blockTime >= rental.endDate) {
-                finishedRentalTime += rental.endDate - rental.beginDate;
+                elapsedRentalTime += rental.endDate - rental.beginDate;
 
                 rental.beginDate = 0;
                 rental.endDate = 0;
@@ -348,7 +445,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
             revert NoTokenCollected();
         }
 
-        return finishedRentalTime;
+        return elapsedRentalTime;
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
