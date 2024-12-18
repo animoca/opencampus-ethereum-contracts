@@ -245,7 +245,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     /// @dev Reverts if the duration is less than minRentalDuration
     /// @dev Reverts if the token is already rented
     /// @dev Reverts if the total fee is greater than maxFee
-    /// @dev Emits an {Rental} event.
+    /// @dev Emits a {Rental} event.
     /// @dev Emits a {Collected} event if at least one expired token is successfully being collected via this write function.
     /// @param tokenIds The tokens that you are going to rent
     /// @param durations The rental durations for each token
