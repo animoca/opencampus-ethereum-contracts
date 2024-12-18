@@ -58,10 +58,10 @@ describe('EDULandRental', function () {
 
   const fixture = async function () {
     const metadataResolverAddress = await deployTokenMetadataResolverWithBaseURI();
-    const forwarderRegistryAddress = await getForwarderRegistryAddress();
+    this.forwarderRegistryAddress = await getForwarderRegistryAddress();
 
-    this.nodeKeyContract = await deployContract('EDULand', 'EDU Land', 'EDULand', metadataResolverAddress);
-    await this.nodeKeyContract.grantRole(await this.nodeKeyContract.OPERATOR_ROLE(), deployer.address);
+    this.eduLandContract = await deployContract('EDULand', 'EDU Land', 'EDULand', metadataResolverAddress);
+    await this.eduLandContract.grantRole(await this.eduLandContract.OPERATOR_ROLE(), deployer.address);
 
     this.nodeKeyContractTotalSupply = 5000n;
     this.minRentalDuration = 1n;
@@ -70,20 +70,20 @@ describe('EDULandRental', function () {
 
     const initialOCPAmount = ethers.MaxUint256 / 2n;
 
-    this.ocp = await deployContract('Points', forwarderRegistryAddress);
-    await this.ocp.grantRole(await this.ocp.DEPOSITOR_ROLE(), deployer);
+    this.pointsContract = await deployContract('Points', this.forwarderRegistryAddress);
+    await this.pointsContract.grantRole(await this.pointsContract.DEPOSITOR_ROLE(), deployer);
 
     const ocpReasonCode = keccak256('TEST');
-    await this.ocp.deposit(deployer, initialOCPAmount, ocpReasonCode);
-    await this.ocp.deposit(user1, initialOCPAmount, ocpReasonCode);
-    await this.ocp.deposit(user2, initialOCPAmount, ocpReasonCode);
-    await this.ocp.deposit(user3, initialOCPAmount, ocpReasonCode);
+    await this.pointsContract.deposit(deployer, initialOCPAmount, ocpReasonCode);
+    await this.pointsContract.deposit(user1, initialOCPAmount, ocpReasonCode);
+    await this.pointsContract.deposit(user2, initialOCPAmount, ocpReasonCode);
+    await this.pointsContract.deposit(user3, initialOCPAmount, ocpReasonCode);
 
     this.rentalFeeHelper = await deployContract('EDULandPriceHelper');
     this.rentalContract = await deployContract(
       'EDULandRentalMock',
-      this.nodeKeyContract.target,
-      this.ocp.target,
+      this.eduLandContract.target,
+      this.pointsContract.target,
       this.rentalFeeHelper.target,
       DEFAULT_MAINTENANCE_FEE,
       DEFAULT_MAINTENANCE_FEE_DENOMINATOR,
@@ -91,15 +91,15 @@ describe('EDULandRental', function () {
       this.maxRentalDuration,
       this.maxRentalCountPerCall,
       this.nodeKeyContractTotalSupply,
-      forwarderRegistryAddress
+      this.forwarderRegistryAddress
     );
 
     this.rentalReasonCode = await this.rentalContract.RENTAL_CONSUME_CODE();
 
-    await this.ocp.grantRole(await this.ocp.ADMIN_ROLE(), deployer);
-    await this.ocp.grantRole(await this.ocp.SPENDER_ROLE(), this.rentalContract.target);
-    await this.ocp.addConsumeReasonCodes([this.rentalReasonCode]);
-    await this.nodeKeyContract.grantRole(await this.nodeKeyContract.OPERATOR_ROLE(), this.rentalContract.target);
+    await this.pointsContract.grantRole(await this.pointsContract.ADMIN_ROLE(), deployer);
+    await this.pointsContract.grantRole(await this.pointsContract.SPENDER_ROLE(), this.rentalContract.target);
+    await this.pointsContract.addConsumeReasonCodes([this.rentalReasonCode]);
+    await this.eduLandContract.grantRole(await this.eduLandContract.OPERATOR_ROLE(), this.rentalContract.target);
     await this.rentalContract.grantRole(await this.rentalContract.OPERATOR_ROLE(), rentalOperator);
 
     this.initialRentals = [
@@ -137,20 +137,53 @@ describe('EDULandRental', function () {
     await loadFixture(fixture, this);
   });
 
-  context('renterOf(uint256 tokenId) public view returns (address)', function () {
-    it('Node key never rented', async function () {
-      expectRevert(this.rentalContract.renterOf(1n), this.rentalContract, 'TokenNotRented', 1n);
+  context('constructor', function () {
+    it('initializes the contract', async function () {
+      expect(await this.rentalContract.EDU_LAND()).to.equal(this.eduLandContract.target);
+      expect(await this.rentalContract.POINTS()).to.equal(this.pointsContract.target);
+      expect(await this.rentalContract.landPriceHelper()).to.equal(this.rentalFeeHelper.target);
+      expect(await this.rentalContract.maintenanceFee()).to.equal(DEFAULT_MAINTENANCE_FEE);
+      expect(await this.rentalContract.maintenanceFeeDenominator()).to.equal(DEFAULT_MAINTENANCE_FEE_DENOMINATOR);
+      expect(await this.rentalContract.minRentalDuration()).to.equal(this.minRentalDuration);
+      expect(await this.rentalContract.maxRentalDuration()).to.equal(this.maxRentalDuration);
+      expect(await this.rentalContract.maxRentalCountPerCall()).to.equal(this.maxRentalCountPerCall);
+      expect(await this.rentalContract.maxTokenSupply()).to.equal(this.nodeKeyContractTotalSupply);
     });
 
-    it('Node key rented', async function () {
-      await this.rentalContract.connect(user1).rent([1n], [10n], [], 0n);
-      expect(await this.rentalContract.renterOf(1n)).to.be.equal(user1);
+    it('reverts if EDU Land contract is the zero address', async function () {
+      await expect(
+        deployContract(
+          'EDULandRentalMock',
+          ZeroAddress,
+          this.pointsContract.target,
+          this.rentalFeeHelper.target,
+          DEFAULT_MAINTENANCE_FEE,
+          DEFAULT_MAINTENANCE_FEE_DENOMINATOR,
+          this.minRentalDuration,
+          this.maxRentalDuration,
+          this.maxRentalCountPerCall,
+          this.nodeKeyContractTotalSupply,
+          this.forwarderRegistryAddress
+        )
+      ).to.be.revertedWithCustomError(this.rentalContract, 'InvalidLandAddress');
     });
 
-    it('Node key rented, and expired', async function () {
-      await this.rentalContract.connect(user1).rent([1n], [10n], [], 0n);
-      await time.increase(10n);
-      expectRevert(this.rentalContract.renterOf(1n), this.rentalContract, 'TokenNotRented', 1n);
+    it('reverts if Points contract is the zero address', async function () {
+      await expect(
+        deployContract(
+          'EDULandRentalMock',
+          this.eduLandContract.target,
+          ZeroAddress,
+          this.rentalFeeHelper.target,
+          DEFAULT_MAINTENANCE_FEE,
+          DEFAULT_MAINTENANCE_FEE_DENOMINATOR,
+          this.minRentalDuration,
+          this.maxRentalDuration,
+          this.maxRentalCountPerCall,
+          this.nodeKeyContractTotalSupply,
+          this.forwarderRegistryAddress
+        )
+      ).to.be.revertedWithCustomError(this.rentalContract, 'InvalidPointsAddress');
     });
   });
 
@@ -250,7 +283,7 @@ describe('EDULandRental', function () {
       it('signer does not have enough balance to rent', async function () {
         const expectedCosts = calculateFees(this.initialRentalsDuration, [2000n, 1000n]);
         await expect(this.rentalContract.connect(user4).rent([1n, 2n], [2000n, 1000n], [], 0n))
-          .to.be.revertedWithCustomError(this.ocp, 'InsufficientBalance')
+          .to.be.revertedWithCustomError(this.pointsContract, 'InsufficientBalance')
           .withArgs(
             user4,
             expectedCosts.reduce((acc, cost) => acc + cost, 0n)
@@ -271,7 +304,7 @@ describe('EDULandRental', function () {
           const expectedCost = calculateFees(this.initialRentalsDuration, [this.minRentalDuration]).reduce((acc, cost) => acc + cost, 0n);
           const blockTimestamp = await getBlockTimestamp(tx);
           await expect(tx)
-            .to.emit(this.ocp, 'Consumed')
+            .to.emit(this.pointsContract, 'Consumed')
             .withArgs(this.rentalContract, this.rentalReasonCode, user1, expectedCost)
             .to.emit(this.rentalContract, 'Rental')
             .withArgs(user1, [1n], [blockTimestamp], [blockTimestamp + this.minRentalDuration], [expectedCost]);
@@ -287,7 +320,7 @@ describe('EDULandRental', function () {
           const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, 2000n]);
           const blockTimestamp = await getBlockTimestamp(tx);
           await expect(tx)
-            .to.emit(this.ocp, 'Consumed')
+            .to.emit(this.pointsContract, 'Consumed')
             .withArgs(
               this.rentalContract,
               this.rentalReasonCode,
@@ -330,7 +363,7 @@ describe('EDULandRental', function () {
           ]);
 
           await expect(tx2)
-            .to.emit(this.ocp, 'Consumed')
+            .to.emit(this.pointsContract, 'Consumed')
             .withArgs(
               this.rentalContract,
               this.rentalReasonCode,
@@ -362,7 +395,7 @@ describe('EDULandRental', function () {
           const blockTimestamp = await getBlockTimestamp(tx);
 
           await expect(tx)
-            .to.emit(this.ocp, 'Consumed')
+            .to.emit(this.pointsContract, 'Consumed')
             .withArgs(
               this.rentalContract,
               this.rentalReasonCode,
@@ -390,7 +423,7 @@ describe('EDULandRental', function () {
           const blockTimestamp = await getBlockTimestamp(tx);
 
           await expect(tx)
-            .to.emit(this.ocp, 'Consumed')
+            .to.emit(this.pointsContract, 'Consumed')
             .withArgs(
               this.rentalContract,
               this.rentalReasonCode,
@@ -420,7 +453,7 @@ describe('EDULandRental', function () {
           const blockTimestamp = await getBlockTimestamp(tx);
 
           await expect(tx)
-            .to.emit(this.ocp, 'Consumed')
+            .to.emit(this.pointsContract, 'Consumed')
             .withArgs(
               this.rentalContract,
               this.rentalReasonCode,
@@ -451,7 +484,7 @@ describe('EDULandRental', function () {
           );
           const blockTimestamp = await getBlockTimestamp(tx);
           await expect(tx)
-            .to.emit(this.ocp, 'Consumed')
+            .to.emit(this.pointsContract, 'Consumed')
             .withArgs(this.rentalContract, this.rentalReasonCode, user1, expectedCost)
             .to.emit(this.rentalContract, 'Rental')
             .withArgs(user1, [1n], [blockTimestamp], [blockTimestamp + this.minRentalDuration], [expectedCost]);
@@ -469,11 +502,11 @@ describe('EDULandRental', function () {
     it('Successfully collect the idled tokens', async function () {
       await time.increase(1000n);
       await expect(this.rentalContract.collectExpiredTokens([400n, 401n, 402n]))
-        .to.emit(this.nodeKeyContract, 'Transfer')
+        .to.emit(this.eduLandContract, 'Transfer')
         .withArgs(user1, ZeroAddress, 400n)
-        .to.emit(this.nodeKeyContract, 'Transfer')
+        .to.emit(this.eduLandContract, 'Transfer')
         .withArgs(user1, ZeroAddress, 401n)
-        .to.emit(this.nodeKeyContract, 'Transfer')
+        .to.emit(this.eduLandContract, 'Transfer')
         .withArgs(user2, ZeroAddress, 402n);
     });
 
@@ -708,7 +741,7 @@ describe('EDULandRental', function () {
     it('Failure because it set by non operator wallet', async function () {
       await expect(this.rentalContract.connect(user1).setLandPriceHelper(ZeroAddress))
         .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
-        .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
+        .withArgs(await this.eduLandContract.OPERATOR_ROLE(), user1);
     });
   });
 
@@ -722,7 +755,7 @@ describe('EDULandRental', function () {
     it('Failure because it set by non operator wallet', async function () {
       await expect(this.rentalContract.connect(user1).setMaxTokenSupply(1000n))
         .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
-        .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
+        .withArgs(await this.eduLandContract.OPERATOR_ROLE(), user1);
     });
   });
 
@@ -736,7 +769,7 @@ describe('EDULandRental', function () {
     it('Failure because it set by non operator wallet', async function () {
       await expect(this.rentalContract.connect(user1).setMaintenanceFee(5n, 2n))
         .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
-        .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
+        .withArgs(await this.eduLandContract.OPERATOR_ROLE(), user1);
     });
   });
 
@@ -750,7 +783,7 @@ describe('EDULandRental', function () {
     it('Failure because it set by non operator wallet', async function () {
       await expect(this.rentalContract.connect(user1).setMinRentalDuration(100n))
         .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
-        .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
+        .withArgs(await this.eduLandContract.OPERATOR_ROLE(), user1);
     });
   });
 
@@ -764,7 +797,7 @@ describe('EDULandRental', function () {
     it('Failure because it set by non operator wallet', async function () {
       await expect(this.rentalContract.connect(user1).setMaxRentalDuration(1000n))
         .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
-        .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
+        .withArgs(await this.eduLandContract.OPERATOR_ROLE(), user1);
     });
   });
 
@@ -778,7 +811,7 @@ describe('EDULandRental', function () {
     it('Failure because it set by non operator wallet', async function () {
       await expect(this.rentalContract.connect(user1).setMaxRentalCountPerCall(300n))
         .to.be.revertedWithCustomError(this.rentalContract, 'NotRoleHolder')
-        .withArgs(await this.nodeKeyContract.OPERATOR_ROLE(), user1);
+        .withArgs(await this.eduLandContract.OPERATOR_ROLE(), user1);
     });
   });
 
