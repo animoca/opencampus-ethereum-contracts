@@ -9,6 +9,6 @@ import {IEDULandPriceHelper} from "./interfaces/IEDULandPriceHelper.sol";
 contract EDULandPriceHelper is IEDULandPriceHelper {
     /// @inheritdoc IEDULandPriceHelper
     function calculatePrice(uint256 totalOngoingRentalTime) external pure returns (uint256) {
-        return Math.max(5000, Math.log2(totalOngoingRentalTime / 100) * 300);
+        return Math.max(3000, Math.log2(totalOngoingRentalTime / 125000000) * 1250);
     }
 }

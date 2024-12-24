@@ -220,22 +220,20 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
             }
 
             RentalInfo memory rental = rentals[tokenId];
-            if (rental.endDate == 0) {
+            if (rental.endDate == 0 || currentTime >= rental.endDate) {
                 if (duration < minRentalDuration) {
                     revert RentalDurationTooLow(tokenId);
                 }
 
                 totalFee += (duration * maintenanceFee) / maintenanceFeeDenominator;
-            } else if (EDU_LAND.ownerOf(tokenId) == _msgSender() && currentTime < rental.endDate) {
+            } else {
                 uint256 newEndDate = currentTime + duration;
-                if (newEndDate - minRentalDuration < rental.endDate) {
+                uint256 extendedDuration = newEndDate - rental.endDate;
+                if (extendedDuration < minRentalDuration) {
                     revert RentalDurationTooLow(tokenId);
                 }
 
-                uint256 extendedDuration = newEndDate - rental.endDate;
                 totalFee += (extendedDuration * maintenanceFee) / maintenanceFeeDenominator;
-            } else {
-                revert TokenAlreadyRented(tokenId);
             }
         }
 
