@@ -594,7 +594,8 @@ describe('EDULandRental', function () {
           .withArgs(1n);
       });
 
-      it('rent 2 tokens; one is clean token, another token is currently rented by someone. Now extending it for a period that causing the potential end date to be earlier than the current end date', async function () {
+      it(`rent 2 tokens; one is clean token, another token is currently rented by someone.
+        Now extending it for a period that could cause the potential expiry date to be earlier than the current expiry date`, async function () {
         await expect(this.rentalContract.connect(user1).estimateRentalFee([1n, 403n], [50n, 1000n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
           .withArgs(403n);
@@ -653,14 +654,18 @@ describe('EDULandRental', function () {
           one of the tokens rented by another account has expired and supply it as expiredTokenIds`, async function () {
           await time.increase(1000n);
           const expectedCosts = calculateFees(this.initialRentalsDuration - 1000n, [50n, 1000n]);
-          expect(await this.rentalContract.estimateRentalFee([20n, 400n], [50, 1000n], [400n])).equal(expectedCosts.reduce((acc, cost) => acc + cost, 0n));
+          expect(await this.rentalContract.estimateRentalFee([20n, 400n], [50, 1000n], [400n])).equal(
+            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+          );
         });
 
         it(`rent 2 tokens; one is clean token,
           one of the tokens rented by another account has expired and not supply it as expiredTokenIds`, async function () {
           await time.increase(1000n);
           const expectedCosts = calculateFees(this.initialRentalsDuration, [50n, 1000n]);
-          expect(await this.rentalContract.estimateRentalFee([20n, 400n], [50, 1000n], [])).equal(expectedCosts.reduce((acc, cost) => acc + cost, 0n));
+          expect(await this.rentalContract.estimateRentalFee([20n, 400n], [50, 1000n], [])).equal(
+            expectedCosts.reduce((acc, cost) => acc + cost, 0n)
+          );
         });
       });
     }
