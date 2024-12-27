@@ -1,6 +1,5 @@
 const {ethers} = require('hardhat');
 const {expect} = require('chai');
-const {expectRevert} = require('@animoca/ethereum-contract-helpers/src/test/revert');
 const {deployContract} = require('@animoca/ethereum-contract-helpers/src/test/deploy');
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
 const {getForwarderRegistryAddress, deployTokenMetadataResolverWithBaseURI} = require('@animoca/ethereum-contracts/test/helpers/registries');
@@ -8,14 +7,10 @@ const {time} = require('@nomicfoundation/hardhat-network-helpers');
 const keccak256 = require('keccak256');
 const {ZeroAddress} = require('ethers');
 
-const DEFAULT_MAINTENANCE_FEE = 1n;
-const DEFAULT_MAINTENANCE_FEE_DENOMINATOR = 1n;
+const DEFAULT_MAINTENANCE_FEE = 40n;
+const DEFAULT_MAINTENANCE_FEE_DENOMINATOR = 2592000n;
 
 function bigIntLog2(n) {
-  if (n <= 0n) {
-    throw new Error('Input must be greater than zero');
-  }
-
   let result = 0n;
   let x = n;
 
@@ -28,11 +23,11 @@ function bigIntLog2(n) {
   return result;
 }
 
-const DIVIDER = 100n;
-const STARTING_PRICE = 500n;
-const MIN_PRICE = 5000n;
+const DIVIDER = 125000000n;
+const MULTIPLIER = 1250n;
+const MIN_PRICE = 3000n;
 function calculateNodeKeyPrice(totalOngoingRentalTime) {
-  const val = bigIntLog2(totalOngoingRentalTime / DIVIDER) * STARTING_PRICE;
+  const val = bigIntLog2(BigInt(totalOngoingRentalTime) / DIVIDER) * MULTIPLIER;
   return val > MIN_PRICE ? val : MIN_PRICE;
 }
 
@@ -584,42 +579,6 @@ describe('EDULandRental', function () {
           .withArgs(1n);
       });
 
-      it(`rent 2 tokens; one is clean token,
-        one of the tokens rented by another account has expired and supply it as expiredTokenIds`, async function () {
-        await time.increase(1000n);
-        await expect(this.rentalContract.estimateRentalFee([20n, 400n], [50, 1000n], [400n]))
-          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
-          .withArgs(400n);
-      });
-
-      it(`rent 2 tokens; one is clean token,
-      one of the tokens rented by another account has expired and not supply it as expiredTokenIds`, async function () {
-        await time.increase(1000n);
-        await expect(this.rentalContract.estimateRentalFee([20n, 400n], [50, 1000n], []))
-          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
-          .withArgs(400n);
-      });
-
-      it('rent 2 tokens; one is clean token, one of the tokens has expired and supply it as expiredTokenIds', async function () {
-        await time.increase(1000n);
-        await expect(this.rentalContract.estimateRentalFee([20n, 400n], [50, 1000n], [400n]))
-          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
-          .withArgs(400n);
-      });
-
-      it('rent 2 tokens; one is clean token, one of the tokens has expired and not supply it as expiredTokenIds', async function () {
-        await time.increase(1000n);
-        await expect(this.rentalContract.estimateRentalFee([20n, 400n], [50, 1000n], []))
-          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
-          .withArgs(400n);
-      });
-
-      it('rent 2 tokens; one is clean token, another token is currently rented by another account', async function () {
-        await expect(this.rentalContract.estimateRentalFee([1n, 403n], [50n, 1000n], []))
-          .to.be.revertedWithCustomError(this.rentalContract, 'TokenAlreadyRented')
-          .withArgs(403n);
-      });
-
       it('rent 2 tokens; one is clean token, another token reaches the maximum rental duration', async function () {
         await expect(this.rentalContract.estimateRentalFee([1n, 2n], [1000n, this.maxRentalDuration + 1n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooHigh')
@@ -633,6 +592,12 @@ describe('EDULandRental', function () {
         await expect(this.rentalContract.connect(user1).estimateRentalFee([2n, 1n], [1000n, this.maxRentalDuration + 1n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooHigh')
           .withArgs(1n);
+      });
+
+      it('rent 2 tokens; one is clean token, another token is currently rented by someone. Now extending it for a period that causing the potential end date to be earlier than the current end date', async function () {
+        await expect(this.rentalContract.connect(user1).estimateRentalFee([1n, 403n], [50n, 1000n], []))
+          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
+          .withArgs(403n);
       });
 
       context('when successful', function () {
@@ -682,6 +647,20 @@ describe('EDULandRental', function () {
           expect(await this.rentalContract.connect(user1).estimateRentalFee([2n, 1n], [500n, extendDuration], [400n, 401n])).equal(
             expectedCosts.reduce((acc, cost) => acc + cost, 0n)
           );
+        });
+
+        it(`rent 2 tokens; one is clean token,
+          one of the tokens rented by another account has expired and supply it as expiredTokenIds`, async function () {
+          await time.increase(1000n);
+          const expectedCosts = calculateFees(this.initialRentalsDuration - 1000n, [50n, 1000n]);
+          expect(await this.rentalContract.estimateRentalFee([20n, 400n], [50, 1000n], [400n])).equal(expectedCosts.reduce((acc, cost) => acc + cost, 0n));
+        });
+
+        it(`rent 2 tokens; one is clean token,
+          one of the tokens rented by another account has expired and not supply it as expiredTokenIds`, async function () {
+          await time.increase(1000n);
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [50n, 1000n]);
+          expect(await this.rentalContract.estimateRentalFee([20n, 400n], [50, 1000n], [])).equal(expectedCosts.reduce((acc, cost) => acc + cost, 0n));
         });
       });
     }

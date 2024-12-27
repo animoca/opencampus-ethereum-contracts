@@ -228,11 +228,11 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 totalFee += (duration * maintenanceFee) / maintenanceFeeDenominator;
             } else {
                 uint256 newEndDate = currentTime + duration;
-                uint256 extendedDuration = newEndDate - rental.endDate;
-                if (extendedDuration < minRentalDuration) {
+                if (newEndDate - minRentalDuration < rental.endDate) {
                     revert RentalDurationTooLow(tokenId);
                 }
 
+                uint256 extendedDuration = newEndDate - rental.endDate;
                 totalFee += (extendedDuration * maintenanceFee) / maintenanceFeeDenominator;
             }
         }
