@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.0
+
+- Added EDULand, EDULandRental, EDULandPriceHelper, EDULandRewards contracts.
+- Added "@gelatonetwork/node-sale-rewards" dependency
+- Upgraded node version of the github workflow version to 20.18
+
 ## 1.3.2
 
 - Bump package version for merging into main.
