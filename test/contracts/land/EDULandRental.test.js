@@ -275,6 +275,18 @@ describe('EDULandRental', function () {
           .withArgs(1n);
       });
 
+      it('putting duplicated tokenIds which the later one has a shorter duration', async function () {
+        await expect(this.rentalContract.connect(user1).rent([20n, 20n], [1000n, 500n], [], 0n))
+          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
+          .withArgs(20n);
+      });
+
+      it('putting duplicated tokenIds which the later one has a same duration', async function () {
+        await expect(this.rentalContract.connect(user1).rent([20n, 20n], [1000n, 1000n], [], 0n))
+          .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
+          .withArgs(20n);
+      });
+
       it('signer does not have enough balance to rent', async function () {
         const expectedCosts = calculateFees(this.initialRentalsDuration, [2000n, 1000n]);
         await expect(this.rentalContract.connect(user4).rent([1n, 2n], [2000n, 1000n], [], 0n))
@@ -489,6 +501,30 @@ describe('EDULandRental', function () {
             expectedCost,
           ]);
         });
+
+        it('successfully rent 1 node key twice in the same tx, the later one has a greater duration', async function () {
+          const tx = await this.rentalContract.connect(user1).rent([1n, 1n], [1000n, 1000n + this.minRentalDuration], [], 0n);
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [1000n, this.minRentalDuration]);
+          const blockTimestamp = await getBlockTimestamp(tx);
+          const totalCost = expectedCosts.reduce((acc, cost) => acc + cost, 0n);
+
+          await expect(tx)
+            .to.emit(this.pointsContract, 'Consumed')
+            .withArgs(this.rentalContract, this.rentalReasonCode, user1, totalCost)
+            .to.emit(this.rentalContract, 'Rental')
+            .withArgs(
+              user1,
+              [1n, 1n],
+              [blockTimestamp, blockTimestamp + 1000n],
+              [blockTimestamp + 1000n, blockTimestamp + 1000n + this.minRentalDuration],
+              [expectedCosts[0], expectedCosts[1]]
+            );
+          expect(await this.rentalContract.rentals(1n)).to.have.ordered.members([
+            blockTimestamp,
+            blockTimestamp + 1000n + this.minRentalDuration,
+            totalCost,
+          ]);
+        });
       });
     }
   );
@@ -666,6 +702,12 @@ describe('EDULandRental', function () {
           expect(await this.rentalContract.estimateRentalFee([20n, 400n], [50, 1000n], [])).equal(
             expectedCosts.reduce((acc, cost) => acc + cost, 0n)
           );
+        });
+
+        it(`rent 2 tokens; both tokens are same tokenId, the later one has longer duration`, async function () {
+          await time.increase(1000n);
+          const expectedCosts = calculateFees(this.initialRentalsDuration, [50n, 1000n]);
+          expect(await this.rentalContract.estimateRentalFee([20n, 20n], [50, 1000n], [])).equal(expectedCosts.reduce((acc, cost) => acc + cost, 0n));
         });
       });
     }
