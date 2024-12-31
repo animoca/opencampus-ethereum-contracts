@@ -2,7 +2,8 @@
 
 ## 1.4.0
 
-- Add EDULand, EDULandRental, EDULandPriceHelper, EDULandRewards contracts
+- Added EDULand, EDULandRental, EDULandPriceHelper, EDULandRewards contracts.
+- Added "@gelatonetwork/node-sale-rewards" dependency
 
 ## 1.3.2
 
