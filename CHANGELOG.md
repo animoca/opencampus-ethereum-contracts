@@ -4,6 +4,7 @@
 
 - Added EDULand, EDULandRental, EDULandPriceHelper, EDULandRewards contracts.
 - Added "@gelatonetwork/node-sale-rewards" dependency
+- Upgraded node version of the github workflow version to 20.18
 
 ## 1.3.2
 
