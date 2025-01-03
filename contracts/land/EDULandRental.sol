@@ -220,13 +220,13 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
             }
 
             RentalInfo memory rental = rentals[tokenId];
-            if (rental.endDate == 0 || currentTime >= rental.endDate) {
+            if (rental.endDate == 0) {
                 if (duration < minRentalDuration) {
                     revert RentalDurationTooLow(tokenId);
                 }
 
                 totalFee += (duration * maintenanceFee) / maintenanceFeeDenominator;
-            } else {
+            } else if (_msgSender() == EDU_LAND.ownerOf(tokenId) && currentTime < rental.endDate) {
                 uint256 newEndDate = currentTime + duration;
                 if (newEndDate - minRentalDuration < rental.endDate) {
                     revert RentalDurationTooLow(tokenId);
@@ -234,6 +234,24 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
 
                 uint256 extendedDuration = newEndDate - rental.endDate;
                 totalFee += (extendedDuration * maintenanceFee) / maintenanceFeeDenominator;
+            } else {
+                if (duration < minRentalDuration) {
+                    revert RentalDurationTooLow(tokenId);
+                }
+
+                bool collected = false;
+                for (uint256 j = 0; j < expiredTokenIds.length; j++) {
+                    if (tokenId == expiredTokenIds[j]) {
+                        collected = true;
+                        break;
+                    }
+                }
+
+                if (!collected) {
+                    revert TokenAlreadyRented(tokenId);
+                }
+
+                totalFee += (duration * maintenanceFee) / maintenanceFeeDenominator;
             }
         }
 
