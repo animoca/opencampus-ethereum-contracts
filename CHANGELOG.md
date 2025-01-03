@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1
+
+- Revert with TokenAlreadyRented error in EDULandRental.estimateRentalFee() view function if expired tokens are not collected
+
 ## 1.4.0
 
 - Added EDULand, EDULandRental, EDULandPriceHelper, EDULandRewards contracts.
