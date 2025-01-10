@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.2
+- Remediations based on internal audit AB-SC-SOL-01 to AB-SC-SOL-09
+
 ## 1.4.1
 
 - Revert with TokenAlreadyRented error in EDULandRental.estimateRentalFee() view function if expired tokens are not collected
