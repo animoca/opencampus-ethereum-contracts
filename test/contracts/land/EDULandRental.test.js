@@ -224,7 +224,7 @@ describe('EDULandRental', function () {
       it('one of the tokenIds is lower than the minium duration', async function () {
         await expect(this.rentalContract.connect(user1).rent([1n, 2n], [this.minRentalDuration - 1n, 1000n], [], 0n))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
-          .withArgs(1n);
+          .withArgs(1n, this.minRentalDuration - 1n);
       });
 
       it('rent 2 tokens; one is clean token, another token period to extend is lower than the minium rental duration', async function () {
@@ -233,13 +233,13 @@ describe('EDULandRental', function () {
 
         await expect(this.rentalContract.connect(user1).rent([2n, 1n], [1000n, 799n], [], 0n))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
-          .withArgs(1n);
+          .withArgs(1n, 799n);
       });
 
       it('one of the tokenIds reaches the maximum rental duration', async function () {
         await expect(this.rentalContract.connect(user1).rent([2n, 1n], [1000n, this.maxRentalDuration + 1n], [], 0n))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooHigh')
-          .withArgs(1n);
+          .withArgs(1n, this.maxRentalDuration + 1n);
       });
 
       it('the total rental duration of one of the tokenIds to extend reaches the maximum rental duration', async function () {
@@ -248,7 +248,7 @@ describe('EDULandRental', function () {
         await time.setNextBlockTimestamp(blockTimestamp + 200n);
         await expect(this.rentalContract.connect(user1).rent([2n, 1n], [1000n, this.maxRentalDuration + 1n], [], 0n))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooHigh')
-          .withArgs(1n);
+          .withArgs(1n, this.maxRentalDuration + 1n);
       });
 
       it('one of the tokenIds is non-expired node key from another wallet', async function () {
@@ -278,13 +278,13 @@ describe('EDULandRental', function () {
       it('putting duplicated tokenIds which the later one has a shorter duration', async function () {
         await expect(this.rentalContract.connect(user1).rent([20n, 20n], [1000n, 500n], [], 0n))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
-          .withArgs(20n);
+          .withArgs(20n, 500n);
       });
 
       it('putting duplicated tokenIds which the later one has a same duration', async function () {
         await expect(this.rentalContract.connect(user1).rent([20n, 20n], [1000n, 1000n], [], 0n))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
-          .withArgs(20n);
+          .withArgs(20n, 1000n);
       });
 
       it('signer does not have enough balance to rent', async function () {
@@ -603,7 +603,7 @@ describe('EDULandRental', function () {
       it('one of the rent period is lower than the minium rental duration', async function () {
         await expect(this.rentalContract.estimateRentalFee([1n, 2n], [this.minRentalDuration - 1n, 1000n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
-          .withArgs(1n);
+          .withArgs(1n, this.minRentalDuration - 1n);
       });
 
       it('rent 2 tokens; one is clean token, another token period to extend is lower than the minium rental duration', async function () {
@@ -612,7 +612,7 @@ describe('EDULandRental', function () {
 
         await expect(this.rentalContract.connect(user1).estimateRentalFee([2n, 1n], [1000n, 800n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
-          .withArgs(1n);
+          .withArgs(1n, 800n);
       });
 
       it(`rent 3 tokens; one is clean token,
@@ -649,13 +649,13 @@ describe('EDULandRental', function () {
 
         await expect(this.rentalContract.connect(user1).estimateRentalFee([1n, 402n], [1000n, 0n], [402n]))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooLow')
-          .withArgs(402n);
+          .withArgs(402n, 0n);
       });
 
       it('rent 2 tokens; one is clean token, another token reaches the maximum rental duration', async function () {
         await expect(this.rentalContract.estimateRentalFee([1n, 2n], [1000n, this.maxRentalDuration + 1n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooHigh')
-          .withArgs(2n);
+          .withArgs(2n, this.maxRentalDuration + 1n);
       });
 
       it('rent 2 tokens; one is clean token, another token to extend reaches the maximum rental duration', async function () {
@@ -664,7 +664,7 @@ describe('EDULandRental', function () {
 
         await expect(this.rentalContract.connect(user1).estimateRentalFee([2n, 1n], [1000n, this.maxRentalDuration + 1n], []))
           .to.be.revertedWithCustomError(this.rentalContract, 'RentalDurationTooHigh')
-          .withArgs(1n);
+          .withArgs(1n, this.maxRentalDuration + 1n);
       });
 
       context('when successful', function () {

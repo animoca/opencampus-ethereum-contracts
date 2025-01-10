@@ -246,7 +246,17 @@ describe('EDULandRewards', function () {
 
       await expect(this.refereeContract.connect(nonKycUser).claimReward(nodeKeyId, 1)).to.be.revertedWithCustomError(
         this.nodeRewardsContract,
-        'OnlyKycWallet'
+        'NoRewardToClaim'
+      );
+    });
+
+    it('reverts if no rewards to claim', async function () {
+      const nodeKeyId = 10n;
+      await this.refereeContract.connect(kycUser).attest(0n, nodeKeyId);
+      await this.refereeContract.finalize();
+      await expect(this.refereeContract.connect(kycUser).claimReward(nodeKeyId, 1)).to.be.revertedWithCustomError(
+        this.nodeRewardsContract,
+        'NoRewardToClaim'
       );
     });
 
@@ -348,6 +358,38 @@ describe('EDULandRewards', function () {
 
         expect(newBalance - prevBalance).to.equal(reward - gasCost);
       });
+
+      it('pay reward to a non-KYC wallet if kyc disabled and emit Claimed event', async function () {
+        await this.nodeRewardsContract.connect(kycController).setKycDisabled(true);
+
+        const nodeKeyId = 10n;
+
+        await this.refereeContract.connect(nonKycUser).attest(batchNumber, nodeKeyId);
+        await this.refereeContract.finalize();
+        const reward = maxRewardTimeWindow * rewardPerSecond;
+
+        const prevBalance = await ethers.provider.getBalance(nonKycUser.address);
+        const txPromise = await this.refereeContract.connect(nonKycUser).claimReward(nodeKeyId, 1);
+        const receipt = await (await txPromise).wait();
+        const newBalance = await ethers.provider.getBalance(nonKycUser.address);
+
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = receipt.gasPrice;
+        const gasCost = gasUsed * gasPrice;
+
+        await expect(txPromise).to.emit(this.nodeRewardsContract, 'Claimed').withArgs(nonKycUser.address, batchNumber, nodeKeyId, reward);
+        expect(newBalance - prevBalance).to.equal(reward - gasCost);
+      });
+    });
+  });
+
+  context('isKycWallet(address wallet) public view returns (bool)', function () {
+    it('returns true if the wallet is a KYC wallet', async function () {
+      expect(await this.nodeRewardsContract.isKycWallet(kycUser.address)).to.be.true;
+    });
+
+    it('returns false if the wallet is not a KYC wallet', async function () {
+      expect(await this.nodeRewardsContract.isKycWallet(nonKycUser.address)).to.be.false;
     });
   });
 });
