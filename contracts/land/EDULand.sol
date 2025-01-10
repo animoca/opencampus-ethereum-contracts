@@ -135,16 +135,18 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     /// @dev This implementation enforces role-based access control and does not rely on sender approval.
     /// @dev Reverts with {NotRoleHolder} if the sender does not have the {OPERATOR_ROLE}.
     function transferFrom(address from, address to, uint256 tokenId) external {
-        transferFrom_(from, to, tokenId);
+        address msgSender = _msgSender();
+        transferFrom_(msgSender, from, to, tokenId);
     }
 
     /// @inheritdoc IERC721
     /// @dev This implementation enforces role-based access control and does not rely on sender approval.
     /// @dev Reverts with {NotRoleHolder} if the sender does not have the {OPERATOR_ROLE}.
     function safeTransferFrom(address from, address to, uint256 tokenId) external {
-        transferFrom_(from, to, tokenId);
+        address msgSender = _msgSender();
+        transferFrom_(msgSender, from, to, tokenId);
         if (to.isContract()) {
-            if (IERC721Receiver(to).onERC721Received(_msgSender(), from, tokenId, "") != IERC721Receiver.onERC721Received.selector) {
+            if (IERC721Receiver(to).onERC721Received(msgSender, from, tokenId, "") != IERC721Receiver.onERC721Received.selector) {
                 revert ERC721SafeTransferRejected(to, tokenId);
             }
         }
@@ -154,9 +156,10 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     /// @dev This implementation enforces role-based access control and does not rely on sender approval.
     /// @dev Reverts with {NotRoleHolder} if the sender does not have the {OPERATOR_ROLE}.
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes calldata data) external {
-        transferFrom_(from, to, tokenId);
+        address msgSender = _msgSender();
+        transferFrom_(msgSender, from, to, tokenId);
         if (to.isContract()) {
-            if (IERC721Receiver(to).onERC721Received(_msgSender(), from, tokenId, data) != IERC721Receiver.onERC721Received.selector) {
+            if (IERC721Receiver(to).onERC721Received(msgSender, from, tokenId, data) != IERC721Receiver.onERC721Received.selector) {
                 revert ERC721SafeTransferRejected(to, tokenId);
             }
         }
@@ -225,11 +228,12 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     /// @dev Reverts with {ERC721NonExistingToken} if `tokenId` does not exist.
     /// @dev Reverts with {ERC721NonOwnedToken} if `from` is not the owner of `tokenId`.
     /// @dev Emits a {Transfer} event.
+    /// @param sender The sender of the transaction.
     /// @param from The current token owner.
     /// @param to The recipient of the token transfer.
     /// @param tokenId The identifier of the token to transfer.
-    function transferFrom_(address from, address to, uint256 tokenId) internal {
-        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
+    function transferFrom_(address sender, address from, address to, uint256 tokenId) internal {
+        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, sender);
 
         if (to == address(0)) revert ERC721TransferToAddressZero();
 
