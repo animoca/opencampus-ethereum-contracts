@@ -13,13 +13,11 @@ import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/i
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IEDULandPriceHelper} from "./interfaces/IEDULandPriceHelper.sol";
 
 contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext {
     using AccessControlStorage for AccessControlStorage.Layout;
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
-    using Math for uint256;
 
     struct RentalInfo {
         uint256 beginDate;
