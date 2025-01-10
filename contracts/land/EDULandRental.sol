@@ -85,7 +85,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     error UnsupportedTokenId(uint256 tokenId);
     error FeeExceeded(uint256 calculatedFee, uint256 maxFee);
 
-    /// @notice Creates a new land rental contract
+    /// @notice Constructor
     /// @dev Reverts if the landAddress or points address is a zero address.
     /// @dev ContractOwnership is required to initiate TokenRecovery
     /// @dev ForwarderRegistryContext is required to handle meta transactions
