@@ -29,10 +29,6 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     /// @notice The role identifier for the operator role.
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
-    /// @notice Burnt token magic value
-    /// @notice This magic number is used as the owner's value to indicate that the token has been burnt
-    uint256 internal constant BURNT_TOKEN_OWNER_VALUE = 0xdead000000000000000000000000000000000000000000000000000000000000;
-
     /// @notice error message for approve and setApprovalForAll operations
     error ApprovalNotAllowed();
 
@@ -96,7 +92,7 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
         if (owner == address(0)) revert ERC721NonExistingToken(tokenId);
         if (owner != from) revert ERC721NonOwnedToken(from, tokenId);
 
-        erc721Storage.owners[tokenId] = BURNT_TOKEN_OWNER_VALUE;
+        erc721Storage.owners[tokenId] = ERC721Storage.BURNT_TOKEN_OWNER_VALUE;
 
         unchecked {
             // cannot underflow as balance is verified through TOKEN ownership
@@ -123,7 +119,7 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
             if (owner == address(0)) revert ERC721NonExistingToken(tokenId);
             if (owner != from) revert ERC721NonOwnedToken(from, tokenId);
 
-            erc721Storage.owners[tokenId] = BURNT_TOKEN_OWNER_VALUE;
+            erc721Storage.owners[tokenId] = ERC721Storage.BURNT_TOKEN_OWNER_VALUE;
             emit Transfer(from, address(0), tokenId);
         }
 
