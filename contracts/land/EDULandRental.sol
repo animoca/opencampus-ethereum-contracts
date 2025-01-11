@@ -158,7 +158,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
             uint256 tokenId = tokenIds[i];
             RentalInfo storage rental = rentals[tokenId];
             uint256 rentalEndDate = rental.endDate;
-            if (rental.endDate != 0 && currentTime >= rentalEndDate) {
+            if (rentalEndDate != 0 && currentTime >= rentalEndDate) {
                 elapsedTime += rentalEndDate - rental.beginDate;
             }
         }
