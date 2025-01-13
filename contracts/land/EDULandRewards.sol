@@ -26,7 +26,7 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     /// @notice Emitted when reward is claimed.
     event Claimed(address indexed account, uint256 indexed batchNumber, uint256 indexed tokenId, uint256 amount);
 
-    /// @notice Creates a EDU Land Rewards contract
+    /// @notice Constructor
     /// @dev emits a {RewardPerSecondUpdated} event
     /// @param maxRewardTimeWindow The maximum reward time window
     /// @param referee The address of the referee contract
@@ -83,18 +83,30 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     }
 
     /// @inheritdoc NodeRewardsBase
+    /// @dev Reverts if now rewards to claim.
     /// @dev Emits a {Claimed} event.
     function _claimReward(uint256 tokenId, uint256[] calldata batchNumbers) internal override {
         for (uint256 i; i < batchNumbers.length; i++) {
             uint256 batchNumber = batchNumbers[i];
-            uint256 amount = rewardPerLandOfBatch[batchNumber];
+            if (batchNumber == 0) {
+                continue;
+            }
 
             address tokenOwner = rewardsRecipients[batchNumber][tokenId];
             delete rewardsRecipients[batchNumber][tokenId];
+            if (!kycDisabled && !_isKycWallet(tokenOwner)) {
+                continue;
+            }
 
-            _onlyKycWallet(tokenOwner);
+            uint256 amount = rewardPerLandOfBatch[batchNumber];
             _payReward(tokenOwner, amount);
             emit Claimed(tokenOwner, batchNumber, tokenId, amount);
         }
+    }
+
+    /// @notice Check if the wallet has been KYCed
+    /// @param wallet The wallet to be checked
+    function isKycWallet(address wallet) public view returns (bool) {
+        return _isKycWallet(wallet);
     }
 }

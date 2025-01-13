@@ -239,17 +239,6 @@ describe('EDULandRewards', function () {
       );
     });
 
-    it('reverts if the recipient is not a KYC wallet', async function () {
-      const nodeKeyId = 10n;
-      await this.refereeContract.connect(nonKycUser).attest(batchNumber, nodeKeyId);
-      await this.refereeContract.finalize();
-
-      await expect(this.refereeContract.connect(nonKycUser).claimReward(nodeKeyId, 1)).to.be.revertedWithCustomError(
-        this.nodeRewardsContract,
-        'OnlyKycWallet'
-      );
-    });
-
     context('when successful', function () {
       it('pay reward to a KYC wallet and emit Claimed event', async function () {
         const nodeKeyId = 1n;
@@ -348,6 +337,88 @@ describe('EDULandRewards', function () {
 
         expect(newBalance - prevBalance).to.equal(reward - gasCost);
       });
+
+      it('pay reward to a non-KYC wallet if kyc disabled and emit Claimed event', async function () {
+        await this.nodeRewardsContract.connect(kycController).setKycDisabled(true);
+
+        const nodeKeyId = 10n;
+
+        await this.refereeContract.connect(nonKycUser).attest(batchNumber, nodeKeyId);
+        await this.refereeContract.finalize();
+        const reward = maxRewardTimeWindow * rewardPerSecond;
+
+        const prevBalance = await ethers.provider.getBalance(nonKycUser.address);
+        const txPromise = await this.refereeContract.connect(nonKycUser).claimReward(nodeKeyId, 1);
+        const receipt = await (await txPromise).wait();
+        const newBalance = await ethers.provider.getBalance(nonKycUser.address);
+
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = receipt.gasPrice;
+        const gasCost = gasUsed * gasPrice;
+
+        await expect(txPromise).to.emit(this.nodeRewardsContract, 'Claimed').withArgs(nonKycUser.address, batchNumber, nodeKeyId, reward);
+        expect(newBalance - prevBalance).to.equal(reward - gasCost);
+      });
+
+      it('the recipient of the previous batch of reward is not a KYC wallet', async function () {
+        const nodeKeyId = 10n;
+
+        // first batch attest and finalize
+        await this.refereeContract.connect(nonKycUser).attest(batchNumber, nodeKeyId);
+        await this.refereeContract.finalize();
+        const timestampAfterFirstFinalize = await this.refereeContract.latestConfirmedTimestamp();
+
+        await this.nodeKeyContract.connect(deployer).transferFrom(nonKycUser.address, kycUser.address, nodeKeyId);
+
+        // second batch attest and finalize
+        const secondBatchNumber = (await this.refereeContract.latestFinalizedBatchNumber()) + 1n;
+        await this.refereeContract.connect(kycUser).attest(secondBatchNumber, nodeKeyId);
+        await this.refereeContract.finalize();
+        const timestampOnSecondFinalize = await this.refereeContract.latestConfirmedTimestamp();
+        const rewardTimeWindow = timestampOnSecondFinalize - timestampAfterFirstFinalize;
+        const secondBatchReward = rewardTimeWindow * rewardPerSecond;
+
+        // claim rewards
+        const prevBalance = await ethers.provider.getBalance(kycUser.address);
+        const txPromise = this.refereeContract.connect(kycUser).claimReward(nodeKeyId, 2);
+        const receipt = await (await txPromise).wait();
+        const newBalance = await ethers.provider.getBalance(kycUser.address);
+
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = receipt.gasPrice;
+        const gasCost = gasUsed * gasPrice;
+
+        await expect(txPromise)
+          .to.emit(this.nodeRewardsContract, 'Claimed')
+          .withArgs(kycUser.address, secondBatchNumber, nodeKeyId, secondBatchReward);
+        expect(newBalance - prevBalance).to.equal(secondBatchReward - gasCost);
+      });
+
+      it('No rewards to be claimed', async function () {
+        const nodeKeyId = 1n;
+        await this.refereeContract.connect(kycUser).attest(batchNumber, nodeKeyId);
+        await this.refereeContract.finalize();
+        const prevBalance = await ethers.provider.getBalance(kycUser.address);   
+        const txPromise = this.refereeContract.connect(kycUser).claimRewardAllNonSuccessfulAttestations(nodeKeyId, 1);
+        const receipt = await (await txPromise).wait();
+        const newBalance = await ethers.provider.getBalance(kycUser.address);
+       
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = receipt.gasPrice;
+        const gasCost = gasUsed * gasPrice;
+
+        expect(prevBalance - newBalance).to.equal(gasCost);
+      });
+    });
+  });
+
+  context('isKycWallet(address wallet) public view returns (bool)', function () {
+    it('returns true if the wallet is a KYC wallet', async function () {
+      expect(await this.nodeRewardsContract.isKycWallet(kycUser.address)).to.be.true;
+    });
+
+    it('returns false if the wallet is not a KYC wallet', async function () {
+      expect(await this.nodeRewardsContract.isKycWallet(nonKycUser.address)).to.be.false;
     });
   });
 });

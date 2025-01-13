@@ -29,10 +29,6 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     /// @notice The role identifier for the operator role.
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
-    /// @notice Burnt token magic value
-    /// @notice This magic number is used as the owner's value to indicate that the token has been burnt
-    uint256 internal constant BURNT_TOKEN_OWNER_VALUE = 0xdead000000000000000000000000000000000000000000000000000000000000;
-
     /// @notice error message for approve and setApprovalForAll operations
     error ApprovalNotAllowed();
 
@@ -70,8 +66,9 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     /// @inheritdoc IERC721Mintable
     /// @dev Reverts with {NotRoleHolder} if the sender does not have the operator role.
     function safeMint(address to, uint256 tokenId, bytes calldata data) external {
-        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
-        ERC721Storage.layout().safeMint(_msgSender(), to, tokenId, data);
+        address msgSender = _msgSender();
+        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, msgSender);
+        ERC721Storage.layout().safeMint(msgSender, to, tokenId, data);
     }
 
     /// @inheritdoc IERC721Mintable
@@ -96,7 +93,7 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
         if (owner == address(0)) revert ERC721NonExistingToken(tokenId);
         if (owner != from) revert ERC721NonOwnedToken(from, tokenId);
 
-        erc721Storage.owners[tokenId] = BURNT_TOKEN_OWNER_VALUE;
+        erc721Storage.owners[tokenId] = ERC721Storage.BURNT_TOKEN_OWNER_VALUE;
 
         unchecked {
             // cannot underflow as balance is verified through TOKEN ownership
@@ -123,7 +120,7 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
             if (owner == address(0)) revert ERC721NonExistingToken(tokenId);
             if (owner != from) revert ERC721NonOwnedToken(from, tokenId);
 
-            erc721Storage.owners[tokenId] = BURNT_TOKEN_OWNER_VALUE;
+            erc721Storage.owners[tokenId] = ERC721Storage.BURNT_TOKEN_OWNER_VALUE;
             emit Transfer(from, address(0), tokenId);
         }
 
@@ -139,16 +136,18 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     /// @dev This implementation enforces role-based access control and does not rely on sender approval.
     /// @dev Reverts with {NotRoleHolder} if the sender does not have the {OPERATOR_ROLE}.
     function transferFrom(address from, address to, uint256 tokenId) external {
-        transferFrom_(from, to, tokenId);
+        address msgSender = _msgSender();
+        transferFrom_(msgSender, from, to, tokenId);
     }
 
     /// @inheritdoc IERC721
     /// @dev This implementation enforces role-based access control and does not rely on sender approval.
     /// @dev Reverts with {NotRoleHolder} if the sender does not have the {OPERATOR_ROLE}.
     function safeTransferFrom(address from, address to, uint256 tokenId) external {
-        transferFrom_(from, to, tokenId);
+        address msgSender = _msgSender();
+        transferFrom_(msgSender, from, to, tokenId);
         if (to.isContract()) {
-            if (IERC721Receiver(to).onERC721Received(_msgSender(), from, tokenId, "") != IERC721Receiver.onERC721Received.selector) {
+            if (IERC721Receiver(to).onERC721Received(msgSender, from, tokenId, "") != IERC721Receiver.onERC721Received.selector) {
                 revert ERC721SafeTransferRejected(to, tokenId);
             }
         }
@@ -158,9 +157,10 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     /// @dev This implementation enforces role-based access control and does not rely on sender approval.
     /// @dev Reverts with {NotRoleHolder} if the sender does not have the {OPERATOR_ROLE}.
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes calldata data) external {
-        transferFrom_(from, to, tokenId);
+        address msgSender = _msgSender();
+        transferFrom_(msgSender, from, to, tokenId);
         if (to.isContract()) {
-            if (IERC721Receiver(to).onERC721Received(_msgSender(), from, tokenId, data) != IERC721Receiver.onERC721Received.selector) {
+            if (IERC721Receiver(to).onERC721Received(msgSender, from, tokenId, data) != IERC721Receiver.onERC721Received.selector) {
                 revert ERC721SafeTransferRejected(to, tokenId);
             }
         }
@@ -229,11 +229,12 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     /// @dev Reverts with {ERC721NonExistingToken} if `tokenId` does not exist.
     /// @dev Reverts with {ERC721NonOwnedToken} if `from` is not the owner of `tokenId`.
     /// @dev Emits a {Transfer} event.
+    /// @param sender The sender of the transaction.
     /// @param from The current token owner.
     /// @param to The recipient of the token transfer.
     /// @param tokenId The identifier of the token to transfer.
-    function transferFrom_(address from, address to, uint256 tokenId) internal {
-        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
+    function transferFrom_(address sender, address from, address to, uint256 tokenId) internal {
+        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, sender);
 
         if (to == address(0)) revert ERC721TransferToAddressZero();
 

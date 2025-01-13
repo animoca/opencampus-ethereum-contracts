@@ -13,13 +13,11 @@ import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/i
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IEDULandPriceHelper} from "./interfaces/IEDULandPriceHelper.sol";
 
 contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext {
     using AccessControlStorage for AccessControlStorage.Layout;
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
-    using Math for uint256;
 
     struct RentalInfo {
         uint256 beginDate;
@@ -77,8 +75,8 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     error InvalidLandAddress();
     error InvalidPointsAddress();
     error InvalidTokenIdsParam();
-    error RentalDurationTooLow(uint256 tokenId);
-    error RentalDurationTooHigh(uint256 tokenId);
+    error RentalDurationTooLow(uint256 tokenId, uint256 duration);
+    error RentalDurationTooHigh(uint256 tokenId, uint256 duration);
     error RentalCountPerCallLimitExceeded();
     error TokenAlreadyRented(uint256 tokenId);
     error TokenNotRented(uint256 tokenId);
@@ -87,7 +85,7 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
     error UnsupportedTokenId(uint256 tokenId);
     error FeeExceeded(uint256 calculatedFee, uint256 maxFee);
 
-    /// @notice Creates a new land rental contract
+    /// @notice Constructor
     /// @dev Reverts if the landAddress or points address is a zero address.
     /// @dev ContractOwnership is required to initiate TokenRecovery
     /// @dev ForwarderRegistryContext is required to handle meta transactions
@@ -159,8 +157,9 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
             RentalInfo storage rental = rentals[tokenId];
-            if (rental.endDate != 0 && currentTime >= rental.endDate) {
-                elapsedTime += rental.endDate - rental.beginDate;
+            uint256 rentalEndDate = rental.endDate;
+            if (rentalEndDate != 0 && currentTime >= rentalEndDate) {
+                elapsedTime += rentalEndDate - rental.beginDate;
             }
         }
 
@@ -216,27 +215,27 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
             }
 
             if (duration > maxRentalDuration) {
-                revert RentalDurationTooHigh(tokenId);
+                revert RentalDurationTooHigh(tokenId, duration);
             }
 
             RentalInfo memory rental = rentals[tokenId];
             if (rental.endDate == 0) {
                 if (duration < minRentalDuration) {
-                    revert RentalDurationTooLow(tokenId);
+                    revert RentalDurationTooLow(tokenId, duration);
                 }
 
                 totalFee += (duration * maintenanceFee) / maintenanceFeeDenominator;
             } else if (_msgSender() == EDU_LAND.ownerOf(tokenId) && currentTime < rental.endDate) {
                 uint256 newEndDate = currentTime + duration;
                 if (newEndDate - minRentalDuration < rental.endDate) {
-                    revert RentalDurationTooLow(tokenId);
+                    revert RentalDurationTooLow(tokenId, duration);
                 }
 
                 uint256 extendedDuration = newEndDate - rental.endDate;
                 totalFee += (extendedDuration * maintenanceFee) / maintenanceFeeDenominator;
             } else {
                 if (duration < minRentalDuration) {
-                    revert RentalDurationTooLow(tokenId);
+                    revert RentalDurationTooLow(tokenId, duration);
                 }
 
                 bool collected = false;
@@ -309,13 +308,14 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
             }
 
             if (duration > maxRentalDuration) {
-                revert RentalDurationTooHigh(tokenId);
+                revert RentalDurationTooHigh(tokenId, duration);
             }
 
             RentalInfo storage rental = rentals[tokenId];
-            if (rental.endDate == 0) {
+            uint256 rentalEndDate = rental.endDate;
+            if (rentalEndDate == 0) {
                 if (duration < minRentalDuration) {
-                    revert RentalDurationTooLow(tokenId);
+                    revert RentalDurationTooLow(tokenId, duration);
                 }
 
                 EDU_LAND.safeMint(account, tokenId, "");
@@ -330,21 +330,20 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
                 beginDates[i] = currentTime;
                 endDates[i] = endDate;
                 fees[i] = fee;
-            } else if (account == EDU_LAND.ownerOf(tokenId) && currentTime < rental.endDate) {
+            } else if (account == EDU_LAND.ownerOf(tokenId) && currentTime < rentalEndDate) {
                 uint256 newEndDate = currentTime + duration;
-                uint256 oldEndDate = rental.endDate;
-                if (newEndDate - minRentalDuration < oldEndDate) {
-                    revert RentalDurationTooLow(tokenId);
+                if (newEndDate - minRentalDuration < rentalEndDate) {
+                    revert RentalDurationTooLow(tokenId, duration);
                 }
 
-                uint256 extendedDuration = newEndDate - oldEndDate;
+                uint256 extendedDuration = newEndDate - rentalEndDate;
                 rental.endDate = newEndDate;
                 uint256 fee = landPrice + (extendedDuration * maintenanceFee) / maintenanceFeeDenominator;
                 rental.fee += fee;
                 totalFee += fee;
                 postCollectionTotalOngoingRentalTime += extendedDuration;
 
-                beginDates[i] = oldEndDate;
+                beginDates[i] = rentalEndDate;
                 endDates[i] = newEndDate;
                 fees[i] = fee;
             } else {
@@ -446,8 +445,9 @@ contract EDULandRental is AccessControl, TokenRecovery, ForwarderRegistryContext
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
             RentalInfo storage rental = rentals[tokenId];
-            if (rental.endDate != 0 && blockTime >= rental.endDate) {
-                elapsedRentalTime += rental.endDate - rental.beginDate;
+            uint256 rentalEndDate = rental.endDate;
+            if (rentalEndDate != 0 && blockTime >= rentalEndDate) {
+                elapsedRentalTime += rentalEndDate - rental.beginDate;
 
                 rental.beginDate = 0;
                 rental.endDate = 0;
