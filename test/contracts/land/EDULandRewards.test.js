@@ -398,11 +398,11 @@ describe('EDULandRewards', function () {
         const nodeKeyId = 1n;
         await this.refereeContract.connect(kycUser).attest(batchNumber, nodeKeyId);
         await this.refereeContract.finalize();
-        const prevBalance = await ethers.provider.getBalance(kycUser.address);   
+        const prevBalance = await ethers.provider.getBalance(kycUser.address);
         const txPromise = this.refereeContract.connect(kycUser).claimRewardAllNonSuccessfulAttestations(nodeKeyId, 1);
         const receipt = await (await txPromise).wait();
         const newBalance = await ethers.provider.getBalance(kycUser.address);
-       
+
         const gasUsed = receipt.gasUsed;
         const gasPrice = receipt.gasPrice;
         const gasCost = gasUsed * gasPrice;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.4
+
+- Removed trailing space in EDULandRewards.test.js.
+
 ## 1.4.3
 
 - Added the missing test cases for EDULandRewards._claimRewards() where some batchNumber is 0.
