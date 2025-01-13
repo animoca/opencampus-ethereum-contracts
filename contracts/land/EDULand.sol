@@ -66,8 +66,9 @@ contract EDULand is IEDULand, ERC721Metadata, AccessControl, TokenRecovery {
     /// @inheritdoc IERC721Mintable
     /// @dev Reverts with {NotRoleHolder} if the sender does not have the operator role.
     function safeMint(address to, uint256 tokenId, bytes calldata data) external {
-        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
-        ERC721Storage.layout().safeMint(_msgSender(), to, tokenId, data);
+        address msgSender = _msgSender();
+        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, msgSender);
+        ERC721Storage.layout().safeMint(msgSender, to, tokenId, data);
     }
 
     /// @inheritdoc IERC721Mintable
