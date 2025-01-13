@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.3
+- Added the missing test cases for EDULandRewards._claimRewards() where some batchNumber is 0.
+- Updated the MockReferee contract to achieve the above test case.
+
 ## 1.4.2
 - Remediations based on internal audit AB-SC-SOL-01 to AB-SC-SOL-09
 - Expose EDULandRewards.isKycWallet() public view function

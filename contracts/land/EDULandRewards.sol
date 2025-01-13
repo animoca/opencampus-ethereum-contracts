@@ -26,8 +26,6 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     /// @notice Emitted when reward is claimed.
     event Claimed(address indexed account, uint256 indexed batchNumber, uint256 indexed tokenId, uint256 amount);
 
-    error NoRewardToClaim();
-
     /// @notice Constructor
     /// @dev emits a {RewardPerSecondUpdated} event
     /// @param maxRewardTimeWindow The maximum reward time window
@@ -88,7 +86,6 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     /// @dev Reverts if now rewards to claim.
     /// @dev Emits a {Claimed} event.
     function _claimReward(uint256 tokenId, uint256[] calldata batchNumbers) internal override {
-        bool hasRewards;
         for (uint256 i; i < batchNumbers.length; i++) {
             uint256 batchNumber = batchNumbers[i];
             if (batchNumber == 0) {
@@ -104,11 +101,6 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
             uint256 amount = rewardPerLandOfBatch[batchNumber];
             _payReward(tokenOwner, amount);
             emit Claimed(tokenOwner, batchNumber, tokenId, amount);
-            hasRewards = true;
-        }
-
-        if (!hasRewards) {
-            revert NoRewardToClaim();
         }
     }
 
