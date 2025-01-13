@@ -4,6 +4,7 @@
 
 - Added the missing test cases for EDULandRewards._claimRewards() where some batchNumber is 0.
 - Updated the MockReferee contract to achieve the above test case.
+- Further removed duplicated _msgSender() call in EDULand.
 
 ## 1.4.2
 
