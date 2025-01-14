@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.5
+- Revert the EDULandRewards._claimRewards() method if the current NFT owner does not pass KYC check.
+
 ## 1.4.4
 
 - Removed trailing space in EDULandRewards.test.js.

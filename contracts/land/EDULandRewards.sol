@@ -26,6 +26,8 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     /// @notice Emitted when reward is claimed.
     event Claimed(address indexed account, uint256 indexed batchNumber, uint256 indexed tokenId, uint256 amount);
 
+    error CurrentOwnerIsNotKycWallet(address currentOwner);
+
     /// @notice Constructor
     /// @dev emits a {RewardPerSecondUpdated} event
     /// @param maxRewardTimeWindow The maximum reward time window
@@ -86,21 +88,30 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     /// @dev Reverts if now rewards to claim.
     /// @dev Emits a {Claimed} event.
     function _claimReward(uint256 tokenId, uint256[] calldata batchNumbers) internal override {
+        address currentOwner;
+        try NODE_KEY.ownerOf(tokenId) returns (address owner) {
+            currentOwner = owner;
+        } catch {}
+
         for (uint256 i; i < batchNumbers.length; i++) {
             uint256 batchNumber = batchNumbers[i];
             if (batchNumber == 0) {
                 continue;
             }
 
-            address tokenOwner = rewardsRecipients[batchNumber][tokenId];
+            address rewardsRecipient = rewardsRecipients[batchNumber][tokenId];
             delete rewardsRecipients[batchNumber][tokenId];
-            if (!kycDisabled && !_isKycWallet(tokenOwner)) {
-                continue;
+            if (!kycDisabled && !_isKycWallet(rewardsRecipient)) {
+                if (currentOwner == rewardsRecipient) {
+                    revert CurrentOwnerIsNotKycWallet(currentOwner);
+                } else {
+                    continue;
+                }
             }
 
             uint256 amount = rewardPerLandOfBatch[batchNumber];
-            _payReward(tokenOwner, amount);
-            emit Claimed(tokenOwner, batchNumber, tokenId, amount);
+            _payReward(rewardsRecipient, amount);
+            emit Claimed(rewardsRecipient, batchNumber, tokenId, amount);
         }
     }
 

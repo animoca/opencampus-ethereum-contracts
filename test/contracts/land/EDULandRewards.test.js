@@ -239,6 +239,19 @@ describe('EDULandRewards', function () {
       );
     });
 
+    it('reverts if current owner is not KYC wallet', async function () {
+      await expect(this.nodeRewardsContract.connect(deployer).claimReward(1n, [1n]));
+
+      const nodeKeyId = 10n;
+
+      await this.refereeContract.connect(nonKycUser).attest(batchNumber, nodeKeyId);
+      await this.refereeContract.finalize();
+
+      const txPromise = this.refereeContract.connect(kycUser).claimReward(nodeKeyId, 1);
+
+      await expect(txPromise).to.be.revertedWithCustomError(this.nodeRewardsContract, 'CurrentOwnerIsNotKycWallet').withArgs(nonKycUser.address);
+    });
+
     context('when successful', function () {
       it('pay reward to a KYC wallet and emit Claimed event', async function () {
         const nodeKeyId = 1n;
