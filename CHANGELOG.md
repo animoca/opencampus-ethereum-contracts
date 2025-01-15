@@ -1,6 +1,11 @@
 # Changelog
 
+## 1.4.6
+
+- Fixed the outdated function doc for EDULandRewards._claimRewards()
+
 ## 1.4.5
+
 - Revert the EDULandRewards._claimRewards() method if the current NFT owner does not pass KYC check.
 
 ## 1.4.4
