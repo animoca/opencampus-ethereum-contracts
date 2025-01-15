@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.7
+
+- Further updated the function doc for EDULandRewards._claimRewards().
+
 ## 1.4.6
 
 - Fixed the outdated function doc for EDULandRewards._claimRewards()

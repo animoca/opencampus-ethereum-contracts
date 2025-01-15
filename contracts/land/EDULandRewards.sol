@@ -85,8 +85,8 @@ contract EDULandRewards is NodeRewardsBase, RewardsKYC {
     }
 
     /// @inheritdoc NodeRewardsBase
-    /// @dev Reverts if the current nft owner is not a KYC wallet
-    /// @dev Emits a {Claimed} event.
+    /// @dev Reverts if the current nft owner is not a KYC wallet, while KYC check is not disabled.
+    /// @dev Emits a {Claimed} event every time the reward per node key for each batch is successfully claimed.
     function _claimReward(uint256 tokenId, uint256[] calldata batchNumbers) internal override {
         address currentOwner;
         try NODE_KEY.ownerOf(tokenId) returns (address owner) {
