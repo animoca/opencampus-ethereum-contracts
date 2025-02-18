@@ -51,7 +51,7 @@ describe('EDULandRewardsKYC', function () {
       verifyingContract: await this.contract.getAddress(),
     };
     this.signTypedMessageTypes = {
-      addKycWalletWithSignature: [
+      addKycWallet: [
         {name: 'wallet', type: 'address'},
         {name: 'expireAt', type: 'uint256'},
       ],
@@ -72,14 +72,14 @@ describe('EDULandRewardsKYC', function () {
     });
   });
 
-  context('addKycWalletWithSignature(address,uint256,bytes)', function () {
+  context('addKycWallet(address,uint256,bytes)', function () {
     it('reverts if signature expires', async function () {
       const blockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
       const signature = await messageSigner.signTypedData(this.signTypedMessageDomain, this.signTypedMessageTypes, {
         wallet: user.address,
         expireAt: blockTimestamp,
       });
-      await expect(this.contract.addKycWalletWithSignature(user.address, blockTimestamp, signature))
+      await expect(this.contract.addKycWallet(user.address, blockTimestamp, signature))
         .to.be.revertedWithCustomError(this.contract, 'ExpiredSignature')
         .withArgs(user.address, blockTimestamp, signature);
     });
@@ -93,7 +93,7 @@ describe('EDULandRewardsKYC', function () {
         wallet: user.address,
         expireAt,
       });
-      await expect(this.contract.addKycWalletWithSignature(user.address, expireAt, signature)).to.be.revertedWith(
+      await expect(this.contract.addKycWallet(user.address, expireAt, signature)).to.be.revertedWith(
         `AccessControl: account ${(await this.contract.getAddress()).toLowerCase()} is missing role ${REWARDS_CONTRACT_KYC_CONTROLLER_ROLE}`
       );
     });
@@ -105,7 +105,7 @@ describe('EDULandRewardsKYC', function () {
         wallet: user.address,
         expireAt,
       });
-      await expect(this.contract.addKycWalletWithSignature(user.address, expireAt, signature))
+      await expect(this.contract.addKycWallet(user.address, expireAt, signature))
         .to.be.revertedWithCustomError(this.contract, 'InvalidSignature')
         .withArgs(user.address, expireAt, signature);
     });
@@ -117,7 +117,7 @@ describe('EDULandRewardsKYC', function () {
         wallet: other.address,
         expireAt,
       });
-      await expect(this.contract.addKycWalletWithSignature(user.address, expireAt, signature))
+      await expect(this.contract.addKycWallet(user.address, expireAt, signature))
         .to.be.revertedWithCustomError(this.contract, 'InvalidSignature')
         .withArgs(user.address, expireAt, signature);
     });
@@ -133,7 +133,7 @@ describe('EDULandRewardsKYC', function () {
         wallet: other.address,
         expireAt,
       });
-      await expect(this.contract.addKycWalletWithSignature(user.address, expireAt, signature))
+      await expect(this.contract.addKycWallet(user.address, expireAt, signature))
         .to.be.revertedWithCustomError(this.contract, 'InvalidSignature')
         .withArgs(user.address, expireAt, signature);
     });
@@ -145,9 +145,7 @@ describe('EDULandRewardsKYC', function () {
         wallet: user.address,
         expireAt,
       });
-      await expect(this.contract.addKycWalletWithSignature(user.address, expireAt, signature))
-        .to.emit(this.contract, 'KycWalletsAdded')
-        .withArgs([user.address]);
+      await expect(this.contract.addKycWallet(user.address, expireAt, signature)).to.emit(this.contract, 'KycWalletsAdded').withArgs([user.address]);
       expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.true;
     });
   });

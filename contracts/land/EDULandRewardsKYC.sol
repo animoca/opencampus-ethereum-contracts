@@ -30,8 +30,8 @@ contract EDULandRewardsKYC is AccessControl, ForwarderRegistryContext, EIP712 {
     /// @notice The role identifier for the operator role.
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
-    /// @notice The signature typehash for the addKycWalletWithSignature function.
-    bytes32 private constant ADD_KYC_WALLET_TYPEHASH = keccak256("addKycWalletWithSignature(address wallet,uint256 expireAt)");
+    /// @notice The signature typehash for the addKycWallet function.
+    bytes32 private constant ADD_KYC_WALLET_TYPEHASH = keccak256("addKycWallet(address wallet,uint256 expireAt)");
 
     /// @notice Emitted when the message signer is set.
     /// @param messageSigner The new message signer.
@@ -80,7 +80,7 @@ contract EDULandRewardsKYC is AccessControl, ForwarderRegistryContext, EIP712 {
     /// @param wallet The wallet address to add.
     /// @param expireAt The expiration timestamp of the signature.
     /// @param signature A EIP712 signature for the values `wallet` and `expireAt`.
-    function addKycWalletWithSignature(address wallet, uint256 expireAt, bytes calldata signature) external {
+    function addKycWallet(address wallet, uint256 expireAt, bytes calldata signature) external {
         if (block.timestamp >= expireAt) {
             revert ExpiredSignature(wallet, expireAt, signature);
         }
