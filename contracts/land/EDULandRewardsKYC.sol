@@ -22,6 +22,7 @@ contract EDULandRewardsKYC is AccessControl, ForwarderRegistryContext, EIP712 {
     using AccessControlStorage for AccessControlStorage.Layout;
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
 
+    /// @notice An reference to an IEDULandRewards instance.
     IEDULandRewards public immutable EDU_LAND_REWARDS;
 
     /// @notice The address of the message signer.
@@ -73,6 +74,15 @@ contract EDULandRewardsKYC is AccessControl, ForwarderRegistryContext, EIP712 {
         emit MessageSignerSet(messageSigner_);
     }
 
+    /// @notice Set the message signer address.
+    /// @dev Reverts with {NotContractOwner} if the sender is not the contract owner.
+    /// @dev Emits a {MessageSignerSet} event.
+    function setMessageSigner(address messageSigner_) external {
+        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        messageSigner = messageSigner_;
+        emit MessageSignerSet(messageSigner_);
+    }
+
     /// @notice Add a KYC wallet with a signature.
     /// @dev Reverts with {ExpiredSignature} if the signature is expired.
     /// @dev Reverts with {InvalidSignature} if the signature is invalid.
@@ -115,15 +125,6 @@ contract EDULandRewardsKYC is AccessControl, ForwarderRegistryContext, EIP712 {
         AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
         EDU_LAND_REWARDS.removeKycWallets(wallets);
         emit KycWalletsRemoved(wallets);
-    }
-
-    /// @notice Set the message signer address.
-    /// @dev Reverts with {NotContractOwner} if the sender is not the contract owner.
-    /// @dev Emits a {MessageSignerSet} event.
-    function setMessageSigner(address messageSigner_) public {
-        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
-        messageSigner = messageSigner_;
-        emit MessageSignerSet(messageSigner_);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase

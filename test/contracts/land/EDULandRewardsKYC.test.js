@@ -72,6 +72,21 @@ describe('EDULandRewardsKYC', function () {
     });
   });
 
+  context('setMessageSigner(address)', function () {
+    it('reverts if it is not called by the owner', async function () {
+      await expect(this.contract.connect(other).setMessageSigner(messageSigner2.address))
+        .to.be.revertedWithCustomError(this.contract, 'NotContractOwner')
+        .withArgs(other.address);
+    });
+
+    it('successfully set the new message signer', async function () {
+      await expect(this.contract.setMessageSigner(messageSigner2.address))
+        .to.emit(this.contract, 'MessageSignerSet')
+        .withArgs(messageSigner2.address);
+      expect(await this.contract.messageSigner()).to.equal(messageSigner2.address);
+    });
+  });
+
   context('addKycWallet(address,uint256,bytes)', function () {
     it('reverts if signature expires', async function () {
       const blockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
@@ -197,21 +212,6 @@ describe('EDULandRewardsKYC', function () {
         .withArgs([user.address, user2.address]);
       expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.false;
       expect(await this.nodeRewardsContract.isKycWallet(user2.address)).to.be.false;
-    });
-  });
-
-  context('setMessageSigner(address)', function () {
-    it('reverts if it is not called by the owner', async function () {
-      await expect(this.contract.connect(other).setMessageSigner(messageSigner2.address))
-        .to.be.revertedWithCustomError(this.contract, 'NotContractOwner')
-        .withArgs(other.address);
-    });
-
-    it('successfully set the new message signer', async function () {
-      await expect(this.contract.setMessageSigner(messageSigner2.address))
-        .to.emit(this.contract, 'MessageSignerSet')
-        .withArgs(messageSigner2.address);
-      expect(await this.contract.messageSigner()).to.equal(messageSigner2.address);
     });
   });
 
