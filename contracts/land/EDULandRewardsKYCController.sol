@@ -13,11 +13,11 @@ import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contract
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {IEDULandRewards} from "./interfaces/IEDULandRewards.sol";
 
-/// @title EDULandRewardsKYC
+/// @title EDULandRewardsKYCController
 /// @notice A contract for managing KYC wallets for EDULandRewards.
 /// @notice This contract allows adding KYC wallet with a valid EIP712 signature by anyone.
 /// @notice It also allows adding and removing KYC wallets by the operator.
-contract EDULandRewardsKYC is AccessControl, ForwarderRegistryContext, EIP712 {
+contract EDULandRewardsKYCController is AccessControl, ForwarderRegistryContext, EIP712 {
     using ECDSA for bytes32;
     using AccessControlStorage for AccessControlStorage.Layout;
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
@@ -67,7 +67,7 @@ contract EDULandRewardsKYC is AccessControl, ForwarderRegistryContext, EIP712 {
         address messageSigner_,
         IEDULandRewards eduLandRewards,
         IForwarderRegistry forwarderRegistry
-    ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) EIP712("EDULandRewardsKYC", "1.0") {
+    ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) EIP712("EDULandRewardsKYCController", "1.0") {
         EDU_LAND_REWARDS = eduLandRewards;
 
         messageSigner = messageSigner_;

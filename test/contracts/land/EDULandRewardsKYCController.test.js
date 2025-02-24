@@ -6,7 +6,7 @@ const {deployContract, deployContractFromPath} = require('@animoca/ethereum-cont
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
 const {deployTokenMetadataResolverWithBaseURI, getForwarderRegistryAddress} = require('@animoca/ethereum-contracts/test/helpers/registries');
 
-describe('EDULandRewardsKYC', function () {
+describe('EDULandRewardsKYCController', function () {
   const REWARDS_CONTRACT_KYC_CONTROLLER_ROLE = keccak256(toUtf8Bytes('KYC_CONTROLLER_ROLE'));
   const OPERATOR_ROLE = keccak256(toUtf8Bytes('OPERATOR_ROLE'));
 
@@ -40,12 +40,12 @@ describe('EDULandRewardsKYC', function () {
       deployer
     );
 
-    this.contract = await deployContract('EDULandRewardsKYCMock', messageSigner, this.nodeRewardsContract, forwarderRegistryAddress);
+    this.contract = await deployContract('EDULandRewardsKYCControllerMock', messageSigner, this.nodeRewardsContract, forwarderRegistryAddress);
     await this.nodeRewardsContract.connect(deployer).grantRole(REWARDS_CONTRACT_KYC_CONTROLLER_ROLE, this.contract);
     await this.contract.grantRole(OPERATOR_ROLE, operator.address);
 
     this.signTypedMessageDomain = {
-      name: 'EDULandRewardsKYC',
+      name: 'EDULandRewardsKYCController',
       version: '1.0',
       chainId: network.config.chainId,
       verifyingContract: await this.contract.getAddress(),
