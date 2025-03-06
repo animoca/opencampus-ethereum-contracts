@@ -153,6 +153,13 @@ describe('EDULandRewardsKYCController', function () {
         .withArgs(user.address, expireAt, signature);
     });
 
+    it('reverts if signature is invalid (invalid signature)', async function () {
+      const blockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
+      const expireAt = blockTimestamp + 60; // 1 minute
+      const signature = '0x' + '0'.repeat(130);
+      await expect(this.contract.addKycWallet(user.address, expireAt, signature)).to.be.revertedWith('ECDSA: invalid signature');
+    });
+
     it('successfully adds a kyc wallet', async function () {
       const blockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
       const expireAt = blockTimestamp + 60; // 1 minute
