@@ -1,23 +1,52 @@
-const {ethers, network} = require('hardhat');
+/* eslint-disable max-len */
+const {ethers} = require('hardhat');
 const {expect} = require('chai');
-const {parseEther, keccak256, toUtf8Bytes} = require('ethers');
+const {parseEther, keccak256, toUtf8Bytes, ZeroAddress} = require('ethers');
 
 const {deployContract, deployContractFromPath} = require('@animoca/ethereum-contract-helpers/src/test/deploy');
 const {loadFixture} = require('@animoca/ethereum-contract-helpers/src/test/fixtures');
 const {deployTokenMetadataResolverWithBaseURI, getForwarderRegistryAddress} = require('@animoca/ethereum-contracts/test/helpers/registries');
 
+const {RevocationUtil} = require('../vc/utils/revocation');
+const {setupOpenCampusCertificateNFTv1} = require('../setup');
+
 describe('EDULandRewardsKYCController', function () {
   const REWARDS_CONTRACT_KYC_CONTROLLER_ROLE = keccak256(toUtf8Bytes('KYC_CONTROLLER_ROLE'));
   const OPERATOR_ROLE = keccak256(toUtf8Bytes('OPERATOR_ROLE'));
 
-  let deployer, operator, messageSigner, messageSigner2, user, user2, other;
+  const VC_ISSUER = {
+    did: 'did:key:zUC7KtygRhrsVGTMYx7LHWsg3dpPscW6VcBvps4KgoziJ2vYXW3er1vH9mCqM67q3Nqc3BXAy488po6zMu6yEXdWz4oRLD9rbP5abPAKFuZXqTiwyvrgDehsYtw1NjAhUSzcYiL',
+    address: '0x58D027C315bAc47c60bD2491e2CBDce0977E3a37',
+    name: 'test.edu',
+    privateKey: '0x5a5c9a0954cc0a98584542c0fae233819133f8fc3ebafed632104bbe144ba2d7',
+  };
+  const VC_TOKEN_ID = '0x3E68D6D114FC48F393517777295C8D64';
+  const VC_TOKEN_ID_2 = '0xE291B7D94A184CE4A59CB8F2E0527B8E';
+  const getVcMetadata = (issuerDid = VC_ISSUER.did) => {
+    const now = 1742256000000;
+    return {
+      schemaVersion: 1,
+      achievementType: 3,
+      awardedDate: now,
+      validFrom: now,
+      validUtil: now + 365 * 24 * 3600 * 1000,
+      issuerDid,
+      achievementId: 'achievement-123-xyz',
+    };
+  };
+
+  let deployer, operator, user, user2, payoutWallet, other;
   before(async function () {
-    [deployer, operator, messageSigner, messageSigner2, user, user2, other] = await ethers.getSigners();
+    [deployer, operator, user, user2, payoutWallet, other] = await ethers.getSigners();
   });
 
   const fixture = async function () {
+    await setupOpenCampusCertificateNFTv1.call(this, deployer, user, payoutWallet);
+    await this.didRegistry.addIssuer(VC_ISSUER.did, VC_ISSUER.address);
+    this.vcRevocationUtil = new RevocationUtil(VC_ISSUER.privateKey, await this.revocationRegistry.getAddress());
+
+    this.forwarderRegistryAddress = await getForwarderRegistryAddress();
     const metadataResolverAddress = await deployTokenMetadataResolverWithBaseURI();
-    const forwarderRegistryAddress = await getForwarderRegistryAddress();
     const landContract = await deployContract('EDULand', 'EDU Land', 'EDULand', metadataResolverAddress);
     const refereeImplementation = await deployContract('RefereeMock', landContract);
     const refereeContract = await ethers.getContractAt(
@@ -40,22 +69,15 @@ describe('EDULandRewardsKYCController', function () {
       deployer
     );
 
-    this.contract = await deployContract('EDULandRewardsKYCControllerMock', messageSigner, this.nodeRewardsContract, forwarderRegistryAddress);
+    this.contract = await deployContract(
+      'EDULandRewardsKYCControllerMock',
+      this.nodeRewardsContract,
+      this.ocNFT,
+      VC_ISSUER.address,
+      this.forwarderRegistryAddress
+    );
     await this.nodeRewardsContract.connect(deployer).grantRole(REWARDS_CONTRACT_KYC_CONTROLLER_ROLE, this.contract);
     await this.contract.grantRole(OPERATOR_ROLE, operator.address);
-
-    this.signTypedMessageDomain = {
-      name: 'EDULandRewardsKYCController',
-      version: '1.0',
-      chainId: network.config.chainId,
-      verifyingContract: await this.contract.getAddress(),
-    };
-    this.signTypedMessageTypes = {
-      addKycWallet: [
-        {name: 'wallet', type: 'address'},
-        {name: 'expireAt', type: 'uint256'},
-      ],
-    };
   };
 
   beforeEach(async function () {
@@ -63,162 +85,223 @@ describe('EDULandRewardsKYCController', function () {
   });
 
   context('constructor', function () {
-    it('sets the message sender', async function () {
-      expect(await this.contract.messageSigner()).to.equal(messageSigner.address);
+    it('reverts if eduLandRewardsAddress is the zero address', async function () {
+      await expect(
+        deployContract('EDULandRewardsKYCController', ZeroAddress, this.ocNFT, VC_ISSUER.address, this.forwarderRegistryAddress)
+      ).to.be.revertedWithCustomError(this.contract, 'InvalidEduLandRewardsAddress');
     });
 
-    it('sets the node rewards contract', async function () {
-      expect(await this.contract.EDU_LAND_REWARDS()).to.equal(this.nodeRewardsContract);
-    });
-  });
-
-  context('setMessageSigner(address)', function () {
-    it('reverts if it is not called by the owner', async function () {
-      await expect(this.contract.connect(other).setMessageSigner(messageSigner2.address))
-        .to.be.revertedWithCustomError(this.contract, 'NotContractOwner')
-        .withArgs(other.address);
-    });
-
-    it('successfully set the new message signer', async function () {
-      await expect(this.contract.setMessageSigner(messageSigner2.address))
-        .to.emit(this.contract, 'MessageSignerSet')
-        .withArgs(messageSigner2.address);
-      expect(await this.contract.messageSigner()).to.equal(messageSigner2.address);
+    it('reverts if certificateNFTv1Address is the zero address', async function () {
+      await expect(
+        deployContract('EDULandRewardsKYCController', this.nodeRewardsContract, ZeroAddress, VC_ISSUER.address, this.forwarderRegistryAddress)
+      ).to.be.revertedWithCustomError(this.contract, 'InvalidCertificateNFTv1Address');
     });
   });
 
-  context('addKycWallet(address,uint256,bytes)', function () {
-    it('reverts if signature expires', async function () {
-      const blockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
-      const signature = await messageSigner.signTypedData(this.signTypedMessageDomain, this.signTypedMessageTypes, {
-        wallet: user.address,
-        expireAt: blockTimestamp,
-      });
-      await expect(this.contract.addKycWallet(user.address, blockTimestamp, signature))
-        .to.be.revertedWithCustomError(this.contract, 'ExpiredSignature')
-        .withArgs(user.address, blockTimestamp, signature);
-    });
-
-    it("reverts if reward KYC contract doesn't have kyc controller role in rewards contract", async function () {
-      await this.nodeRewardsContract.connect(deployer).revokeRole(REWARDS_CONTRACT_KYC_CONTROLLER_ROLE, this.contract);
-
-      const blockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
-      const expireAt = blockTimestamp + 60; // 1 minute
-      const signature = await messageSigner.signTypedData(this.signTypedMessageDomain, this.signTypedMessageTypes, {
-        wallet: user.address,
-        expireAt,
-      });
-      await expect(this.contract.addKycWallet(user.address, expireAt, signature)).to.be.revertedWith(
-        `AccessControl: account ${(await this.contract.getAddress()).toLowerCase()} is missing role ${REWARDS_CONTRACT_KYC_CONTROLLER_ROLE}`
-      );
-    });
-
-    it('reverts if signature is invalid (invalid signer)', async function () {
-      const blockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
-      const expireAt = blockTimestamp + 60; // 1 minute
-      const signature = await user.signTypedData(this.signTypedMessageDomain, this.signTypedMessageTypes, {
-        wallet: user.address,
-        expireAt,
-      });
-      await expect(this.contract.addKycWallet(user.address, expireAt, signature))
-        .to.be.revertedWithCustomError(this.contract, 'InvalidSignature')
-        .withArgs(user.address, expireAt, signature);
-    });
-
-    it('reverts if signature is invalid (invalid message data)', async function () {
-      const blockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
-      const expireAt = blockTimestamp + 60; // 1 minute
-      const signature = await messageSigner.signTypedData(this.signTypedMessageDomain, this.signTypedMessageTypes, {
-        wallet: other.address,
-        expireAt,
-      });
-      await expect(this.contract.addKycWallet(user.address, expireAt, signature))
-        .to.be.revertedWithCustomError(this.contract, 'InvalidSignature')
-        .withArgs(user.address, expireAt, signature);
-    });
-
-    it('reverts if signature is invalid (invalid message type)', async function () {
-      const blockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
-      const expireAt = blockTimestamp + 60; // 1 minute
-      const invalidDomain = {
-        ...this.signTypedMessageDomain,
-        verifyingContract: await this.nodeRewardsContract.getAddress(),
-      };
-      const signature = await messageSigner.signTypedData(invalidDomain, this.signTypedMessageTypes, {
-        wallet: other.address,
-        expireAt,
-      });
-      await expect(this.contract.addKycWallet(user.address, expireAt, signature))
-        .to.be.revertedWithCustomError(this.contract, 'InvalidSignature')
-        .withArgs(user.address, expireAt, signature);
-    });
-
-    it('reverts if signature is invalid (invalid signature)', async function () {
-      const blockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
-      const expireAt = blockTimestamp + 60; // 1 minute
-      const signature = '0x' + '0'.repeat(130);
-      await expect(this.contract.addKycWallet(user.address, expireAt, signature)).to.be.revertedWith('ECDSA: invalid signature');
-    });
-
-    it('successfully adds a kyc wallet', async function () {
-      const blockTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
-      const expireAt = blockTimestamp + 60; // 1 minute
-      const signature = await messageSigner.signTypedData(this.signTypedMessageDomain, this.signTypedMessageTypes, {
-        wallet: user.address,
-        expireAt,
-      });
-      await expect(this.contract.addKycWallet(user.address, expireAt, signature)).to.emit(this.contract, 'KycWalletsAdded').withArgs([user.address]);
-      expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.true;
-    });
-  });
-
-  context('addKycWallets(address[])', function () {
-    it('reverts if it is not called by the operator', async function () {
-      await expect(this.contract.addKycWallets([user.address]))
+  context('setVcIssuer(address)', function () {
+    it('reverts if the caller is not an operator', async function () {
+      await expect(this.contract.setVcIssuer(VC_ISSUER.address))
         .to.be.revertedWithCustomError(this.contract, 'NotRoleHolder')
-        .withArgs(OPERATOR_ROLE, deployer.address);
+        .withArgs(this.contract.OPERATOR_ROLE(), deployer.address);
     });
 
-    it('successfully adds a kyc wallet', async function () {
-      await expect(this.contract.connect(operator).addKycWallets([user.address]))
-        .to.emit(this.contract, 'KycWalletsAdded')
-        .withArgs([user.address]);
-      expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.true;
+    it('sets the VC issuer', async function () {
+      await this.contract.connect(operator).setVcIssuer(VC_ISSUER.address);
+      expect(await this.contract.vcIssuer()).to.equal(VC_ISSUER.address);
+    });
+  });
+
+  context('addKycWallets(uint256[])', function () {
+    it('reverts if the Vc doesn’t exist', async function () {
+      await expect(this.contract.addKycWallets([VC_TOKEN_ID]))
+        .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonExistingToken')
+        .withArgs(VC_TOKEN_ID);
     });
 
-    it('successfully adds multiple kyc wallets', async function () {
-      await expect(this.contract.connect(operator).addKycWallets([user.address, user2.address]))
-        .to.emit(this.contract, 'KycWalletsAdded')
-        .withArgs([user.address, user2.address]);
-      expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.true;
-      expect(await this.nodeRewardsContract.isKycWallet(user2.address)).to.be.true;
+    context('when VC issuer is not allowed', function () {
+      beforeEach(async function () {
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID, getVcMetadata());
+        await this.ocNFT.mint(user2.address, VC_TOKEN_ID_2, getVcMetadata('did:key:nonExists'));
+      });
+
+      it("reverts if the issuer did doesn't match", async function () {
+        await expect(this.contract.addKycWallets([VC_TOKEN_ID_2]))
+          .to.be.revertedWithCustomError(this.contract, 'InvalidVcIssuerDid')
+          .withArgs(keccak256(toUtf8Bytes('did:key:nonExists')));
+      });
+
+      it('reverts if one of the VCs issuer did does not match', async function () {
+        await expect(this.contract.addKycWallets([VC_TOKEN_ID, VC_TOKEN_ID_2]))
+          .to.be.revertedWithCustomError(this.contract, 'InvalidVcIssuerDid')
+          .withArgs(keccak256(toUtf8Bytes('did:key:nonExists')));
+      });
+    });
+
+    context('when attempting to add a wallet that is already set', function () {
+      beforeEach(async function () {
+        const metaData = getVcMetadata();
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID, metaData);
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID_2, metaData);
+      });
+
+      it('reverts if the wallet is already set', async function () {
+        await this.contract.addKycWallets([VC_TOKEN_ID]);
+
+        await expect(this.contract.addKycWallets([VC_TOKEN_ID]))
+          .to.be.revertedWithCustomError(this.contract, 'KycWalletAlreadySet')
+          .withArgs(user.address, VC_TOKEN_ID);
+      });
+
+      it('reverts if providing duplicate vc ids', async function () {
+        await expect(this.contract.addKycWallets([VC_TOKEN_ID, VC_TOKEN_ID]))
+          .to.be.revertedWithCustomError(this.contract, 'KycWalletAlreadySet')
+          .withArgs(user.address, VC_TOKEN_ID);
+      });
+
+      it('reverts if providing Vc ids for the same wallet', async function () {
+        await expect(this.contract.addKycWallets([VC_TOKEN_ID, VC_TOKEN_ID_2]))
+          .to.be.revertedWithCustomError(this.contract, 'KycWalletAlreadySet')
+          .withArgs(user.address, VC_TOKEN_ID_2);
+      });
+    });
+
+    context('when Vc is revoked', function () {
+      beforeEach(async function () {
+        const metaData = getVcMetadata();
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID, metaData);
+
+        const {hashedDid, signature} = await this.vcRevocationUtil.makePayloadAndSignature(VC_ISSUER.did, VC_TOKEN_ID);
+        await this.revocationRegistry.revokeVC(hashedDid, VC_TOKEN_ID, signature);
+
+        await this.ocNFT.mint(user2.address, VC_TOKEN_ID_2, metaData);
+      });
+
+      it('reverts if the Vc is revoked', async function () {
+        await expect(this.contract.addKycWallets([VC_TOKEN_ID]))
+          .to.be.revertedWithCustomError(this.contract, 'RevokedVc')
+          .withArgs(VC_TOKEN_ID);
+      });
+
+      it('reverts if one of the VCs is revoked', async function () {
+        await expect(this.contract.addKycWallets([VC_TOKEN_ID, VC_TOKEN_ID_2]))
+          .to.be.revertedWithCustomError(this.contract, 'RevokedVc')
+          .withArgs(VC_TOKEN_ID);
+      });
+    });
+
+    context('when successful', function () {
+      beforeEach(async function () {
+        const metaData = getVcMetadata();
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID, metaData);
+        await this.ocNFT.mint(user2.address, VC_TOKEN_ID_2, metaData);
+      });
+
+      it('successfully adds a kyc wallet', async function () {
+        await expect(this.contract.addKycWallets([VC_TOKEN_ID]))
+          .to.emit(this.contract, 'KycWalletsAdded')
+          .withArgs([user.address]);
+        expect(await this.contract.vcIdPerAccount(user.address)).to.equal(VC_TOKEN_ID);
+        expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.true;
+      });
+
+      it('successfully adds multiple kyc wallets', async function () {
+        await expect(this.contract.addKycWallets([VC_TOKEN_ID, VC_TOKEN_ID_2]))
+          .to.emit(this.contract, 'KycWalletsAdded')
+          .withArgs([user.address, user2.address]);
+
+        expect(await this.contract.vcIdPerAccount(user.address)).to.equal(VC_TOKEN_ID);
+        expect(await this.contract.vcIdPerAccount(user2.address)).to.equal(VC_TOKEN_ID_2);
+
+        expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.true;
+        expect(await this.nodeRewardsContract.isKycWallet(user2.address)).to.be.true;
+      });
     });
   });
 
   context('removeKycWallets(address[])', function () {
-    beforeEach(async function () {
-      await this.contract.connect(operator).addKycWallets([user.address, user2.address]);
-    });
-
-    it('reverts if it is not called by the operator', async function () {
+    it('reverts if the wallet is not set', async function () {
       await expect(this.contract.removeKycWallets([user.address]))
-        .to.be.revertedWithCustomError(this.contract, 'NotRoleHolder')
-        .withArgs(OPERATOR_ROLE, deployer.address);
+        .to.be.revertedWithCustomError(this.contract, 'KycWalletNotSet')
+        .withArgs(user.address);
     });
 
-    it('successfully removes a kyc wallet', async function () {
-      await expect(this.contract.connect(operator).removeKycWallets([user.address]))
-        .to.emit(this.contract, 'KycWalletsRemoved')
-        .withArgs([user.address]);
-      expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.false;
+    context('when VC not revoked', function () {
+      beforeEach(async function () {
+        const metaData = getVcMetadata();
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID, metaData);
+        await this.ocNFT.mint(user2.address, VC_TOKEN_ID_2, metaData);
+        await this.contract.addKycWallets([VC_TOKEN_ID, VC_TOKEN_ID_2]);
+
+        const {hashedDid, signature} = await this.vcRevocationUtil.makePayloadAndSignature(VC_ISSUER.did, VC_TOKEN_ID);
+        await this.revocationRegistry.revokeVC(hashedDid, VC_TOKEN_ID, signature);
+      });
+
+      it('reverts if the VC is not revoked', async function () {
+        await expect(this.contract.removeKycWallets([user2.address]))
+          .to.be.revertedWithCustomError(this.contract, 'VcNotRevoked')
+          .withArgs(VC_TOKEN_ID_2);
+      });
+
+      it('reverts if one of the VCs is not revoked', async function () {
+        await expect(this.contract.removeKycWallets([user.address, user2.address]))
+          .to.be.revertedWithCustomError(this.contract, 'VcNotRevoked')
+          .withArgs(VC_TOKEN_ID_2);
+      });
     });
 
-    it('successfully removes multiple kyc wallets', async function () {
-      await expect(this.contract.connect(operator).removeKycWallets([user.address, user2.address]))
-        .to.emit(this.contract, 'KycWalletsRemoved')
-        .withArgs([user.address, user2.address]);
-      expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.false;
-      expect(await this.nodeRewardsContract.isKycWallet(user2.address)).to.be.false;
+    context('when successful', function () {
+      beforeEach(async function () {
+        const metaData = getVcMetadata();
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID, metaData);
+        await this.ocNFT.mint(user2.address, VC_TOKEN_ID_2, metaData);
+        await this.contract.addKycWallets([VC_TOKEN_ID, VC_TOKEN_ID_2]);
+      });
+
+      it('remove a kyc wallet if the VC is revoked', async function () {
+        const {hashedDid, signature} = await this.vcRevocationUtil.makePayloadAndSignature(VC_ISSUER.did, VC_TOKEN_ID);
+        await this.revocationRegistry.revokeVC(hashedDid, VC_TOKEN_ID, signature);
+
+        await expect(this.contract.removeKycWallets([user.address]))
+          .to.emit(this.contract, 'KycWalletsRemoved')
+          .withArgs([user.address]);
+        expect(await this.contract.vcIdPerAccount(user.address)).to.equal(0);
+        expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.false;
+      });
+
+      it('remove a kyc wallet if the VC is burnt', async function () {
+        const {hashedDid, signature} = await this.vcRevocationUtil.makePayloadAndSignature(VC_ISSUER.did, VC_TOKEN_ID);
+        await this.revocationRegistry.revokeVC(hashedDid, VC_TOKEN_ID, signature);
+        await this.ocNFT.burn(VC_TOKEN_ID);
+
+        await expect(this.contract.removeKycWallets([user.address]))
+          .to.emit(this.contract, 'KycWalletsRemoved')
+          .withArgs([user.address]);
+        expect(await this.contract.vcIdPerAccount(user.address)).to.equal(0);
+        expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.false;
+      });
+
+      it('remove a kyc wallet if the VC issuer is revoked', async function () {
+        await this.didRegistry.connect(deployer).removeIssuer(VC_ISSUER.did, VC_ISSUER.address);
+
+        await expect(this.contract.removeKycWallets([user.address]))
+          .to.emit(this.contract, 'KycWalletsRemoved')
+          .withArgs([user.address]);
+        expect(await this.contract.vcIdPerAccount(user.address)).to.equal(0);
+        expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.false;
+      });
+
+      it('remove multiple kyc wallets', async function () {
+        const {hashedDid, signature} = await this.vcRevocationUtil.makePayloadAndSignature(VC_ISSUER.did, [VC_TOKEN_ID, VC_TOKEN_ID_2]);
+        await this.revocationRegistry.batchRevokeVCs(hashedDid, [VC_TOKEN_ID, VC_TOKEN_ID_2], signature);
+
+        await expect(this.contract.removeKycWallets([user.address, user2.address]))
+          .to.emit(this.contract, 'KycWalletsRemoved')
+          .withArgs([user.address, user2.address]);
+        expect(await this.contract.vcIdPerAccount(user.address)).to.equal(0);
+        expect(await this.contract.vcIdPerAccount(user2.address)).to.equal(0);
+        expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.false;
+        expect(await this.nodeRewardsContract.isKycWallet(user2.address)).to.be.false;
+      });
     });
   });
 

@@ -2,15 +2,15 @@
 pragma solidity 0.8.22;
 
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
-import {IEDULandRewards} from "../../land/interfaces/IEDULandRewards.sol";
 import {EDULandRewardsKYCController} from "../../land/EDULandRewardsKYCController.sol";
 
 contract EDULandRewardsKYCControllerMock is EDULandRewardsKYCController {
     constructor(
-        address messageSigner,
-        IEDULandRewards eduLandRewards,
+        address eduLandRewardsAddress,
+        address certificateNFTV1Address,
+        address vcIssuerAddress,
         IForwarderRegistry forwarderRegistry
-    ) EDULandRewardsKYCController(messageSigner, eduLandRewards, forwarderRegistry) {}
+    ) EDULandRewardsKYCController(eduLandRewardsAddress, certificateNFTV1Address, vcIssuerAddress, forwarderRegistry) {}
 
     /// @notice Internal function to access the current msg.sender.
     /// @return The current msg.sender value.
