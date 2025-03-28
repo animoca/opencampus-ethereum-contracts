@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.0
+
+- Added EDULandPriceHelperV2 contract and related test cases. 
+
 ## 1.4.7
 
 - Further updated the function doc for EDULandRewards._claimRewards().
