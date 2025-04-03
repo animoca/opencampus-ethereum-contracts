@@ -72,7 +72,7 @@ describe('OpenCampusCertificateNFTMinter', function () {
 
     context('When issuer is whitelisted', function () {
       beforeEach(async function () {
-        this.didRegistry.addIssuer(ISSUER.did, ISSUER.address);
+        await this.didRegistry.addIssuer(ISSUER.did, ISSUER.address);
       });
 
       it('User balance is 1', async function () {
