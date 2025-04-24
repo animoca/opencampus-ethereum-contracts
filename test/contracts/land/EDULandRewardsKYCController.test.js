@@ -12,7 +12,6 @@ const {setupOpenCampusCertificateNFTv1} = require('../setup');
 
 describe('EDULandRewardsKYCController', function () {
   const REWARDS_CONTRACT_KYC_CONTROLLER_ROLE = keccak256(toUtf8Bytes('KYC_CONTROLLER_ROLE'));
-  const OPERATOR_ROLE = keccak256(toUtf8Bytes('OPERATOR_ROLE'));
 
   const VC_ISSUER = {
     did: 'did:key:zUC7KtygRhrsVGTMYx7LHWsg3dpPscW6VcBvps4KgoziJ2vYXW3er1vH9mCqM67q3Nqc3BXAy488po6zMu6yEXdWz4oRLD9rbP5abPAKFuZXqTiwyvrgDehsYtw1NjAhUSzcYiL',
@@ -77,39 +76,34 @@ describe('EDULandRewardsKYCController', function () {
       this.forwarderRegistryAddress
     );
     await this.nodeRewardsContract.connect(deployer).grantRole(REWARDS_CONTRACT_KYC_CONTROLLER_ROLE, this.contract);
-    await this.contract.grantRole(OPERATOR_ROLE, operator.address);
   };
 
   beforeEach(async function () {
     await loadFixture(fixture, this);
   });
 
-  context('constructor', function () {
-    it('reverts if eduLandRewardsAddress is the zero address', async function () {
-      await expect(
-        deployContract('EDULandRewardsKYCController', ZeroAddress, this.ocNFT, VC_ISSUER.address, this.forwarderRegistryAddress)
-      ).to.be.revertedWithCustomError(this.contract, 'InvalidEduLandRewardsAddress');
-    });
+  context(
+    'constructor(address eduLandRewardsAddress, address certificateNFTv1Address, address vcIssuerAddress, IForwarderRegistry forwarderRegistry)',
+    function () {
+      it('reverts if eduLandRewardsAddress is the zero address', async function () {
+        await expect(
+          deployContract('EDULandRewardsKYCController', ZeroAddress, this.ocNFT, VC_ISSUER.address, this.forwarderRegistryAddress)
+        ).to.be.revertedWithCustomError(this.contract, 'InvalidEduLandRewardsAddress');
+      });
 
-    it('reverts if certificateNFTv1Address is the zero address', async function () {
-      await expect(
-        deployContract('EDULandRewardsKYCController', this.nodeRewardsContract, ZeroAddress, VC_ISSUER.address, this.forwarderRegistryAddress)
-      ).to.be.revertedWithCustomError(this.contract, 'InvalidCertificateNFTv1Address');
-    });
-  });
+      it('reverts if certificateNFTv1Address is the zero address', async function () {
+        await expect(
+          deployContract('EDULandRewardsKYCController', this.nodeRewardsContract, ZeroAddress, VC_ISSUER.address, this.forwarderRegistryAddress)
+        ).to.be.revertedWithCustomError(this.contract, 'InvalidCertificateNFTv1Address');
+      });
 
-  context('setVcIssuer(address)', function () {
-    it('reverts if the caller is not an operator', async function () {
-      await expect(this.contract.setVcIssuer(VC_ISSUER.address))
-        .to.be.revertedWithCustomError(this.contract, 'NotRoleHolder')
-        .withArgs(this.contract.OPERATOR_ROLE(), deployer.address);
-    });
-
-    it('sets the VC issuer', async function () {
-      await this.contract.connect(operator).setVcIssuer(VC_ISSUER.address);
-      expect(await this.contract.vcIssuer()).to.equal(VC_ISSUER.address);
-    });
-  });
+      it('reverts if vcIssuerAddress is the zero address', async function () {
+        await expect(
+          deployContract('EDULandRewardsKYCController', this.nodeRewardsContract, this.ocNFT, ZeroAddress, this.forwarderRegistryAddress)
+        ).to.be.revertedWithCustomError(this.contract, 'InvalidVcIssuerAddress');
+      });
+    }
+  );
 
   context('addKycWallets(uint256[])', function () {
     it('reverts if the Vc doesn’t exist', async function () {
@@ -126,14 +120,14 @@ describe('EDULandRewardsKYCController', function () {
 
       it("reverts if the issuer did doesn't match", async function () {
         await expect(this.contract.addKycWallets([VC_TOKEN_ID_2]))
-          .to.be.revertedWithCustomError(this.contract, 'InvalidVcIssuerDid')
-          .withArgs(keccak256(toUtf8Bytes('did:key:nonExists')));
+          .to.be.revertedWithCustomError(this.contract, 'VcIssuerNotAllowed')
+          .withArgs(VC_TOKEN_ID_2, 'did:key:nonExists');
       });
 
       it('reverts if one of the VCs issuer did does not match', async function () {
         await expect(this.contract.addKycWallets([VC_TOKEN_ID, VC_TOKEN_ID_2]))
-          .to.be.revertedWithCustomError(this.contract, 'InvalidVcIssuerDid')
-          .withArgs(keccak256(toUtf8Bytes('did:key:nonExists')));
+          .to.be.revertedWithCustomError(this.contract, 'VcIssuerNotAllowed')
+          .withArgs(VC_TOKEN_ID_2, 'did:key:nonExists');
       });
     });
 

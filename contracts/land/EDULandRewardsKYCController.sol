@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
-import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {RewardsKYC} from "@gelatonetwork/node-sale-rewards/contracts/RewardsKYC.sol";
-import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
-import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
-import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
-import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
@@ -16,13 +11,7 @@ import {OpenCampusCertificateNFTv1} from "../vc/OpenCampusCertificateNFTv1.sol";
 
 /// @title EDULandRewardsKYCController
 /// @notice A contract for managing KYC accounts in EDULandRewards, utilizing OpenCampusCertificateNFTv1 (VC) as proof of KYC approval.
-contract EDULandRewardsKYCController is AccessControl, ForwarderRegistryContext {
-    using AccessControlStorage for AccessControlStorage.Layout;
-    using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
-
-    /// @notice The role identifier for the operator role.
-    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
-
+contract EDULandRewardsKYCController is ForwarderRegistryContext {
     /// @notice An reference to the EDULandRewards contract.
     RewardsKYC public immutable EDU_LAND_REWARDS;
 
@@ -33,14 +22,10 @@ contract EDULandRewardsKYCController is AccessControl, ForwarderRegistryContext 
     IIssuersDIDRegistry public immutable VC_ISSUERS_DID_REGISTRY;
 
     /// @notice The VC issuer address.
-    address public vcIssuer;
+    address public immutable VC_ISSUER;
 
     /// @notice A mapping of the VC token ID per account.
     mapping(address account => uint256 vcId) public vcIdPerAccount;
-
-    /// @notice Emitted when the VC issuer is set.
-    /// @param vcIssuer The VC issuer address.
-    event VcIssuerSet(address vcIssuer);
 
     /// @notice Emitted when KYC accounts are added.
     /// @param accounts A list of wallet addresses added.
@@ -56,9 +41,13 @@ contract EDULandRewardsKYCController is AccessControl, ForwarderRegistryContext 
     /// @notice Thrown when the OpenCampusCertificateNFTv1 address is invalid.
     error InvalidCertificateNFTv1Address();
 
-    /// @notice Thrown when the VC issuer is invalid.
-    /// @param issuerDid The issuer DID hash.
-    error InvalidVcIssuerDid(bytes32 issuerDid);
+    /// @notice Thrown when the VC issuer address is invalid.
+    error InvalidVcIssuerAddress();
+
+    /// @notice Thrown when the VC issuer is not included in the VC issuers DID registry.
+    /// @param vcId The token ID of the VC.
+    /// @param issuerDid The issuer DID.
+    error VcIssuerNotAllowed(uint256 vcId, string issuerDid);
 
     /// @notice Thrown when the VC is revoked when adding KYC accounts.
     /// @param vcId The token ID of the VC.
@@ -78,46 +67,32 @@ contract EDULandRewardsKYCController is AccessControl, ForwarderRegistryContext 
     error KycWalletNotSet(address account);
 
     /// @notice Constructor.
-    /// @dev Reverts with {InvalidEduLandRewardsAddress} if the EDULandRewards address is invalid.
-    /// @dev Reverts with {InvalidCertificateNFTv1Address} if the OpenCampusCertificateNFTv1 address is invalid.
-    /// @dev Emits {VcIssuerSet} with the VC issuer address.
+    /// @dev Reverts with {InvalidEduLandRewardsAddress} if the EDULandRewards address is zero.
+    /// @dev Reverts with {InvalidCertificateNFTv1Address} if the OpenCampusCertificateNFTv1 address is zero.
+    /// @dev Reverts with {InvalidVcIssuerAddress} if the VC issuer address is zero.
     /// @param eduLandRewardsAddress The address of the EDULandRewards contract.
     /// @param certificateNFTv1Address The address of the OpenCampusCertificateNFTv1 contract.
-    /// @param vcIssuer_ The VC issuer address.
+    /// @param vcIssuerAddress The VC issuer address.
     /// @param forwarderRegistry The address of the ForwarderRegistry contract.
     constructor(
         address eduLandRewardsAddress,
         address certificateNFTv1Address,
-        address vcIssuer_,
+        address vcIssuerAddress,
         IForwarderRegistry forwarderRegistry
-    ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
-        if (eduLandRewardsAddress == address(0)) {
-            revert InvalidEduLandRewardsAddress();
-        }
-        EDU_LAND_REWARDS = RewardsKYC(eduLandRewardsAddress);
+    ) ForwarderRegistryContext(forwarderRegistry) {
+        if (eduLandRewardsAddress == address(0)) revert InvalidEduLandRewardsAddress();
+        if (certificateNFTv1Address == address(0)) revert InvalidCertificateNFTv1Address();
+        if (vcIssuerAddress == address(0)) revert InvalidVcIssuerAddress();
 
-        if (certificateNFTv1Address == address(0)) {
-            revert InvalidCertificateNFTv1Address();
-        }
+        EDU_LAND_REWARDS = RewardsKYC(eduLandRewardsAddress);
         VC_NFT_V1 = OpenCampusCertificateNFTv1(certificateNFTv1Address);
         VC_ISSUERS_DID_REGISTRY = VC_NFT_V1.DID_REGISTRY();
-
-        vcIssuer = vcIssuer_;
-        emit VcIssuerSet(vcIssuer_);
+        VC_ISSUER = vcIssuerAddress;
     }
 
-    /// @notice Sets the VC issuer address.
-    /// @dev Reverts with {NotRoleHolder} if the sender does not have the operator role.
-    /// @param vcIssuer_ The VC issuer address.
-    function setVcIssuer(address vcIssuer_) external {
-        AccessControlStorage.layout().enforceHasRole(OPERATOR_ROLE, _msgSender());
-        vcIssuer = vcIssuer_;
-        emit VcIssuerSet(vcIssuer_);
-    }
-
-    /// @notice Adds KYC wallets.
+    /// @notice Adds KYC wallets to the EDULandRewards contract by verifying the VC token IDs.
     /// @dev Reverts with {KycWalletAlreadySet} if the VC token ID already exists for the account.
-    /// @dev Reverts with {InvalidVcIssuerDid} if the VC issuer is invalid.
+    /// @dev Reverts with {VcIssuerNotAllowed} if the issuer is not included in the VC issuers DID registry.
     /// @dev Reverts with {RevokedVc} if the VC is revoked.
     /// @dev Emits {KycWalletsAdded} with the list of wallet addresses added.
     /// @param vcIds The list of VC token IDs.
@@ -125,7 +100,7 @@ contract EDULandRewardsKYCController is AccessControl, ForwarderRegistryContext 
         uint256 length = vcIds.length;
         address[] memory accounts = new address[](length);
 
-        address issuer = vcIssuer;
+        address issuer = VC_ISSUER;
         IRevocationRegistry revocationRegistry = VC_NFT_V1.revocationRegistry();
 
         for (uint256 i = 0; i < length; i++) {
@@ -138,7 +113,7 @@ contract EDULandRewardsKYCController is AccessControl, ForwarderRegistryContext 
             (, , , , , string memory issuerDid, ) = VC_NFT_V1.vcData(vcId);
             bytes32 vcHashedIssuerDid = keccak256(bytes(issuerDid));
             if (!VC_ISSUERS_DID_REGISTRY.isIssuerAllowed(issuerDid, issuer)) {
-                revert InvalidVcIssuerDid(vcHashedIssuerDid);
+                revert VcIssuerNotAllowed(vcId, issuerDid);
             }
 
             bool isRevoked = revocationRegistry.isRevoked(vcHashedIssuerDid, vcId);
@@ -154,13 +129,13 @@ contract EDULandRewardsKYCController is AccessControl, ForwarderRegistryContext 
         emit KycWalletsAdded(accounts);
     }
 
-    /// @notice Removes KYC wallets.
+    /// @notice Removes KYC wallets from the EDULandRewards contract.
     /// @dev Reverts with {KycWalletNotSet} if the VC token ID is not set for the account.
     /// @dev Reverts with {VcNotRevoked} if the VC is not revoked.
     /// @dev Emits {KycWalletsRemoved} with the list of wallet addresses removed.
     /// @param accounts The list of wallet addresses.
     function removeKycWallets(address[] calldata accounts) external {
-        address issuer = vcIssuer;
+        address issuer = VC_ISSUER;
         IRevocationRegistry revocationRegistry = VC_NFT_V1.revocationRegistry();
 
         for (uint256 i; i < accounts.length; i++) {
@@ -187,12 +162,12 @@ contract EDULandRewardsKYCController is AccessControl, ForwarderRegistryContext 
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
-    function _msgSender() internal view virtual override(Context, ForwarderRegistryContextBase) returns (address) {
+    function _msgSender() internal view virtual override(ForwarderRegistryContextBase) returns (address) {
         return ForwarderRegistryContextBase._msgSender();
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
-    function _msgData() internal view virtual override(Context, ForwarderRegistryContextBase) returns (bytes calldata) {
+    function _msgData() internal view virtual override(ForwarderRegistryContextBase) returns (bytes calldata) {
         return ForwarderRegistryContextBase._msgData();
     }
 }
