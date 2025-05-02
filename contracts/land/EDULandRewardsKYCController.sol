@@ -6,7 +6,6 @@ import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/i
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {IRevocationRegistry} from "../vc/interfaces/IRevocationRegistry.sol";
-import {IIssuersDIDRegistry} from "../vc/interfaces/IIssuersDIDRegistry.sol";
 import {OpenCampusCertificateNFTv1} from "../vc/OpenCampusCertificateNFTv1.sol";
 
 /// @title EDULandRewardsKYCController
@@ -16,13 +15,10 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
     RewardsKYC public immutable EDU_LAND_REWARDS;
 
     /// @notice An reference to the OpenCampusCertificateNFTv1 contract.
-    OpenCampusCertificateNFTv1 public immutable VC_NFT_V1;
+    OpenCampusCertificateNFTv1 public immutable KYC_CERTIFICATE_NFT;
 
-    /// @notice An reference to an IIssuersDIDRegistry instance.
-    IIssuersDIDRegistry public immutable VC_ISSUERS_DID_REGISTRY;
-
-    /// @notice The VC issuer address.
-    address public immutable VC_ISSUER;
+    /// @notice The VC issuer DID hash.
+    bytes32 public immutable VC_ISSUER_DID_HASH;
 
     /// @notice A mapping of the VC token ID per account.
     mapping(address account => uint256 vcId) public vcIdPerAccount;
@@ -39,15 +35,11 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
     error InvalidEduLandRewardsAddress();
 
     /// @notice Thrown when the OpenCampusCertificateNFTv1 address is invalid.
-    error InvalidCertificateNFTv1Address();
+    error InvalidKycCertificateNFTAddress();
 
-    /// @notice Thrown when the VC issuer address is invalid.
-    error InvalidVcIssuerAddress();
-
-    /// @notice Thrown when the VC issuer is not included in the VC issuers DID registry.
+    /// @notice Thrown when the VC issuer DID hash does not match.
     /// @param vcId The token ID of the VC.
-    /// @param issuerDid The issuer DID.
-    error VcIssuerNotAllowed(uint256 vcId, string issuerDid);
+    error InvalidIssuerDid(uint256 vcId);
 
     /// @notice Thrown when the VC is revoked when adding KYC accounts.
     /// @param vcId The token ID of the VC.
@@ -68,31 +60,28 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
 
     /// @notice Constructor.
     /// @dev Reverts with {InvalidEduLandRewardsAddress} if the EDULandRewards address is zero.
-    /// @dev Reverts with {InvalidCertificateNFTv1Address} if the OpenCampusCertificateNFTv1 address is zero.
-    /// @dev Reverts with {InvalidVcIssuerAddress} if the VC issuer address is zero.
+    /// @dev Reverts with {InvalidKycCertificateNFTAddress} if the OpenCampusCertificateNFTv1 address is zero.
     /// @param eduLandRewardsAddress The address of the EDULandRewards contract.
-    /// @param certificateNFTv1Address The address of the OpenCampusCertificateNFTv1 contract.
-    /// @param vcIssuerAddress The VC issuer address.
+    /// @param kycCertificateNftAddress The address of the OpenCampusCertificateNFTv1 contract for KYC.
+    /// @param vcIssuerDid The VC issuer DID.
     /// @param forwarderRegistry The address of the ForwarderRegistry contract.
     constructor(
         address eduLandRewardsAddress,
-        address certificateNFTv1Address,
-        address vcIssuerAddress,
+        address kycCertificateNftAddress,
+        string memory vcIssuerDid,
         IForwarderRegistry forwarderRegistry
     ) ForwarderRegistryContext(forwarderRegistry) {
         if (eduLandRewardsAddress == address(0)) revert InvalidEduLandRewardsAddress();
-        if (certificateNFTv1Address == address(0)) revert InvalidCertificateNFTv1Address();
-        if (vcIssuerAddress == address(0)) revert InvalidVcIssuerAddress();
+        if (kycCertificateNftAddress == address(0)) revert InvalidKycCertificateNFTAddress();
 
         EDU_LAND_REWARDS = RewardsKYC(eduLandRewardsAddress);
-        VC_NFT_V1 = OpenCampusCertificateNFTv1(certificateNFTv1Address);
-        VC_ISSUERS_DID_REGISTRY = VC_NFT_V1.DID_REGISTRY();
-        VC_ISSUER = vcIssuerAddress;
+        KYC_CERTIFICATE_NFT = OpenCampusCertificateNFTv1(kycCertificateNftAddress);
+        VC_ISSUER_DID_HASH = keccak256(bytes(vcIssuerDid));
     }
 
     /// @notice Adds KYC wallets to the EDULandRewards contract by verifying the VC token IDs.
     /// @dev Reverts with {KycWalletAlreadySet} if the VC token ID already exists for the account.
-    /// @dev Reverts with {VcIssuerNotAllowed} if the issuer is not included in the VC issuers DID registry.
+    /// @dev Reverts with {InvalidIssuerDid} if the VC issuer DID hash does not match.
     /// @dev Reverts with {RevokedVc} if the VC is revoked.
     /// @dev Emits {KycWalletsAdded} with the list of wallet addresses added.
     /// @param vcIds The list of VC token IDs.
@@ -100,20 +89,20 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
         uint256 length = vcIds.length;
         address[] memory accounts = new address[](length);
 
-        address issuer = VC_ISSUER;
-        IRevocationRegistry revocationRegistry = VC_NFT_V1.revocationRegistry();
+        bytes32 hashedIssuerDid = VC_ISSUER_DID_HASH;
+        IRevocationRegistry revocationRegistry = KYC_CERTIFICATE_NFT.revocationRegistry();
 
         for (uint256 i = 0; i < length; i++) {
             uint256 vcId = vcIds[i];
-            address owner = VC_NFT_V1.ownerOf(vcId);
+            address owner = KYC_CERTIFICATE_NFT.ownerOf(vcId);
             if (vcIdPerAccount[owner] != 0) {
                 revert KycWalletAlreadySet(owner, vcId);
             }
 
-            (, , , , , string memory issuerDid, ) = VC_NFT_V1.vcData(vcId);
+            (, , , , , string memory issuerDid, ) = KYC_CERTIFICATE_NFT.vcData(vcId);
             bytes32 vcHashedIssuerDid = keccak256(bytes(issuerDid));
-            if (!VC_ISSUERS_DID_REGISTRY.isIssuerAllowed(issuerDid, issuer)) {
-                revert VcIssuerNotAllowed(vcId, issuerDid);
+            if (hashedIssuerDid != vcHashedIssuerDid) {
+                revert InvalidIssuerDid(vcId);
             }
 
             bool isRevoked = revocationRegistry.isRevoked(vcHashedIssuerDid, vcId);
@@ -135,8 +124,7 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
     /// @dev Emits {KycWalletsRemoved} with the list of wallet addresses removed.
     /// @param accounts The list of wallet addresses.
     function removeKycWallets(address[] calldata accounts) external {
-        address issuer = VC_ISSUER;
-        IRevocationRegistry revocationRegistry = VC_NFT_V1.revocationRegistry();
+        IRevocationRegistry revocationRegistry = KYC_CERTIFICATE_NFT.revocationRegistry();
 
         for (uint256 i; i < accounts.length; i++) {
             address account = accounts[i];
@@ -145,14 +133,11 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
                 revert KycWalletNotSet(account);
             }
 
-            (, , , , , string memory issuerDid, ) = VC_NFT_V1.vcData(vcId);
+            (, , , , , string memory issuerDid, ) = KYC_CERTIFICATE_NFT.vcData(vcId);
             bytes32 vcHashedIssuerDid = keccak256(bytes(issuerDid));
-            bool isIssuerAllowed = VC_ISSUERS_DID_REGISTRY.isIssuerAllowed(issuerDid, issuer);
-            if (isIssuerAllowed) {
-                bool isRevoked = revocationRegistry.isRevoked(vcHashedIssuerDid, vcId);
-                if (!isRevoked) {
-                    revert VcNotRevoked(vcId);
-                }
+            bool isRevoked = revocationRegistry.isRevoked(vcHashedIssuerDid, vcId);
+            if (!isRevoked) {
+                revert VcNotRevoked(vcId);
             }
             delete vcIdPerAccount[account];
         }

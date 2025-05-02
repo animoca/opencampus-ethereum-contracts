@@ -7,10 +7,10 @@ import {EDULandRewardsKYCController} from "../../land/EDULandRewardsKYCControlle
 contract EDULandRewardsKYCControllerMock is EDULandRewardsKYCController {
     constructor(
         address eduLandRewardsAddress,
-        address certificateNFTV1Address,
-        address vcIssuerAddress,
+        address kycCertificateNftAddress,
+        string memory vcIssuerDid,
         IForwarderRegistry forwarderRegistry
-    ) EDULandRewardsKYCController(eduLandRewardsAddress, certificateNFTV1Address, vcIssuerAddress, forwarderRegistry) {}
+    ) EDULandRewardsKYCController(eduLandRewardsAddress, kycCertificateNftAddress, vcIssuerDid, forwarderRegistry) {}
 
     /// @notice Internal function to access the current msg.sender.
     /// @return The current msg.sender value.

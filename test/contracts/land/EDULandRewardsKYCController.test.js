@@ -72,7 +72,7 @@ describe('EDULandRewardsKYCController', function () {
       'EDULandRewardsKYCControllerMock',
       this.nodeRewardsContract,
       this.ocNFT,
-      VC_ISSUER.address,
+      VC_ISSUER.did,
       this.forwarderRegistryAddress
     );
     await this.nodeRewardsContract.connect(deployer).grantRole(REWARDS_CONTRACT_KYC_CONTROLLER_ROLE, this.contract);
@@ -85,22 +85,16 @@ describe('EDULandRewardsKYCController', function () {
   context(
     'constructor(address eduLandRewardsAddress, address certificateNFTv1Address, address vcIssuerAddress, IForwarderRegistry forwarderRegistry)',
     function () {
-      it('reverts if eduLandRewardsAddress is the zero address', async function () {
+      it('reverts if eduLandRewardsAddress is a zero address', async function () {
         await expect(
-          deployContract('EDULandRewardsKYCController', ZeroAddress, this.ocNFT, VC_ISSUER.address, this.forwarderRegistryAddress)
+          deployContract('EDULandRewardsKYCController', ZeroAddress, this.ocNFT, VC_ISSUER.did, this.forwarderRegistryAddress)
         ).to.be.revertedWithCustomError(this.contract, 'InvalidEduLandRewardsAddress');
       });
 
-      it('reverts if certificateNFTv1Address is the zero address', async function () {
+      it('reverts if certificateNFTv1Address is a zero address', async function () {
         await expect(
-          deployContract('EDULandRewardsKYCController', this.nodeRewardsContract, ZeroAddress, VC_ISSUER.address, this.forwarderRegistryAddress)
-        ).to.be.revertedWithCustomError(this.contract, 'InvalidCertificateNFTv1Address');
-      });
-
-      it('reverts if vcIssuerAddress is the zero address', async function () {
-        await expect(
-          deployContract('EDULandRewardsKYCController', this.nodeRewardsContract, this.ocNFT, ZeroAddress, this.forwarderRegistryAddress)
-        ).to.be.revertedWithCustomError(this.contract, 'InvalidVcIssuerAddress');
+          deployContract('EDULandRewardsKYCController', this.nodeRewardsContract, ZeroAddress, VC_ISSUER.did, this.forwarderRegistryAddress)
+        ).to.be.revertedWithCustomError(this.contract, 'InvalidKycCertificateNFTAddress');
       });
     }
   );
@@ -112,22 +106,22 @@ describe('EDULandRewardsKYCController', function () {
         .withArgs(VC_TOKEN_ID);
     });
 
-    context('when VC issuer is not allowed', function () {
+    context("when VC issuer DID doesn't match", function () {
       beforeEach(async function () {
         await this.ocNFT.mint(user.address, VC_TOKEN_ID, getVcMetadata());
         await this.ocNFT.mint(user2.address, VC_TOKEN_ID_2, getVcMetadata('did:key:nonExists'));
       });
 
-      it("reverts if the issuer did doesn't match", async function () {
+      it("reverts if the issuer DID doesn't match", async function () {
         await expect(this.contract.addKycWallets([VC_TOKEN_ID_2]))
-          .to.be.revertedWithCustomError(this.contract, 'VcIssuerNotAllowed')
-          .withArgs(VC_TOKEN_ID_2, 'did:key:nonExists');
+          .to.be.revertedWithCustomError(this.contract, 'InvalidIssuerDid')
+          .withArgs(VC_TOKEN_ID_2);
       });
 
-      it('reverts if one of the VCs issuer did does not match', async function () {
+      it('reverts if one of the VCs issuer DID does not match', async function () {
         await expect(this.contract.addKycWallets([VC_TOKEN_ID, VC_TOKEN_ID_2]))
-          .to.be.revertedWithCustomError(this.contract, 'VcIssuerNotAllowed')
-          .withArgs(VC_TOKEN_ID_2, 'did:key:nonExists');
+          .to.be.revertedWithCustomError(this.contract, 'InvalidIssuerDid')
+          .withArgs(VC_TOKEN_ID_2);
       });
     });
 
@@ -266,16 +260,6 @@ describe('EDULandRewardsKYCController', function () {
         const {hashedDid, signature} = await this.vcRevocationUtil.makePayloadAndSignature(VC_ISSUER.did, VC_TOKEN_ID);
         await this.revocationRegistry.revokeVC(hashedDid, VC_TOKEN_ID, signature);
         await this.ocNFT.burn(VC_TOKEN_ID);
-
-        await expect(this.contract.removeKycWallets([user.address]))
-          .to.emit(this.contract, 'KycWalletsRemoved')
-          .withArgs([user.address]);
-        expect(await this.contract.vcIdPerAccount(user.address)).to.equal(0);
-        expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.false;
-      });
-
-      it('remove a kyc wallet if the VC issuer is revoked', async function () {
-        await this.didRegistry.connect(deployer).removeIssuer(VC_ISSUER.did, VC_ISSUER.address);
 
         await expect(this.contract.removeKycWallets([user.address]))
           .to.emit(this.contract, 'KycWalletsRemoved')
