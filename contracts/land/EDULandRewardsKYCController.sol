@@ -89,7 +89,6 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
         uint256 length = vcIds.length;
         address[] memory accounts = new address[](length);
 
-        bytes32 hashedIssuerDid = VC_ISSUER_DID_HASH;
         IRevocationRegistry revocationRegistry = KYC_CERTIFICATE_NFT.revocationRegistry();
 
         for (uint256 i = 0; i < length; i++) {
@@ -101,7 +100,7 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
 
             (, , , , , string memory issuerDid, ) = KYC_CERTIFICATE_NFT.vcData(vcId);
             bytes32 vcHashedIssuerDid = keccak256(bytes(issuerDid));
-            if (hashedIssuerDid != vcHashedIssuerDid) {
+            if (VC_ISSUER_DID_HASH != vcHashedIssuerDid) {
                 revert InvalidIssuerDid(vcId);
             }
 
