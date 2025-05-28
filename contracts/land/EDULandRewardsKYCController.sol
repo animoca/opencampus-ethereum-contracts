@@ -50,13 +50,7 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
     error VcNotRevoked(uint256 vcId);
 
     /// @notice Thrown when the VC token ID already exists for the account when adding KYC accounts.
-    /// @param account The account address.
-    /// @param vcId The token ID of the VC.
-    error KycWalletAlreadySet(address account, uint256 vcId);
-
-    /// @notice Thrown when the VC token ID is not set for the account when removing KYC accounts.
-    /// @param account The account address.
-    error KycWalletNotSet(address account);
+    error KycWalletAlreadySet();
 
     /// @notice Constructor.
     /// @dev Reverts with {InvalidEduLandRewardsAddress} if the EDULandRewards address is zero.
@@ -79,23 +73,54 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
         VC_ISSUER_DID_HASH = keccak256(bytes(vcIssuerDid));
     }
 
-    /// @notice Adds KYC wallets to the EDULandRewards contract by verifying the VC token IDs.
-    /// @dev Reverts with {KycWalletAlreadySet} if the VC token ID already exists for the account.
+    /// @notice Adds a KYC wallet to the EDULandRewards contract by verifying the VC token ID.
+    /// @dev Reverts with {KycWalletAlreadySet} if the account already being added by this contract.
     /// @dev Reverts with {InvalidIssuerDid} if the VC issuer DID hash does not match.
     /// @dev Reverts with {RevokedVc} if the VC is revoked.
-    /// @dev Emits {KycWalletsAdded} with the list of wallet addresses added.
+    /// @dev Emits {KycWalletsAdded} with the wallet address being successfully added.
+    /// @param vcId The VC token ID to be verified.
+    function addKycWallet(uint256 vcId) external {
+        address owner = KYC_CERTIFICATE_NFT.ownerOf(vcId);
+        if (vcIdPerAccount[owner] != 0) {
+            revert KycWalletAlreadySet();
+        }
+
+        (, , , , , string memory issuerDid, ) = KYC_CERTIFICATE_NFT.vcData(vcId);
+        bytes32 vcHashedIssuerDid = keccak256(bytes(issuerDid));
+        if (VC_ISSUER_DID_HASH != vcHashedIssuerDid) {
+            revert InvalidIssuerDid(vcId);
+        }
+
+        bool isRevoked = KYC_CERTIFICATE_NFT.revocationRegistry().isRevoked(vcHashedIssuerDid, vcId);
+        if (isRevoked) {
+            revert RevokedVc(vcId);
+        }
+
+        address[] memory accounts = new address[](1);
+        accounts[0] = owner;
+
+        vcIdPerAccount[owner] = vcId;
+        EDU_LAND_REWARDS.addKycWallets(accounts);
+        emit KycWalletsAdded(accounts);
+    }
+
+    /// @notice Adds KYC wallets to the EDULandRewards contract by verifying the VC token IDs.
+    /// @dev Reverts with {InvalidIssuerDid} if the VC issuer DID hash does not match.
+    /// @dev Reverts with {RevokedVc} if the VC is revoked.
+    /// @dev Emits {KycWalletsAdded} with the list of wallet addresses being successfully added.
     /// @param vcIds The list of VC token IDs.
     function addKycWallets(uint256[] calldata vcIds) external {
+        IRevocationRegistry revocationRegistry = KYC_CERTIFICATE_NFT.revocationRegistry();
+
         uint256 length = vcIds.length;
         address[] memory accounts = new address[](length);
-
-        IRevocationRegistry revocationRegistry = KYC_CERTIFICATE_NFT.revocationRegistry();
+        uint256 validCount = 0;
 
         for (uint256 i = 0; i < length; i++) {
             uint256 vcId = vcIds[i];
             address owner = KYC_CERTIFICATE_NFT.ownerOf(vcId);
             if (vcIdPerAccount[owner] != 0) {
-                revert KycWalletAlreadySet(owner, vcId);
+                continue;
             }
 
             (, , , , , string memory issuerDid, ) = KYC_CERTIFICATE_NFT.vcData(vcId);
@@ -108,28 +133,38 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
             if (isRevoked) {
                 revert RevokedVc(vcId);
             }
-
-            accounts[i] = owner;
             vcIdPerAccount[owner] = vcId;
+
+            accounts[validCount++] = owner;
         }
 
-        EDU_LAND_REWARDS.addKycWallets(accounts);
-        emit KycWalletsAdded(accounts);
+        if (validCount > 0) {
+            address[] memory validAccounts = new address[](validCount);
+            for (uint256 i = 0; i < validCount; i++) {
+                validAccounts[i] = accounts[i];
+            }
+
+            EDU_LAND_REWARDS.addKycWallets(validAccounts);
+            emit KycWalletsAdded(validAccounts);
+        }
     }
 
     /// @notice Removes KYC wallets from the EDULandRewards contract.
-    /// @dev Reverts with {KycWalletNotSet} if the VC token ID is not set for the account.
     /// @dev Reverts with {VcNotRevoked} if the VC is not revoked.
-    /// @dev Emits {KycWalletsRemoved} with the list of wallet addresses removed.
+    /// @dev Emits {KycWalletsRemoved} with the list of wallet addresses being successfully removed.
     /// @param accounts The list of wallet addresses.
     function removeKycWallets(address[] calldata accounts) external {
         IRevocationRegistry revocationRegistry = KYC_CERTIFICATE_NFT.revocationRegistry();
 
-        for (uint256 i; i < accounts.length; i++) {
+        uint256 length = accounts.length;
+        address[] memory tempAccounts = new address[](length);
+        uint256 validCount = 0;
+
+        for (uint256 i; i < length; i++) {
             address account = accounts[i];
             uint256 vcId = vcIdPerAccount[account];
             if (vcId == 0) {
-                revert KycWalletNotSet(account);
+                continue;
             }
 
             (, , , , , string memory issuerDid, ) = KYC_CERTIFICATE_NFT.vcData(vcId);
@@ -139,10 +174,18 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
                 revert VcNotRevoked(vcId);
             }
             delete vcIdPerAccount[account];
+
+            tempAccounts[validCount++] = account;
         }
 
-        EDU_LAND_REWARDS.removeKycWallets(accounts);
-        emit KycWalletsRemoved(accounts);
+        if (validCount > 0) {
+            address[] memory validAccounts = new address[](validCount);
+            for (uint256 i = 0; i < validCount; i++) {
+                validAccounts[i] = tempAccounts[i];
+            }
+            EDU_LAND_REWARDS.removeKycWallets(validAccounts);
+            emit KycWalletsRemoved(validAccounts);
+        }
     }
 
     /// @inheritdoc ForwarderRegistryContextBase

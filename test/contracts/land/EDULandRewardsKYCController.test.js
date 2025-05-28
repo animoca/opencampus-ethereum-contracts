@@ -34,9 +34,9 @@ describe('EDULandRewardsKYCController', function () {
     };
   };
 
-  let deployer, operator, user, user2, payoutWallet, other;
+  let deployer, user, user2, user3, payoutWallet, other;
   before(async function () {
-    [deployer, operator, user, user2, payoutWallet, other] = await ethers.getSigners();
+    [deployer, user, user2, user3, payoutWallet, other] = await ethers.getSigners();
   });
 
   const fixture = async function () {
@@ -99,6 +99,68 @@ describe('EDULandRewardsKYCController', function () {
     }
   );
 
+  context('addKycWallet(uint256)', function () {
+    it('reverts if the Vc doesn’t exist', async function () {
+      await expect(this.contract.addKycWallet(VC_TOKEN_ID)).to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonExistingToken').withArgs(VC_TOKEN_ID);
+    });
+
+    context("when VC issuer DID doesn't match", function () {
+      beforeEach(async function () {
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID, getVcMetadata());
+        await this.ocNFT.mint(user2.address, VC_TOKEN_ID_2, getVcMetadata('did:key:nonExists'));
+      });
+
+      it("reverts if the issuer DID doesn't match", async function () {
+        await expect(this.contract.addKycWallet(VC_TOKEN_ID_2))
+          .to.be.revertedWithCustomError(this.contract, 'InvalidIssuerDid')
+          .withArgs(VC_TOKEN_ID_2);
+      });
+    });
+
+    context('when attempting to add a wallet that is already set', function () {
+      beforeEach(async function () {
+        const metaData = getVcMetadata();
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID, metaData);
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID_2, metaData);
+        await this.contract.addKycWallet(VC_TOKEN_ID);
+      });
+
+      it('reverts if the wallet has been added by this contract', async function () {
+        await expect(this.contract.addKycWallet(VC_TOKEN_ID)).to.be.revertedWithCustomError(this.contract, 'KycWalletAlreadySet');
+      });
+    });
+
+    context('when Vc is revoked', function () {
+      beforeEach(async function () {
+        const metaData = getVcMetadata();
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID, metaData);
+
+        const {hashedDid, signature} = await this.vcRevocationUtil.makePayloadAndSignature(VC_ISSUER.did, VC_TOKEN_ID);
+        await this.revocationRegistry.revokeVC(hashedDid, VC_TOKEN_ID, signature);
+
+        await this.ocNFT.mint(user2.address, VC_TOKEN_ID_2, metaData);
+      });
+
+      it('reverts if the Vc is revoked', async function () {
+        await expect(this.contract.addKycWallet(VC_TOKEN_ID)).to.be.revertedWithCustomError(this.contract, 'RevokedVc').withArgs(VC_TOKEN_ID);
+      });
+    });
+
+    context('when successful', function () {
+      beforeEach(async function () {
+        const metaData = getVcMetadata();
+        await this.ocNFT.mint(user.address, VC_TOKEN_ID, metaData);
+        await this.ocNFT.mint(user2.address, VC_TOKEN_ID_2, metaData);
+      });
+
+      it('successfully adds a kyc wallet', async function () {
+        await expect(this.contract.addKycWallet(VC_TOKEN_ID)).to.emit(this.contract, 'KycWalletsAdded').withArgs([user.address]);
+        expect(await this.contract.vcIdPerAccount(user.address)).to.equal(VC_TOKEN_ID);
+        expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.true;
+      });
+    });
+  });
+
   context('addKycWallets(uint256[])', function () {
     it('reverts if the Vc doesn’t exist', async function () {
       await expect(this.contract.addKycWallets([VC_TOKEN_ID]))
@@ -130,26 +192,11 @@ describe('EDULandRewardsKYCController', function () {
         const metaData = getVcMetadata();
         await this.ocNFT.mint(user.address, VC_TOKEN_ID, metaData);
         await this.ocNFT.mint(user.address, VC_TOKEN_ID_2, metaData);
-      });
-
-      it('reverts if the wallet is already set', async function () {
         await this.contract.addKycWallets([VC_TOKEN_ID]);
-
-        await expect(this.contract.addKycWallets([VC_TOKEN_ID]))
-          .to.be.revertedWithCustomError(this.contract, 'KycWalletAlreadySet')
-          .withArgs(user.address, VC_TOKEN_ID);
       });
 
-      it('reverts if providing duplicate vc ids', async function () {
-        await expect(this.contract.addKycWallets([VC_TOKEN_ID, VC_TOKEN_ID]))
-          .to.be.revertedWithCustomError(this.contract, 'KycWalletAlreadySet')
-          .withArgs(user.address, VC_TOKEN_ID);
-      });
-
-      it('reverts if providing Vc ids for the same wallet', async function () {
-        await expect(this.contract.addKycWallets([VC_TOKEN_ID, VC_TOKEN_ID_2]))
-          .to.be.revertedWithCustomError(this.contract, 'KycWalletAlreadySet')
-          .withArgs(user.address, VC_TOKEN_ID_2);
+      it('does not emit event if the providing Vc id is set', async function () {
+        await expect(this.contract.addKycWallets([VC_TOKEN_ID])).to.not.emit(this.contract, 'KycWalletsAdded');
       });
     });
 
@@ -178,9 +225,12 @@ describe('EDULandRewardsKYCController', function () {
     });
 
     context('when successful', function () {
+      const USER1_ANOTHER_VC_ID = '0x1A3C37937EFB40629EE4922FE6D510CD';
       beforeEach(async function () {
         const metaData = getVcMetadata();
         await this.ocNFT.mint(user.address, VC_TOKEN_ID, metaData);
+        await this.ocNFT.mint(user.address, USER1_ANOTHER_VC_ID, metaData);
+
         await this.ocNFT.mint(user2.address, VC_TOKEN_ID_2, metaData);
       });
 
@@ -203,14 +253,33 @@ describe('EDULandRewardsKYCController', function () {
         expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.true;
         expect(await this.nodeRewardsContract.isKycWallet(user2.address)).to.be.true;
       });
+
+      context('when one of the wallets is already set', function () {
+        it('successfully adds one valid account and skips the duplicated Vc id', async function () {
+          await expect(this.contract.addKycWallets([VC_TOKEN_ID, USER1_ANOTHER_VC_ID]))
+            .to.emit(this.contract, 'KycWalletsAdded')
+            .withArgs([user.address]);
+          expect(await this.contract.vcIdPerAccount(user.address)).to.equal(VC_TOKEN_ID);
+        });
+
+        it('successfully adds multiple valid accounts and skips the Vc id for the same wallet', async function () {
+          await expect(this.contract.addKycWallets([VC_TOKEN_ID, USER1_ANOTHER_VC_ID, VC_TOKEN_ID_2]))
+            .to.emit(this.contract, 'KycWalletsAdded')
+            .withArgs([user.address, user2.address]);
+
+          expect(await this.contract.vcIdPerAccount(user.address)).to.equal(VC_TOKEN_ID);
+          expect(await this.contract.vcIdPerAccount(user2.address)).to.equal(VC_TOKEN_ID_2);
+
+          expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.true;
+          expect(await this.nodeRewardsContract.isKycWallet(user2.address)).to.be.true;
+        });
+      });
     });
   });
 
   context('removeKycWallets(address[])', function () {
-    it('reverts if the wallet is not set', async function () {
-      await expect(this.contract.removeKycWallets([user.address]))
-        .to.be.revertedWithCustomError(this.contract, 'KycWalletNotSet')
-        .withArgs(user.address);
+    it('skips if the wallet is not set', async function () {
+      await expect(this.contract.removeKycWallets([user.address])).to.not.emit(this.contract, 'KycWalletsRemoved');
     });
 
     context('when VC not revoked', function () {
@@ -279,6 +348,33 @@ describe('EDULandRewardsKYCController', function () {
         expect(await this.contract.vcIdPerAccount(user2.address)).to.equal(0);
         expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.false;
         expect(await this.nodeRewardsContract.isKycWallet(user2.address)).to.be.false;
+      });
+
+      context('when one of the wallets is not set by the contract', function () {
+        it('successfully removes one valid account and skips the not set not', async function () {
+          const {hashedDid, signature} = await this.vcRevocationUtil.makePayloadAndSignature(VC_ISSUER.did, VC_TOKEN_ID);
+          await this.revocationRegistry.revokeVC(hashedDid, VC_TOKEN_ID, signature);
+
+          await expect(this.contract.removeKycWallets([user.address, user3.address]))
+            .to.emit(this.contract, 'KycWalletsRemoved')
+            .withArgs([user.address]);
+          expect(await this.contract.vcIdPerAccount(user.address)).to.equal(0);
+        });
+
+        it('successfully removes multiple valid accounts and skips the Vc id for the same wallet', async function () {
+          const {hashedDid, signature} = await this.vcRevocationUtil.makePayloadAndSignature(VC_ISSUER.did, [VC_TOKEN_ID, VC_TOKEN_ID_2]);
+          await this.revocationRegistry.batchRevokeVCs(hashedDid, [VC_TOKEN_ID, VC_TOKEN_ID_2], signature);
+
+          await expect(this.contract.removeKycWallets([user.address, user3.address, user2.address]))
+            .to.emit(this.contract, 'KycWalletsRemoved')
+            .withArgs([user.address, user2.address]);
+
+          expect(await this.contract.vcIdPerAccount(user.address)).to.equal(0);
+          expect(await this.contract.vcIdPerAccount(user2.address)).to.equal(0);
+
+          expect(await this.nodeRewardsContract.isKycWallet(user.address)).to.be.false;
+          expect(await this.nodeRewardsContract.isKycWallet(user2.address)).to.be.false;
+        });
       });
     });
   });
