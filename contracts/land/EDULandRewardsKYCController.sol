@@ -52,6 +52,12 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
     /// @notice Thrown when the VC token ID already exists for the account when adding KYC accounts.
     error KycWalletAlreadySet();
 
+    /// @notice Thrown when there is no valid wallet to be added into the KYC list.
+    error NoWalletToBeAdded();
+
+    /// @notice Thrown when there is no valid wallet to be removed from the KYC list.
+    error NoWalletToBeRemoved();
+
     /// @notice Constructor.
     /// @dev Reverts with {InvalidEduLandRewardsAddress} if the EDULandRewards address is zero.
     /// @dev Reverts with {InvalidKycCertificateNFTAddress} if the OpenCampusCertificateNFTv1 address is zero.
@@ -107,6 +113,7 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
     /// @notice Adds KYC wallets to the EDULandRewards contract by verifying the VC token IDs.
     /// @dev Reverts with {InvalidIssuerDid} if the VC issuer DID hash does not match.
     /// @dev Reverts with {RevokedVc} if the VC is revoked.
+    /// @dev Reverts with {NoWalletToBeAdded} if there is no valid wallet to be added into the KYC list.
     /// @dev Emits {KycWalletsAdded} with the list of wallet addresses being successfully added.
     /// @param vcIds The list of VC token IDs.
     function addKycWallets(uint256[] calldata vcIds) external {
@@ -138,19 +145,22 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
             accounts[validCount++] = owner;
         }
 
-        if (validCount > 0) {
-            address[] memory validAccounts = new address[](validCount);
-            for (uint256 i = 0; i < validCount; i++) {
-                validAccounts[i] = accounts[i];
-            }
-
-            EDU_LAND_REWARDS.addKycWallets(validAccounts);
-            emit KycWalletsAdded(validAccounts);
+        if (validCount == 0) {
+            revert NoWalletToBeAdded();
         }
+
+        address[] memory validAccounts = new address[](validCount);
+        for (uint256 i = 0; i < validCount; i++) {
+            validAccounts[i] = accounts[i];
+        }
+
+        EDU_LAND_REWARDS.addKycWallets(validAccounts);
+        emit KycWalletsAdded(validAccounts);
     }
 
     /// @notice Removes KYC wallets from the EDULandRewards contract.
     /// @dev Reverts with {VcNotRevoked} if the VC is not revoked.
+    /// @dev Reverts with {NoWalletToBeRemoved} if there is no valid wallet to be removed from the KYC list.
     /// @dev Emits {KycWalletsRemoved} with the list of wallet addresses being successfully removed.
     /// @param accounts The list of wallet addresses.
     function removeKycWallets(address[] calldata accounts) external {
@@ -178,14 +188,16 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
             tempAccounts[validCount++] = account;
         }
 
-        if (validCount > 0) {
-            address[] memory validAccounts = new address[](validCount);
-            for (uint256 i = 0; i < validCount; i++) {
-                validAccounts[i] = tempAccounts[i];
-            }
-            EDU_LAND_REWARDS.removeKycWallets(validAccounts);
-            emit KycWalletsRemoved(validAccounts);
+        if (validCount == 0) {
+            revert NoWalletToBeRemoved();
         }
+
+        address[] memory validAccounts = new address[](validCount);
+        for (uint256 i = 0; i < validCount; i++) {
+            validAccounts[i] = tempAccounts[i];
+        }
+        EDU_LAND_REWARDS.removeKycWallets(validAccounts);
+        emit KycWalletsRemoved(validAccounts);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase

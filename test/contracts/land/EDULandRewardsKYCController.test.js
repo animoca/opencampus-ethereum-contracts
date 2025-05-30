@@ -162,6 +162,10 @@ describe('EDULandRewardsKYCController', function () {
   });
 
   context('addKycWallets(uint256[])', function () {
+    it('reverts if the provided Vc ids are empty', async function () {
+      await expect(this.contract.addKycWallets([])).to.be.revertedWithCustomError(this.contract, 'NoWalletToBeAdded');
+    });
+
     it('reverts if the Vc doesn’t exist', async function () {
       await expect(this.contract.addKycWallets([VC_TOKEN_ID]))
         .to.be.revertedWithCustomError(this.ocNFT, 'ERC721NonExistingToken')
@@ -195,8 +199,8 @@ describe('EDULandRewardsKYCController', function () {
         await this.contract.addKycWallets([VC_TOKEN_ID]);
       });
 
-      it('does not emit event if the providing Vc id is set', async function () {
-        await expect(this.contract.addKycWallets([VC_TOKEN_ID])).to.not.emit(this.contract, 'KycWalletsAdded');
+      it('reverts if the providing Vc id is set', async function () {
+        await expect(this.contract.addKycWallets([VC_TOKEN_ID])).to.be.revertedWithCustomError(this.contract, 'NoWalletToBeAdded');
       });
     });
 
@@ -278,8 +282,12 @@ describe('EDULandRewardsKYCController', function () {
   });
 
   context('removeKycWallets(address[])', function () {
-    it('skips if the wallet is not set', async function () {
-      await expect(this.contract.removeKycWallets([user.address])).to.not.emit(this.contract, 'KycWalletsRemoved');
+    it('reverts if the provided wallets are empty', async function () {
+      await expect(this.contract.removeKycWallets([])).to.be.revertedWithCustomError(this.contract, 'NoWalletToBeRemoved');
+    });
+
+    it('reverts if the wallet is not set', async function () {
+      await expect(this.contract.removeKycWallets([user.address])).to.be.revertedWithCustomError(this.contract, 'NoWalletToBeRemoved');
     });
 
     context('when VC not revoked', function () {
