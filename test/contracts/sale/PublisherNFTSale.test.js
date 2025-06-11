@@ -326,7 +326,7 @@ describe('PublisherNFTSale', function () {
     });
 
     it('reverts when the lz destination address has already been set', async function () {
-      this.sale.setLzDstAddress(user.address);
+      await this.sale.setLzDstAddress(user.address);
       await expect(this.sale.setLzDstAddress(user.address)).to.be.revertedWithCustomError(this.sale, 'LzDstAddressAlreadySet');
     });
 

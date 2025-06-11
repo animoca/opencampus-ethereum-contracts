@@ -77,14 +77,12 @@ describe('EDuCoinMerkleClaim', function () {
       const signature = await messageSigner1.signMessage(
         ethers.getBytes(keccak256(ethers.solidityPacked(['address', 'address', 'uint256'], [this.contract.target, claimer4.address, expireAt])))
       );
-      await expect(
-        this.contract.claimPayout(
-          this.elements[3].claimer,
-          this.elements[3].amount,
-          this.tree.getHexProof(keccak256(this.leaves[3])),
-          signature,
-          expireAt
-        )
+      await this.contract.claimPayout(
+        this.elements[3].claimer,
+        this.elements[3].amount,
+        this.tree.getHexProof(keccak256(this.leaves[3])),
+        signature,
+        expireAt
       );
       await expect(
         this.contract.claimPayout(
