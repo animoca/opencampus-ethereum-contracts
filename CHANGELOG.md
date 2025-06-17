@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.1
+
+- Updated .nvmrc to use the latest Node.js LTS version (lts/jod)
+- Updated GitHub Actions workflow to use Node.js v22.14, and v4 for actions/checkout and actions/setup-node
+- Upgraded Hardhat and related package versions for compatibility with Node.js 22
+- Fixed async handling issues in test cases for OpenCampusCertificateNFTMinter, PublisherNFTSale, and PublisherNFTSale contracts
+
 ## 1.5.0
 
 - Added EDULandPriceHelperV2 contract and related test cases. 
