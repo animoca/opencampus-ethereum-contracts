@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.6.0
+- Added EDULandRewardsKYCController contract and related test cases. 
+
 ## 1.5.1
 
 - Updated .nvmrc to use the latest Node.js LTS version (lts/jod)
