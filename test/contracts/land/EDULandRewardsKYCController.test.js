@@ -69,7 +69,7 @@ describe('EDULandRewardsKYCController', function () {
     );
 
     this.contract = await deployContract(
-      'EDULandRewardsKYCControllerMock',
+      'EDULandRewardsKYCController',
       this.nodeRewardsContract,
       this.ocNFT,
       VC_ISSUER.did,
@@ -384,16 +384,6 @@ describe('EDULandRewardsKYCController', function () {
           expect(await this.nodeRewardsContract.isKycWallet(user2.address)).to.be.false;
         });
       });
-    });
-  });
-
-  context('Meta transaction', function () {
-    it('returns the msg.sender', async function () {
-      await this.contract.__msgSender();
-    });
-
-    it('returns the msg.data', async function () {
-      await this.contract.__msgData();
     });
   });
 });
