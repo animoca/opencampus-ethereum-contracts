@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.6.1
+- Remediation based on internal audit AB-SC-SOL-01
+
 ## 1.6.0
 - Added EDULandRewardsKYCController contract and related test cases. 
 
