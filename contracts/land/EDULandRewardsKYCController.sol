@@ -3,7 +3,6 @@ pragma solidity 0.8.22;
 
 import {RewardsKYC} from "@gelatonetwork/node-sale-rewards/contracts/RewardsKYC.sol";
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
-import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {IRevocationRegistry} from "../vc/interfaces/IRevocationRegistry.sol";
 import {OpenCampusCertificateNFTv1} from "../vc/OpenCampusCertificateNFTv1.sol";
@@ -198,15 +197,5 @@ contract EDULandRewardsKYCController is ForwarderRegistryContext {
         }
         EDU_LAND_REWARDS.removeKycWallets(validAccounts);
         emit KycWalletsRemoved(validAccounts);
-    }
-
-    /// @inheritdoc ForwarderRegistryContextBase
-    function _msgSender() internal view virtual override(ForwarderRegistryContextBase) returns (address) {
-        return ForwarderRegistryContextBase._msgSender();
-    }
-
-    /// @inheritdoc ForwarderRegistryContextBase
-    function _msgData() internal view virtual override(ForwarderRegistryContextBase) returns (bytes calldata) {
-        return ForwarderRegistryContextBase._msgData();
     }
 }
