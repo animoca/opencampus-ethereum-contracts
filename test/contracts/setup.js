@@ -158,6 +158,17 @@ async function setupOCPointMerkleClaimMock(deployer, operator) {
   await this.OCPoint.grantRole(await this.OCPoint.DEPOSITOR_ROLE(), await this.OCPointMerkleClaim.getAddress());
 }
 
+async function setupLimitedOCPointsMerkleClaim() {
+  this.PointsContract = await deployContract('Points', await getForwarderRegistryAddress());
+  this.LimitedOCPointsMerkleClaim = await deployContract(
+    'LimitedOCPointsMerkleClaimMock',
+    await this.PointsContract.getAddress(),
+    await getForwarderRegistryAddress()
+  );
+
+  await this.PointsContract.grantRole(await this.PointsContract.DEPOSITOR_ROLE(), await this.LimitedOCPointsMerkleClaim.getAddress());
+}
+
 module.exports = {
   setupEDUCreditsManager,
   setupPublisherNFTSale,
@@ -167,4 +178,5 @@ module.exports = {
   setupOpenCampusCertificateNFTMinter,
   setupOpenCampusRevocationRegistry,
   setupOCPointMerkleClaimMock,
+  setupLimitedOCPointsMerkleClaim,
 };
