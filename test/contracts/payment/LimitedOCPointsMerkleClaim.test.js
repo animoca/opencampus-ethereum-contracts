@@ -64,10 +64,10 @@ describe('LimitedOCPointsMerkleClaim', function () {
   });
 
   describe('constructor', function () {
-    it('reverts with {InvalidRewardContractAddress} if the reward contract address is the zero address', async function () {
+    it('reverts with {InvalidPointsContractAddress} if the reward contract address is the zero address', async function () {
       await expect(deployContract('LimitedOCPointsMerkleClaim', ethers.ZeroAddress, await getForwarderRegistryAddress())).to.revertedWithCustomError(
         this.LimitedOCPointsMerkleClaim,
-        'InvalidRewardContractAddress'
+        'InvalidPointsContractAddress'
       );
     });
 
@@ -102,6 +102,14 @@ describe('LimitedOCPointsMerkleClaim', function () {
     it('reverts with {InvalidClaimWindow} if startTime equals endTime', async function () {
       await expect(
         this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, this.startTime, this.startTime)
+      ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidClaimWindow');
+    });
+
+    it('reverts with {InvalidClaimWindow} if endTime is in the past', async function () {
+      const pastTime = this.currentTime - 3600; // 1 hour ago
+
+      await expect(
+        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, pastTime - 1800, pastTime)
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidClaimWindow');
     });
 
@@ -226,10 +234,16 @@ describe('LimitedOCPointsMerkleClaim', function () {
       it('marks the claim as completed', async function () {
         const claimData = this.payouts[0];
         const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
+        const leaf = ethers.keccak256(
+          ethers.solidityPacked(
+            ['address', 'uint256', 'bytes32', 'uint256'],
+            [claimData.recipient, claimData.amount, claimData.reasonCode, claimData.epochId]
+          )
+        );
 
-        expect(await this.LimitedOCPointsMerkleClaim.claimed(this.epochId, claimData.recipient)).to.be.false;
+        expect(await this.LimitedOCPointsMerkleClaim.claimed(leaf)).to.be.false;
         await this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof);
-        expect(await this.LimitedOCPointsMerkleClaim.claimed(this.epochId, claimData.recipient)).to.be.true;
+        expect(await this.LimitedOCPointsMerkleClaim.claimed(leaf)).to.be.true;
       });
 
       it('reduces the amount left in the pool', async function () {
@@ -243,14 +257,14 @@ describe('LimitedOCPointsMerkleClaim', function () {
         expect(epochAfter.amountLeft).to.be.equal(epochBefore.amountLeft - claimData.amount);
       });
 
-      it('emits a {RewardClaimed} event', async function () {
+      it('emits a {PointsClaimed} event', async function () {
         const claimData = this.payouts[0];
         const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
         const expectedAmountLeft = this.totalAmount - claimData.amount;
 
         await expect(this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof))
-          .to.emit(this.LimitedOCPointsMerkleClaim, 'RewardClaimed')
-          .withArgs(this.epochId, claimData.recipient, claimData.amount, expectedAmountLeft);
+          .to.emit(this.LimitedOCPointsMerkleClaim, 'PointsClaimed')
+          .withArgs(this.epochId, this.root, claimData.recipient, claimData.amount, expectedAmountLeft);
       });
 
       it('allows multiple users to claim from the same epoch', async function () {
@@ -288,7 +302,7 @@ describe('LimitedOCPointsMerkleClaim', function () {
     });
   });
 
-  describe('canClaim(uint256,address,uint256)', function () {
+  describe('canClaim(uint256,address,uint256,bytes32)', function () {
     beforeEach(async function () {
       await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, this.startTime, this.endTime);
     });
@@ -299,13 +313,17 @@ describe('LimitedOCPointsMerkleClaim', function () {
       const invalidEpochId = 999n;
       const claimData = this.payouts[0];
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(invalidEpochId, claimData.recipient, claimData.amount)).to.be.equal(1n);
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(invalidEpochId, claimData.recipient, claimData.amount, claimData.reasonCode)).to.be.equal(
+        1n
+      );
     });
 
     it('returns ClaimingEpochNotActive before start time', async function () {
       const claimData = this.payouts[0];
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount)).to.be.equal(2n);
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode)).to.be.equal(
+        2n
+      );
     });
 
     it('returns ClaimingEpochNotActive after end time', async function () {
@@ -313,7 +331,9 @@ describe('LimitedOCPointsMerkleClaim', function () {
 
       const claimData = this.payouts[0];
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount)).to.be.equal(2n);
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode)).to.be.equal(
+        2n
+      );
     });
 
     it('returns AlreadyClaimed for users who have already claimed', async function () {
@@ -324,7 +344,9 @@ describe('LimitedOCPointsMerkleClaim', function () {
 
       await this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof);
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount)).to.be.equal(3n);
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode)).to.be.equal(
+        3n
+      );
     });
 
     it('returns InsufficientPoolAmount when pool does not have enough tokens', async function () {
@@ -333,7 +355,9 @@ describe('LimitedOCPointsMerkleClaim', function () {
       const excessiveAmount = this.totalAmount + 1n;
       const claimData = this.payouts[0];
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, excessiveAmount)).to.be.equal(4n);
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, excessiveAmount, claimData.reasonCode)).to.be.equal(
+        4n
+      );
     });
 
     it('returns NoError for valid claim attempts', async function () {
@@ -341,7 +365,9 @@ describe('LimitedOCPointsMerkleClaim', function () {
 
       const claimData = this.payouts[0];
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount)).to.be.equal(0n);
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode)).to.be.equal(
+        0n
+      );
     });
   });
 

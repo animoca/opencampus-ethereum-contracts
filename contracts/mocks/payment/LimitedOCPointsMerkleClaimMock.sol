@@ -5,7 +5,7 @@ import {LimitedOCPointsMerkleClaim} from "../../payment/LimitedOCPointsMerkleCla
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
 
 contract LimitedOCPointsMerkleClaimMock is LimitedOCPointsMerkleClaim {
-    constructor(address ecpContractAddress, IForwarderRegistry forwarderRegistry) LimitedOCPointsMerkleClaim(ecpContractAddress, forwarderRegistry) {}
+    constructor(address pointsContractAddress, IForwarderRegistry forwarderRegistry) LimitedOCPointsMerkleClaim(pointsContractAddress, forwarderRegistry) {}
 
     /// @notice Internal function to access the current msg.sender.
     /// @return The current msg.sender value.

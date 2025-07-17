@@ -18,8 +18,8 @@ import {IPoints} from "@animoca/anichess-ethereum-contracts-2.2.3/contracts/poin
 /// @notice Claims are based on merkle proofs and are subject to time constraints and pool availability.
 contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
     /// @notice Thrown when the reward contract address is invalid.
-    /// @param InvalidRewardContractAddress The address of the invalid reward contract.
-    error InvalidRewardContractAddress(address InvalidRewardContractAddress);
+    /// @param InvalidPointsContractAddress The address of the invalid points contract.
+    error InvalidPointsContractAddress(address InvalidPointsContractAddress);
 
     /// @notice Thrown when trying to claim outside the valid time epoch.
     /// @param currentTime The current block timestamp.
@@ -31,14 +31,14 @@ contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
     /// @param recipient The recipient of the claim.
     /// @param amount The amount being claimed.
     /// @param reasonCode The reason code for the deposit.
-    /// @param epochId The epoch identifier.
+    /// @param epochId The epoch identifier for a specific claiming epoch.
     error AlreadyClaimed(address recipient, uint256 amount, bytes32 reasonCode, uint256 epochId);
 
     /// @notice Thrown when a proof cannot be verified.
     /// @param recipient The recipient of the claim.
     /// @param amount The amount being claimed.
     /// @param reasonCode The reason code for the deposit.
-    /// @param epochId The epoch identifier.
+    /// @param epochId The epoch identifier for a specific claiming epoch.
     error InvalidProof(address recipient, uint256 amount, bytes32 reasonCode, uint256 epochId);
 
     /// @notice Thrown when the pool doesn't have enough tokens for the claim.
@@ -47,7 +47,7 @@ contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
     error InsufficientPoolAmount(uint256 amountRequested, uint256 amountAvailable);
 
     /// @notice Thrown when trying to access a non-existent epoch.
-    /// @param epochId The epoch identifier.
+    /// @param epochId The epoch identifier for a specific claiming epoch.
     error ClaimEpochNotFound(uint256 epochId);
 
     /// @notice Thrown when the start time is not before the end time.
@@ -67,10 +67,7 @@ contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
     using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
     using MerkleProof for bytes32[];
 
-    /// @notice The role identifier for the operator role.
-    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
-
-    /// @notice A reference to the reward contract.
+    /// @notice A reference to the points contract.
     IPoints public immutable POINTS_CONTRACT;
 
     /// @notice Struct representing a claiming epoch.
@@ -88,41 +85,42 @@ contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
     /// @notice Mapping from epoch ID to claiming epoch data.
     mapping(uint256 => ClaimEpoch) public claimEpochs;
 
-    /// @notice Mapping from epoch ID to user address to claimed status.
-    mapping(uint256 => mapping(address => bool)) public claimed;
+    /// @notice Mapping from leaf hash to claimed status.
+    mapping(bytes32 => bool) public claimed;
 
     /// @notice Emitted when a new merkle root is set for an epoch.
-    /// @param epochId The epoch identifier.
+    /// @param epochId The epoch identifier for a specific claiming epoch.
     /// @param merkleRoot The merkle root for this epoch.
     /// @param totalAmount The total amount available for claiming.
     /// @param startTime The start time for claiming.
     /// @param endTime The end time for claiming.
-    event MerkleRootSet(uint256 indexed epochId, bytes32 merkleRoot, uint256 totalAmount, uint256 startTime, uint256 endTime);
+    event MerkleRootSet(uint256 indexed epochId, bytes32 indexed merkleRoot, uint256 totalAmount, uint256 startTime, uint256 endTime);
 
-    /// @notice Emitted when a reward is claimed.
-    /// @param epochId The epoch identifier.
+    /// @notice Emitted when a points is claimed.
+    /// @param epochId The epoch identifier for a specific claiming epoch.
+    /// @param merkleRoot The merkle root for this epoch.
     /// @param recipient The recipient of the claim.
     /// @param amount The amount claimed.
     /// @param amountLeft The amount left in the pool after this claim.
-    event RewardClaimed(uint256 indexed epochId, address indexed recipient, uint256 amount, uint256 amountLeft);
+    event PointsClaimed(uint256 indexed epochId, bytes32 indexed merkleRoot, address indexed recipient, uint256 amount, uint256 amountLeft);
 
-    /// @notice Constructor
-    /// @param rewardContractAddress The address of the reward contract.
+    /// @notice Constructor for limited OC points merkle claim.
+    /// @param pointsContractAddress The address of the points contract.
     /// @param forwarderRegistry The address of the forwarder registry.
-    /// @dev Reverts with {InvalidRewardContractAddress} if the reward contract address is the zero address.
+    /// @dev Reverts with {InvalidPointsContractAddress} if the points contract address is the zero address.
     constructor(
-        address rewardContractAddress,
+        address pointsContractAddress,
         IForwarderRegistry forwarderRegistry
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
-        if (rewardContractAddress == address(0)) {
-            revert InvalidRewardContractAddress(rewardContractAddress);
+        if (pointsContractAddress == address(0)) {
+            revert InvalidPointsContractAddress(pointsContractAddress);
         }
-        POINTS_CONTRACT = IPoints(rewardContractAddress);
+        POINTS_CONTRACT = IPoints(pointsContractAddress);
     }
 
-    /// @notice Sets a new merkle root for a claiming epoch.
+    /// @notice Sets a new merkle root for a epoch with a limited reward pool and time constraints.
     /// @dev Reverts with {NotContractOwner} if the sender is not the contract owner.
-    /// @dev Reverts with {InvalidClaimWindow} if startTime is not before endTime.
+    /// @dev Reverts with {InvalidClaimWindow} if the end time is not after the start time and the end time is in the past.
     /// @dev Emits a {MerkleRootSet} event.
     /// @param merkleRoot The merkle root for this epoch.
     /// @param totalAmount The total amount available for claiming in this epoch.
@@ -136,7 +134,7 @@ contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
     ) external {
         ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
         
-        if (startTime >= endTime) {
+        if (startTime >= endTime || endTime <= block.timestamp) {
             revert InvalidClaimWindow(startTime, endTime);
         }
 
@@ -156,16 +154,16 @@ contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
         emit MerkleRootSet(epochId, merkleRoot, totalAmount, startTime, endTime);
     }
 
-    /// @notice Claims rewards for a given recipient address.
+    /// @notice Claims points for a specific epoch and given recipient address.
     /// @dev Reverts with {ClaimEpochNotFound} if the epoch doesn't exist.
     /// @dev Reverts with {ClaimingEpochNotActive} if the current time is outside the claiming epoch.
     /// @dev Reverts with {AlreadyClaimed} if the user has already claimed for this epoch.
     /// @dev Reverts with {InvalidProof} if the merkle proof verification fails.
     /// @dev Reverts with {InsufficientPoolAmount} if the pool doesn't have enough tokens.
-    /// @dev Emits a {RewardClaimed} event.
-    /// @param epochId The epoch identifier.
-    /// @param recipient The recipient for this claim.
-    /// @param amount The amount to be claimed.
+    /// @dev Emits a {PointsClaimed} event.
+    /// @param epochId The epoch identifier for a specific claiming epoch.
+    /// @param recipient The recipient for the points.
+    /// @param amount The amount of points to be claimed.
     /// @param reasonCode The reason code for the deposit.
     /// @param proof The merkle proof for verification.
     function claim(
@@ -186,7 +184,9 @@ contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
             revert ClaimingEpochNotActive(currentTime, epoch.startTime, epoch.endTime);
         }
 
-        if (claimed[epochId][recipient]) {
+        bytes32 leaf = keccak256(abi.encodePacked(recipient, amount, reasonCode, epochId));
+        
+        if (claimed[leaf]) {
             revert AlreadyClaimed(recipient, amount, reasonCode, epochId);
         }
 
@@ -194,17 +194,16 @@ contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
             revert InsufficientPoolAmount(amount, epoch.amountLeft);
         }
 
-        bytes32 leaf = keccak256(abi.encodePacked(recipient, amount, reasonCode, epochId));
         if (!proof.verifyCalldata(epoch.merkleRoot, leaf)) {
             revert InvalidProof(recipient, amount, reasonCode, epochId);
         }
 
-        claimed[epochId][recipient] = true;
+        claimed[leaf] = true;
         epoch.amountLeft -= amount;
 
         POINTS_CONTRACT.deposit(recipient, amount, reasonCode);
 
-        emit RewardClaimed(epochId, recipient, amount, epoch.amountLeft);
+        emit PointsClaimed(epochId, epoch.merkleRoot, recipient, amount, epoch.amountLeft);
     }
 
     /// @notice Checks if a user can claim rewards for a given epoch.
@@ -213,15 +212,17 @@ contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
     /// @dev Returns ClaimError.AlreadyClaimed if the user has already claimed for this epoch.
     /// @dev Returns ClaimError.InsufficientPoolAmount if the pool doesn't have enough tokens.
     /// @dev Returns ClaimError.NoError if basic validation passes.
-    /// @param epochId The epoch identifier.
+    /// @param epochId The epoch identifier for a specific claiming epoch.
     /// @param recipient The recipient address.
     /// @param amount The amount to be claimed.
+    /// @param reasonCode The reason code for the deposit.
     /// @return error The claim validation result.
     function canClaim(
         uint256 epochId,
         address recipient,
-        uint256 amount
-    ) public view returns (ClaimError error) {
+        uint256 amount,
+        bytes32 reasonCode
+    ) external view returns (ClaimError) {
         ClaimEpoch storage epoch = claimEpochs[epochId];
         
         if (epoch.merkleRoot == bytes32(0)) {
@@ -233,7 +234,9 @@ contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
             return ClaimError.ClaimingEpochNotActive;
         }
 
-        if (claimed[epochId][recipient]) {
+        bytes32 leaf = keccak256(abi.encodePacked(recipient, amount, reasonCode, epochId));
+        
+        if (claimed[leaf]) {
             return ClaimError.AlreadyClaimed;
         }
 
