@@ -27,37 +27,37 @@ describe('LimitedOCPointsMerkleClaim', function () {
     this.startTime = this.currentTime + 100; // starts in 100 seconds
     this.endTime = this.startTime + 3600; // lasts for 1 hour
     this.totalAmount = 800n; // Changed from 1000n to 600n to test pool depletion
-    this.epochId = 0n; // first epoch
+    this.epochId = ethers.encodeBytes32String('EPOCH_1'); // first epoch as bytes32
 
     this.payouts = [
       {
         recipient: claimer1.address,
         amount: 100n,
-        reasonCode: ethers.keccak256(ethers.toUtf8Bytes('SEASON1_DAPP1')),
+        reasonCode: ethers.encodeBytes32String('SEASON1_DAPP1'),
         epochId: this.epochId,
       },
       {
         recipient: claimer2.address,
         amount: 200n,
-        reasonCode: ethers.keccak256(ethers.toUtf8Bytes('SEASON1_DAPP2')),
+        reasonCode: ethers.encodeBytes32String('SEASON1_DAPP2'),
         epochId: this.epochId,
       },
       {
         recipient: claimer3.address,
         amount: 300n,
-        reasonCode: ethers.keccak256(ethers.toUtf8Bytes('OC_POINTS_MIGRATION')),
+        reasonCode: ethers.encodeBytes32String('OC_POINTS_MIGRATION'),
         epochId: this.epochId,
       },
       {
         recipient: claimer4.address,
         amount: 400n,
-        reasonCode: ethers.keccak256(ethers.toUtf8Bytes('SEASON2_REWARD')),
+        reasonCode: ethers.encodeBytes32String('SEASON2_REWARD'),
         epochId: this.epochId,
       },
     ];
 
     this.leaves = this.payouts.map(({recipient, amount, reasonCode, epochId}) => {
-      return ethers.solidityPacked(['address', 'uint256', 'bytes32', 'uint256'], [recipient, amount, reasonCode, epochId]);
+      return ethers.solidityPacked(['address', 'uint256', 'bytes32', 'bytes32'], [recipient, amount, reasonCode, epochId]);
     });
     this.tree = new MerkleTree(this.leaves, ethers.keccak256, {hashLeaves: true, sortPairs: true});
     this.root = this.tree.getHexRoot();
@@ -79,29 +79,35 @@ describe('LimitedOCPointsMerkleClaim', function () {
       it('sets the reward contract address', async function () {
         expect(await this.LimitedOCPointsMerkleClaim.POINTS_CONTRACT()).to.be.equal(await this.PointsContract.getAddress());
       });
-
-      it('initializes current epoch ID to 0', async function () {
-        expect(await this.LimitedOCPointsMerkleClaim.currentEpochId()).to.be.equal(0n);
-      });
     });
   });
 
-  describe('setMerkleRoot(bytes32,uint256,uint256,uint256)', function () {
+  describe('setMerkleRoot(bytes32,bytes32,uint256,uint256,uint256)', function () {
     it('reverts with {NotContractOwner} if not called by the contract owner', async function () {
       await expect(
-        this.LimitedOCPointsMerkleClaim.connect(other).setMerkleRoot(this.root, this.totalAmount, this.startTime, this.endTime)
+        this.LimitedOCPointsMerkleClaim.connect(other).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime)
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'NotContractOwner');
+    });
+
+    it('reverts with {EpochIdAlreadyExists} if the epochId has already been set', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime);
+
+      await expect(
+        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime)
+      )
+        .to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'EpochIdAlreadyExists')
+        .withArgs(this.epochId);
     });
 
     it('reverts with {InvalidClaimWindow} if startTime is not before endTime', async function () {
       await expect(
-        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, this.endTime, this.startTime)
+        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.endTime, this.startTime)
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidClaimWindow');
     });
 
     it('reverts with {InvalidClaimWindow} if startTime equals endTime', async function () {
       await expect(
-        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, this.startTime, this.startTime)
+        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.startTime)
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidClaimWindow');
     });
 
@@ -109,19 +115,19 @@ describe('LimitedOCPointsMerkleClaim', function () {
       const pastTime = this.currentTime - 3600; // 1 hour ago
 
       await expect(
-        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, pastTime - 1800, pastTime)
+        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, pastTime - 1800, pastTime)
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidClaimWindow');
     });
 
     context('when successful', function () {
-      it('increments the current epoch ID', async function () {
-        const initialEpochId = await this.LimitedOCPointsMerkleClaim.currentEpochId();
-        await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, this.startTime, this.endTime);
-        expect(await this.LimitedOCPointsMerkleClaim.currentEpochId()).to.be.equal(initialEpochId + 1n);
-      });
-
       it('sets the claim epoch data correctly', async function () {
-        await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, this.startTime, this.endTime);
+        await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(
+          this.epochId,
+          this.root,
+          this.totalAmount,
+          this.startTime,
+          this.endTime
+        );
         const epoch = await this.LimitedOCPointsMerkleClaim.claimEpochs(this.epochId);
 
         expect(epoch.merkleRoot).to.be.equal(this.root);
@@ -132,37 +138,44 @@ describe('LimitedOCPointsMerkleClaim', function () {
       });
 
       it('emits a {MerkleRootSet} event', async function () {
-        await expect(this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, this.startTime, this.endTime))
+        await expect(
+          this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime)
+        )
           .to.emit(this.LimitedOCPointsMerkleClaim, 'MerkleRootSet')
           .withArgs(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime);
       });
 
-      it('allows setting multiple epochs', async function () {
-        await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, this.startTime, this.endTime);
+      it('allows setting multiple epochs with different epochIds', async function () {
+        await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(
+          this.epochId,
+          this.root,
+          this.totalAmount,
+          this.startTime,
+          this.endTime
+        );
 
-        const newRoot = ethers.keccak256(ethers.toUtf8Bytes('new root'));
+        const newEpochId = ethers.encodeBytes32String('EPOCH_2');
+        const newRoot = ethers.encodeBytes32String('new root');
         const newStartTime = this.endTime + 100;
         const newEndTime = newStartTime + 3600;
         const newTotalAmount = 2000n;
 
-        await expect(this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(newRoot, newTotalAmount, newStartTime, newEndTime))
+        await expect(this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(newEpochId, newRoot, newTotalAmount, newStartTime, newEndTime))
           .to.emit(this.LimitedOCPointsMerkleClaim, 'MerkleRootSet')
-          .withArgs(1n, newRoot, newTotalAmount, newStartTime, newEndTime);
-
-        expect(await this.LimitedOCPointsMerkleClaim.currentEpochId()).to.be.equal(2n);
+          .withArgs(newEpochId, newRoot, newTotalAmount, newStartTime, newEndTime);
       });
     });
   });
 
-  describe('claim(uint256,address,uint256,bytes32,bytes32[])', function () {
+  describe('claim(bytes32,address,uint256,bytes32,bytes32[])', function () {
     beforeEach(async function () {
-      await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, this.startTime, this.endTime);
+      await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime);
     });
 
     it('reverts with {ClaimEpochNotFound} if the epoch does not exist', async function () {
       await helpers.time.increase(100);
 
-      const invalidEpochId = 999n;
+      const invalidEpochId = ethers.encodeBytes32String('INVALID_EPOCH');
       const claimData = this.payouts[0];
       const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
@@ -236,7 +249,7 @@ describe('LimitedOCPointsMerkleClaim', function () {
         const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
         const leaf = ethers.keccak256(
           ethers.solidityPacked(
-            ['address', 'uint256', 'bytes32', 'uint256'],
+            ['address', 'uint256', 'bytes32', 'bytes32'],
             [claimData.recipient, claimData.amount, claimData.reasonCode, claimData.epochId]
           )
         );
@@ -302,15 +315,15 @@ describe('LimitedOCPointsMerkleClaim', function () {
     });
   });
 
-  describe('canClaim(uint256,address,uint256,bytes32)', function () {
+  describe('canClaim(bytes32,address,uint256,bytes32)', function () {
     beforeEach(async function () {
-      await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.root, this.totalAmount, this.startTime, this.endTime);
+      await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime);
     });
 
     it('returns ClaimEpochNotFound for non-existent epoch', async function () {
       await helpers.time.increase(100);
 
-      const invalidEpochId = 999n;
+      const invalidEpochId = ethers.encodeBytes32String('INVALID_EPOCH');
       const claimData = this.payouts[0];
 
       expect(await this.LimitedOCPointsMerkleClaim.canClaim(invalidEpochId, claimData.recipient, claimData.amount, claimData.reasonCode)).to.be.equal(
