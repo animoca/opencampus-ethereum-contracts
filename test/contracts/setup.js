@@ -158,15 +158,19 @@ async function setupOCPointMerkleClaimMock(deployer, operator) {
   await this.OCPoint.grantRole(await this.OCPoint.DEPOSITOR_ROLE(), await this.OCPointMerkleClaim.getAddress());
 }
 
-async function setupLimitedOCPointsMerkleClaim() {
+async function setupLimitedOCPointsMerkleClaim(admin, distributor, poolSize, reasonCode) {
   this.PointsContract = await deployContract('Points', await getForwarderRegistryAddress());
   this.LimitedOCPointsMerkleClaim = await deployContract(
     'LimitedOCPointsMerkleClaimMock',
     await this.PointsContract.getAddress(),
+    poolSize,
+    reasonCode,
     await getForwarderRegistryAddress()
   );
 
   await this.PointsContract.grantRole(await this.PointsContract.DEPOSITOR_ROLE(), await this.LimitedOCPointsMerkleClaim.getAddress());
+  await this.LimitedOCPointsMerkleClaim.grantRole(await this.LimitedOCPointsMerkleClaim.DISTRIBUTOR_ROLE(), distributor.address);
+  await this.LimitedOCPointsMerkleClaim.grantRole(await this.LimitedOCPointsMerkleClaim.ADMIN_ROLE(), admin.address);
 }
 
 module.exports = {

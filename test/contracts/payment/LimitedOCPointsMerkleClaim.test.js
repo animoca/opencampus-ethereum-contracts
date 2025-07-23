@@ -10,14 +10,16 @@ const helpers = require('@nomicfoundation/hardhat-network-helpers');
 const {setupLimitedOCPointsMerkleClaim} = require('../setup');
 
 describe('LimitedOCPointsMerkleClaim', function () {
-  let deployer, owner, claimer1, claimer2, claimer3, claimer4, other;
+  let deployer, owner, admin, distributor, claimer1, claimer2, claimer3, claimer4, other;
 
   before(async function () {
-    [deployer, owner, claimer1, claimer2, claimer3, claimer4, other] = await ethers.getSigners();
+    [deployer, owner, admin, distributor, claimer1, claimer2, claimer3, claimer4, other] = await ethers.getSigners();
   });
 
   const fixture = async function () {
-    await setupLimitedOCPointsMerkleClaim.call(this, deployer, owner);
+    this.initialPoolSize = 900n;
+    this.reasonCode = ethers.encodeBytes32String('OC_LIMITED_POINTS_CLAIM');
+    await setupLimitedOCPointsMerkleClaim.call(this, admin, distributor, this.initialPoolSize, this.reasonCode);
   };
 
   beforeEach(async function () {
@@ -26,49 +28,47 @@ describe('LimitedOCPointsMerkleClaim', function () {
     this.currentTime = await helpers.time.latest();
     this.startTime = this.currentTime + 100; // starts in 100 seconds
     this.endTime = this.startTime + 3600; // lasts for 1 hour
-    this.totalAmount = 800n; // Changed from 1000n to 600n to test pool depletion
-    this.epochId = ethers.encodeBytes32String('EPOCH_1'); // first epoch as bytes32
+    this.reasonCode = await this.LimitedOCPointsMerkleClaim.POINTS_DEPOSIT_REASON_CODE();
+    this.initialNonce = await this.LimitedOCPointsMerkleClaim.nonce();
+    this.expectedNonce = this.initialNonce + 1n;
 
     this.payouts = [
       {
         recipient: claimer1.address,
         amount: 100n,
-        reasonCode: ethers.encodeBytes32String('SEASON1_DAPP1'),
-        epochId: this.epochId,
       },
       {
         recipient: claimer2.address,
         amount: 200n,
-        reasonCode: ethers.encodeBytes32String('SEASON1_DAPP2'),
-        epochId: this.epochId,
       },
       {
         recipient: claimer3.address,
         amount: 300n,
-        reasonCode: ethers.encodeBytes32String('OC_POINTS_MIGRATION'),
-        epochId: this.epochId,
       },
       {
         recipient: claimer4.address,
         amount: 400n,
-        reasonCode: ethers.encodeBytes32String('SEASON2_REWARD'),
-        epochId: this.epochId,
       },
     ];
 
-    this.leaves = this.payouts.map(({recipient, amount, reasonCode, epochId}) => {
-      return ethers.solidityPacked(['address', 'uint256', 'bytes32', 'bytes32'], [recipient, amount, reasonCode, epochId]);
+    this.leaves = this.payouts.map(({recipient, amount}) => {
+      return ethers.solidityPacked(['uint256', 'address', 'uint256', 'bytes32'], [this.expectedNonce, recipient, amount, this.reasonCode]);
     });
     this.tree = new MerkleTree(this.leaves, ethers.keccak256, {hashLeaves: true, sortPairs: true});
     this.root = this.tree.getHexRoot();
   });
 
   describe('constructor', function () {
-    it('reverts with {InvalidPointsContractAddress} if the reward contract address is the zero address', async function () {
-      await expect(deployContract('LimitedOCPointsMerkleClaim', ethers.ZeroAddress, await getForwarderRegistryAddress())).to.revertedWithCustomError(
-        this.LimitedOCPointsMerkleClaim,
-        'InvalidPointsContractAddress'
-      );
+    it('reverts with {InvalidPointsContractAddress} if the points contract address is the zero address', async function () {
+      await expect(
+        deployContract(
+          'LimitedOCPointsMerkleClaim',
+          ethers.ZeroAddress,
+          1000n,
+          ethers.encodeBytes32String('TEST_REASON'),
+          await getForwarderRegistryAddress()
+        )
+      ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidPointsContractAddress');
     });
 
     context('when successful', function () {
@@ -76,38 +76,41 @@ describe('LimitedOCPointsMerkleClaim', function () {
         expect(await this.LimitedOCPointsMerkleClaim.forwarderRegistry()).to.be.equal(await getForwarderRegistryAddress());
       });
 
-      it('sets the reward contract address', async function () {
+      it('sets the points contract address', async function () {
         expect(await this.LimitedOCPointsMerkleClaim.POINTS_CONTRACT()).to.be.equal(await this.PointsContract.getAddress());
+      });
+
+      it('sets the initial pool size', async function () {
+        expect(await this.LimitedOCPointsMerkleClaim.poolSize()).to.be.equal(this.initialPoolSize);
+        expect(await this.LimitedOCPointsMerkleClaim.amountClaimed()).to.be.equal(0n);
+      });
+
+      it('sets the points deposit reason code', async function () {
+        expect(await this.LimitedOCPointsMerkleClaim.POINTS_DEPOSIT_REASON_CODE()).to.be.equal(this.reasonCode);
+      });
+
+      it('initializes nonce to 0', async function () {
+        expect(await this.LimitedOCPointsMerkleClaim.nonce()).to.be.equal(0);
       });
     });
   });
 
-  describe('setMerkleRoot(bytes32,bytes32,uint256,uint256,uint256)', function () {
-    it('reverts with {NotContractOwner} if not called by the contract owner', async function () {
+  describe('setMerkleRoot(bytes32,uint256,uint256)', function () {
+    it('reverts with {NotRoleHolder} if not called by a distributor', async function () {
       await expect(
-        this.LimitedOCPointsMerkleClaim.connect(other).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime)
-      ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'NotContractOwner');
-    });
-
-    it('reverts with {EpochIdAlreadyExists} if the epochId has already been set', async function () {
-      await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime);
-
-      await expect(
-        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime)
-      )
-        .to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'EpochIdAlreadyExists')
-        .withArgs(this.epochId);
+        this.LimitedOCPointsMerkleClaim.connect(other).setMerkleRoot(this.root, this.startTime, this.endTime)
+      ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'NotRoleHolder');
     });
 
     it('reverts with {InvalidClaimWindow} if startTime is not before endTime', async function () {
       await expect(
-        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.endTime, this.startTime)
+        this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.endTime, this.startTime)
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidClaimWindow');
     });
 
     it('reverts with {InvalidClaimWindow} if startTime equals endTime', async function () {
       await expect(
-        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.startTime)
+        this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.startTime)
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidClaimWindow');
     });
 
@@ -115,123 +118,138 @@ describe('LimitedOCPointsMerkleClaim', function () {
       const pastTime = this.currentTime - 3600; // 1 hour ago
 
       await expect(
-        this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, pastTime - 1800, pastTime)
+        this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, pastTime - 1800, pastTime)
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidClaimWindow');
     });
 
-    context('when successful', function () {
-      it('sets the claim epoch data correctly', async function () {
-        await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(
-          this.epochId,
-          this.root,
-          this.totalAmount,
-          this.startTime,
-          this.endTime
-        );
-        const epoch = await this.LimitedOCPointsMerkleClaim.claimEpochs(this.epochId);
+    it('reverts with {MerkleRootCannotBeZero} if the merkle root is zero', async function () {
+      await expect(
+        this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(ethers.ZeroHash, this.startTime, this.endTime)
+      ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'MerkleRootCannotBeZero');
+    });
 
-        expect(epoch.merkleRoot).to.be.equal(this.root);
-        expect(epoch.totalAmount).to.be.equal(this.totalAmount);
-        expect(epoch.amountLeft).to.be.equal(this.totalAmount);
-        expect(epoch.startTime).to.be.equal(this.startTime);
-        expect(epoch.endTime).to.be.equal(this.endTime);
+    context('when successful', function () {
+      it('sets the merkle root and time window correctly', async function () {
+        await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
+
+        expect(await this.LimitedOCPointsMerkleClaim.root()).to.be.equal(this.root);
+        expect(await this.LimitedOCPointsMerkleClaim.startTime()).to.be.equal(this.startTime);
+        expect(await this.LimitedOCPointsMerkleClaim.endTime()).to.be.equal(this.endTime);
+      });
+
+      it('increments the nonce', async function () {
+        const nonceBefore = await this.LimitedOCPointsMerkleClaim.nonce();
+        await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
+        const nonceAfter = await this.LimitedOCPointsMerkleClaim.nonce();
+
+        expect(nonceAfter).to.be.equal(nonceBefore + 1n);
       });
 
       it('emits a {MerkleRootSet} event', async function () {
-        await expect(
-          this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime)
-        )
+        const poolSize = await this.LimitedOCPointsMerkleClaim.poolSize();
+        const amountClaimed = await this.LimitedOCPointsMerkleClaim.amountClaimed();
+        const amountClaimable = poolSize - amountClaimed;
+        await expect(this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime))
           .to.emit(this.LimitedOCPointsMerkleClaim, 'MerkleRootSet')
-          .withArgs(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime);
-      });
-
-      it('allows setting multiple epochs with different epochIds', async function () {
-        await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(
-          this.epochId,
-          this.root,
-          this.totalAmount,
-          this.startTime,
-          this.endTime
-        );
-
-        const newEpochId = ethers.encodeBytes32String('EPOCH_2');
-        const newRoot = ethers.encodeBytes32String('new root');
-        const newStartTime = this.endTime + 100;
-        const newEndTime = newStartTime + 3600;
-        const newTotalAmount = 2000n;
-
-        await expect(this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(newEpochId, newRoot, newTotalAmount, newStartTime, newEndTime))
-          .to.emit(this.LimitedOCPointsMerkleClaim, 'MerkleRootSet')
-          .withArgs(newEpochId, newRoot, newTotalAmount, newStartTime, newEndTime);
+          .withArgs(this.expectedNonce, this.root, amountClaimable, this.startTime, this.endTime);
       });
     });
   });
 
-  describe('claim(bytes32,address,uint256,bytes32,bytes32[])', function () {
-    beforeEach(async function () {
-      await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime);
-    });
-
-    it('reverts with {ClaimEpochNotFound} if the epoch does not exist', async function () {
+  describe('claim(address,uint256,bytes32[])', function () {
+    it('reverts with {MerkleRootNotSet} if no merkle root is set', async function () {
       await helpers.time.increase(100);
 
-      const invalidEpochId = ethers.encodeBytes32String('INVALID_EPOCH');
       const claimData = this.payouts[0];
       const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-      await expect(
-        this.LimitedOCPointsMerkleClaim.claim(invalidEpochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof)
-      ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'ClaimEpochNotFound');
+      await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof)).to.be.revertedWithCustomError(
+        this.LimitedOCPointsMerkleClaim,
+        'MerkleRootNotSet'
+      );
     });
 
-    it('reverts with {ClaimingEpochNotActive} if claiming before start time', async function () {
+    it('reverts with {ClaimNotActive} if claiming before start time', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
+
       const claimData = this.payouts[0];
       const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-      await expect(
-        this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof)
-      ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'ClaimingEpochNotActive');
+      await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof)).to.be.revertedWithCustomError(
+        this.LimitedOCPointsMerkleClaim,
+        'ClaimNotActive'
+      );
     });
 
-    it('reverts with {ClaimingEpochNotActive} if claiming after end time', async function () {
+    it('reverts with {ClaimNotActive} if claiming after end time', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
+
       await helpers.time.increase(3700); // start + end time = 100 + 3600 = 3700
 
       const claimData = this.payouts[0];
       const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-      await helpers.time.increase(100);
-
-      await expect(
-        this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof)
-      ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'ClaimingEpochNotActive');
+      await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof)).to.be.revertedWithCustomError(
+        this.LimitedOCPointsMerkleClaim,
+        'ClaimNotActive'
+      );
     });
 
-    it('reverts with {AlreadyClaimed} if the user has already claimed for this epoch', async function () {
+    it('reverts with {AlreadyClaimed} if the user has already claimed', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
       await helpers.time.increase(100);
 
       const claimData = this.payouts[0];
       const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-      await this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof);
+      await this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof);
 
-      await expect(this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof))
+      await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof))
         .to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'AlreadyClaimed')
-        .withArgs(claimData.recipient, claimData.amount, claimData.reasonCode, this.epochId);
+        .withArgs(this.expectedNonce, claimData.recipient, claimData.amount, this.reasonCode);
     });
 
     it('reverts with {InvalidProof} if the merkle proof verification fails', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
       await helpers.time.increase(100);
 
       const claimData = this.payouts[0];
       const invalidProof = this.tree.getHexProof(ethers.keccak256(this.leaves[1])); // Wrong proof
 
-      await expect(this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, invalidProof))
+      await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, invalidProof))
         .to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidProof')
-        .withArgs(claimData.recipient, claimData.amount, claimData.reasonCode, this.epochId);
+        .withArgs(this.expectedNonce, claimData.recipient, claimData.amount, this.reasonCode);
+    });
+
+    it('reverts with {InsufficientPoolAmount} if the pool does not have enough tokens', async function () {
+      const claimData = this.payouts[0];
+      const poolSize = await this.LimitedOCPointsMerkleClaim.poolSize();
+      const amountClaimed = await this.LimitedOCPointsMerkleClaim.amountClaimed();
+      const excessiveAmount = poolSize - amountClaimed + 1n;
+
+      // Create a leaf for the excessive amount
+      const excessiveLeaf = ethers.solidityPacked(
+        ['uint256', 'address', 'uint256', 'bytes32'],
+        [this.expectedNonce, claimData.recipient, excessiveAmount, this.reasonCode]
+      );
+      const singleLeafTree = new MerkleTree([excessiveLeaf], ethers.keccak256, {hashLeaves: true, sortPairs: true});
+      const excessiveRoot = singleLeafTree.getHexRoot();
+
+      // Set new merkle root with excessive amount
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(excessiveRoot, this.startTime, this.endTime);
+      await helpers.time.increase(100);
+
+      const proof = singleLeafTree.getHexProof(ethers.keccak256(excessiveLeaf));
+
+      await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, excessiveAmount, proof)).to.be.revertedWithCustomError(
+        this.LimitedOCPointsMerkleClaim,
+        'InsufficientPoolAmount'
+      );
     });
 
     context('when successful', function () {
       beforeEach(async function () {
+        await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
         await helpers.time.increase(100);
       });
 
@@ -239,9 +257,9 @@ describe('LimitedOCPointsMerkleClaim', function () {
         const claimData = this.payouts[0];
         const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-        await expect(this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof))
+        await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof))
           .to.emit(this.PointsContract, 'Deposited')
-          .withArgs(await this.LimitedOCPointsMerkleClaim.getAddress(), claimData.reasonCode, claimData.recipient, claimData.amount);
+          .withArgs(await this.LimitedOCPointsMerkleClaim.getAddress(), this.reasonCode, claimData.recipient, claimData.amount);
       });
 
       it('marks the claim as completed', async function () {
@@ -249,35 +267,40 @@ describe('LimitedOCPointsMerkleClaim', function () {
         const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
         const leaf = ethers.keccak256(
           ethers.solidityPacked(
-            ['address', 'uint256', 'bytes32', 'bytes32'],
-            [claimData.recipient, claimData.amount, claimData.reasonCode, claimData.epochId]
+            ['uint256', 'address', 'uint256', 'bytes32'],
+            [this.expectedNonce, claimData.recipient, claimData.amount, this.reasonCode]
           )
         );
 
         expect(await this.LimitedOCPointsMerkleClaim.claimed(leaf)).to.be.false;
-        await this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof);
+        await this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof);
         expect(await this.LimitedOCPointsMerkleClaim.claimed(leaf)).to.be.true;
       });
 
-      it('reduces the amount left in the pool', async function () {
+      it('increases the amount claimed in the contract', async function () {
         const claimData = this.payouts[0];
         const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-        const epochBefore = await this.LimitedOCPointsMerkleClaim.claimEpochs(this.epochId);
-        await this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof);
-        const epochAfter = await this.LimitedOCPointsMerkleClaim.claimEpochs(this.epochId);
+        const amountClaimedBefore = await this.LimitedOCPointsMerkleClaim.amountClaimed();
 
-        expect(epochAfter.amountLeft).to.be.equal(epochBefore.amountLeft - claimData.amount);
+        await this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof);
+
+        const amountClaimedAfter = await this.LimitedOCPointsMerkleClaim.amountClaimed();
+
+        expect(amountClaimedAfter).to.be.equal(amountClaimedBefore + claimData.amount);
       });
 
       it('emits a {PointsClaimed} event', async function () {
         const claimData = this.payouts[0];
         const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
-        const expectedAmountLeft = this.totalAmount - claimData.amount;
+        const poolSize = await this.LimitedOCPointsMerkleClaim.poolSize();
+        const amountClaimed = await this.LimitedOCPointsMerkleClaim.amountClaimed();
+        const amountLeft = poolSize - amountClaimed;
+        const expectedAmountLeft = amountLeft - claimData.amount;
 
-        await expect(this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof))
+        await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof))
           .to.emit(this.LimitedOCPointsMerkleClaim, 'PointsClaimed')
-          .withArgs(this.epochId, this.root, claimData.recipient, claimData.amount, expectedAmountLeft);
+          .withArgs(this.expectedNonce, this.root, claimData.recipient, claimData.amount, expectedAmountLeft);
       });
 
       it('allows multiple users to claim from the same epoch', async function () {
@@ -286,11 +309,13 @@ describe('LimitedOCPointsMerkleClaim', function () {
         const proof1 = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
         const proof2 = this.tree.getHexProof(ethers.keccak256(this.leaves[1]));
 
-        await this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData1.recipient, claimData1.amount, claimData1.reasonCode, proof1);
-        await this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData2.recipient, claimData2.amount, claimData2.reasonCode, proof2);
+        const initialAmountClaimed = await this.LimitedOCPointsMerkleClaim.amountClaimed();
 
-        const epoch = await this.LimitedOCPointsMerkleClaim.claimEpochs(this.epochId);
-        expect(epoch.amountLeft).to.be.equal(this.totalAmount - claimData1.amount - claimData2.amount);
+        await this.LimitedOCPointsMerkleClaim.claim(claimData1.recipient, claimData1.amount, proof1);
+        await this.LimitedOCPointsMerkleClaim.claim(claimData2.recipient, claimData2.amount, proof2);
+
+        const finalAmountClaimed = await this.LimitedOCPointsMerkleClaim.amountClaimed();
+        expect(finalAmountClaimed).to.be.equal(initialAmountClaimed + claimData1.amount + claimData2.amount);
       });
 
       it('prevents claiming when pool is depleted', async function () {
@@ -304,83 +329,121 @@ describe('LimitedOCPointsMerkleClaim', function () {
         const proof3 = this.tree.getHexProof(ethers.keccak256(this.leaves[2]));
         const proof4 = this.tree.getHexProof(ethers.keccak256(this.leaves[3]));
 
-        await this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData1.recipient, claimData1.amount, claimData1.reasonCode, proof1);
-        await this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData2.recipient, claimData2.amount, claimData2.reasonCode, proof2);
-        await this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData3.recipient, claimData3.amount, claimData3.reasonCode, proof3);
+        await this.LimitedOCPointsMerkleClaim.claim(claimData1.recipient, claimData1.amount, proof1);
+        await this.LimitedOCPointsMerkleClaim.claim(claimData2.recipient, claimData2.amount, proof2);
+        await this.LimitedOCPointsMerkleClaim.claim(claimData3.recipient, claimData3.amount, proof3);
 
-        await expect(
-          this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData4.recipient, claimData4.amount, claimData4.reasonCode, proof4)
-        ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InsufficientPoolAmount');
+        await expect(this.LimitedOCPointsMerkleClaim.claim(claimData4.recipient, claimData4.amount, proof4)).to.be.revertedWithCustomError(
+          this.LimitedOCPointsMerkleClaim,
+          'InsufficientPoolAmount'
+        );
       });
     });
   });
 
-  describe('canClaim(bytes32,address,uint256,bytes32)', function () {
-    beforeEach(async function () {
-      await this.LimitedOCPointsMerkleClaim.connect(deployer).setMerkleRoot(this.epochId, this.root, this.totalAmount, this.startTime, this.endTime);
-    });
-
-    it('returns ClaimEpochNotFound for non-existent epoch', async function () {
-      await helpers.time.increase(100);
-
-      const invalidEpochId = ethers.encodeBytes32String('INVALID_EPOCH');
+  describe('canClaim(address,uint256)', function () {
+    it('returns MerkleRootNotSet for contracts without merkle root', async function () {
       const claimData = this.payouts[0];
+      const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(invalidEpochId, claimData.recipient, claimData.amount, claimData.reasonCode)).to.be.equal(
-        1n
-      );
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(claimData.recipient, claimData.amount, proof)).to.be.equal(1n);
     });
 
-    it('returns ClaimingEpochNotActive before start time', async function () {
+    it('returns ClaimNotActive before start time', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
       const claimData = this.payouts[0];
+      const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode)).to.be.equal(
-        2n
-      );
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(claimData.recipient, claimData.amount, proof)).to.be.equal(2n);
     });
 
-    it('returns ClaimingEpochNotActive after end time', async function () {
+    it('returns ClaimNotActive after end time', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
       await helpers.time.increase(3700);
 
       const claimData = this.payouts[0];
+      const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode)).to.be.equal(
-        2n
-      );
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(claimData.recipient, claimData.amount, proof)).to.be.equal(2n);
     });
 
     it('returns AlreadyClaimed for users who have already claimed', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
       await helpers.time.increase(100);
 
       const claimData = this.payouts[0];
       const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-      await this.LimitedOCPointsMerkleClaim.claim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode, proof);
+      await this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof);
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode)).to.be.equal(
-        3n
-      );
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(claimData.recipient, claimData.amount, proof)).to.be.equal(3n);
     });
 
     it('returns InsufficientPoolAmount when pool does not have enough tokens', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
       await helpers.time.increase(100);
 
-      const excessiveAmount = this.totalAmount + 1n;
+      const poolSize = await this.LimitedOCPointsMerkleClaim.poolSize();
+      const amountClaimed = await this.LimitedOCPointsMerkleClaim.amountClaimed();
+      const excessiveAmount = poolSize - amountClaimed + 1n;
       const claimData = this.payouts[0];
+      const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, excessiveAmount, claimData.reasonCode)).to.be.equal(
-        4n
-      );
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(claimData.recipient, excessiveAmount, proof)).to.be.equal(5n);
     });
 
     it('returns NoError for valid claim attempts', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
       await helpers.time.increase(100);
 
       const claimData = this.payouts[0];
+      const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(this.epochId, claimData.recipient, claimData.amount, claimData.reasonCode)).to.be.equal(
-        0n
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(claimData.recipient, claimData.amount, proof)).to.be.equal(0n);
+    });
+  });
+
+  describe('increasePoolSize(uint256)', function () {
+    it('reverts with {NotRoleHolder} if not called by an admin', async function () {
+      await expect(this.LimitedOCPointsMerkleClaim.connect(other).increasePoolSize(2000n)).to.be.revertedWithCustomError(
+        this.LimitedOCPointsMerkleClaim,
+        'NotRoleHolder'
       );
+    });
+
+    it('reverts with {InvalidPoolSize} if increment amount is zero', async function () {
+      await expect(this.LimitedOCPointsMerkleClaim.connect(admin).increasePoolSize(0)).to.be.revertedWithCustomError(
+        this.LimitedOCPointsMerkleClaim,
+        'InvalidPoolSize'
+      );
+    });
+
+    context('when successful', function () {
+      it('increases the pool size by the specified amount', async function () {
+        const oldPoolSize = await this.LimitedOCPointsMerkleClaim.poolSize();
+        const increment = 2000n;
+        const expectedNewPoolSize = oldPoolSize + increment;
+
+        await this.LimitedOCPointsMerkleClaim.connect(admin).increasePoolSize(increment);
+
+        expect(await this.LimitedOCPointsMerkleClaim.poolSize()).to.be.equal(expectedNewPoolSize);
+      });
+
+      it('emits a {PoolSizeUpdated} event', async function () {
+        const oldPoolSize = await this.LimitedOCPointsMerkleClaim.poolSize();
+        const increment = 2000n;
+        const expectedNewPoolSize = oldPoolSize + increment;
+
+        await expect(this.LimitedOCPointsMerkleClaim.connect(admin).increasePoolSize(increment))
+          .to.emit(this.LimitedOCPointsMerkleClaim, 'PoolSizeUpdated')
+          .withArgs(oldPoolSize, expectedNewPoolSize);
+      });
+
+      it('allows increasing pool size when no merkle root is set', async function () {
+        const increment = 2000n;
+
+        await expect(this.LimitedOCPointsMerkleClaim.connect(admin).increasePoolSize(increment)).to.not.be.reverted;
+      });
     });
   });
 

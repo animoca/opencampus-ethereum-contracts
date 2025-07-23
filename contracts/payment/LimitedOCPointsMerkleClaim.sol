@@ -3,20 +3,20 @@ pragma solidity 0.8.22;
 
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import {InconsistentArrayLengths} from "@animoca/ethereum-contracts/contracts/CommonErrors.sol";
 import {ContractOwnership} from "@animoca/ethereum-contracts/contracts/access/ContractOwnership.sol";
-import {ContractOwnershipStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/ContractOwnershipStorage.sol";
 import {TokenRecovery} from "@animoca/ethereum-contracts/contracts/security/TokenRecovery.sol";
 import {ForwarderRegistryContext} from "@animoca/ethereum-contracts/contracts/metatx/ForwarderRegistryContext.sol";
 import {ForwarderRegistryContextBase} from "@animoca/ethereum-contracts/contracts/metatx/base/ForwarderRegistryContextBase.sol";
 import {IForwarderRegistry} from "@animoca/ethereum-contracts/contracts/metatx/interfaces/IForwarderRegistry.sol";
 import {IPoints} from "@animoca/anichess-ethereum-contracts-2.2.3/contracts/points/interface/IPoints.sol";
+import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/AccessControl.sol";
+import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
 
 /// @title LimitedOCPointsMerkleClaim
 /// @notice This contract is designed for claiming reward tokens from a limited pool within fixed time epochs.
 /// @notice Each epoch has a fixed total amount that gets depleted as users claim their allocations.
 /// @notice Claims are based on merkle proofs and are subject to time constraints and pool availability.
-contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
+contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryContext {
     /// @notice Thrown when the reward contract address is invalid.
     /// @param InvalidPointsContractAddress The address of the invalid points contract.
     error InvalidPointsContractAddress(address InvalidPointsContractAddress);
@@ -25,229 +25,267 @@ contract LimitedOCPointsMerkleClaim is TokenRecovery, ForwarderRegistryContext {
     /// @param currentTime The current block timestamp.
     /// @param startTime The start time of the claiming epoch.
     /// @param endTime The end time of the claiming epoch.
-    error ClaimingEpochNotActive(uint256 currentTime, uint256 startTime, uint256 endTime);
+    error ClaimNotActive(uint256 currentTime, uint256 startTime, uint256 endTime);
 
     /// @notice Thrown when trying to claim the same allocation more than once.
+    /// @param nonce The nonce for the pool.
     /// @param recipient The recipient of the claim.
     /// @param amount The amount being claimed.
     /// @param reasonCode The reason code for the deposit.
-    /// @param epochId The epoch identifier for a specific claiming epoch.
-    error AlreadyClaimed(address recipient, uint256 amount, bytes32 reasonCode, bytes32 epochId);
+    error AlreadyClaimed(uint256 nonce, address recipient, uint256 amount, bytes32 reasonCode);
 
     /// @notice Thrown when a proof cannot be verified.
+    /// @param nonce The nonce for the pool.
     /// @param recipient The recipient of the claim.
     /// @param amount The amount being claimed.
     /// @param reasonCode The reason code for the deposit.
-    /// @param epochId The epoch identifier for a specific claiming epoch.
-    error InvalidProof(address recipient, uint256 amount, bytes32 reasonCode, bytes32 epochId);
+    error InvalidProof(uint256 nonce, address recipient, uint256 amount, bytes32 reasonCode);
 
-    /// @notice Thrown when the pool doesn't have enough tokens for the claim.
-    /// @param amountRequested The amount requested to claim.
-    /// @param amountAvailable The amount available in the pool.
-    error InsufficientPoolAmount(uint256 amountRequested, uint256 amountAvailable);
+    /// @notice Thrown when the pool doesn't have enough points for the claim.
+    /// @param claimAmount The amount requested to claim.
+    /// @param poolAmount The amount available in the pool.
+    error InsufficientPoolAmount(uint256 claimAmount, uint256 poolAmount);
 
-    /// @notice Thrown when trying to access a non-existent epoch.
-    /// @param epochId The epoch identifier for a specific claiming epoch.
-    error ClaimEpochNotFound(bytes32 epochId);
+    /// @notice Thrown when trying to claim before a merkle root is set.
+    error MerkleRootNotSet();
 
-    /// @notice Thrown when trying to set a merkle root for an epoch that already exists.
-    /// @param epochId The epoch identifier that already exists.
-    error EpochIdAlreadyExists(bytes32 epochId);
-
-    /// @notice Thrown when the start time is not before the end time.
+    /// @notice Thrown when the claim window is invalid.
     /// @param startTime The start time.
     /// @param endTime The end time.
     error InvalidClaimWindow(uint256 startTime, uint256 endTime);
 
+    /// @notice Thrown when the merkle root is zero.
+    error MerkleRootCannotBeZero();
+
+    /// @notice Thrown when incremental amount to the pool is invalid.
+    /// @param amount The amount to be added to the pool.
+    error InvalidPoolSize(uint256 amount);
+
     /// @notice Enum representing different claim validation errors.
     enum ClaimError {
         NoError,
-        ClaimEpochNotFound,
-        ClaimingEpochNotActive,
+        MerkleRootNotSet,
+        ClaimNotActive,
         AlreadyClaimed,
+        InvalidProof,
         InsufficientPoolAmount
     }
 
-    using ContractOwnershipStorage for ContractOwnershipStorage.Layout;
+    using AccessControlStorage for AccessControlStorage.Layout;
     using MerkleProof for bytes32[];
+
+    /// @notice The role identifier for the distributor role.
+    bytes32 public constant DISTRIBUTOR_ROLE = keccak256("DISTRIBUTOR_ROLE");
+
+    /// @notice The role identifier for the admin role.
+    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
     /// @notice A reference to the points contract.
     IPoints public immutable POINTS_CONTRACT;
 
-    /// @notice Struct representing a claiming epoch.
-    struct ClaimEpoch {
-        bytes32 merkleRoot;      // Merkle root for this epoch
-        uint256 totalAmount;     // Total amount available for claiming
-        uint256 amountLeft;      // Amount left to be claimed
-        uint256 startTime;       // Start time for claiming
-        uint256 endTime;         // End time for claiming
-    }
-
-    /// @notice Mapping from epoch ID to claiming epoch data.
-    mapping(bytes32 => ClaimEpoch) public claimEpochs;
+    /// @notice The reason code for the points deposit.
+    bytes32 public immutable POINTS_DEPOSIT_REASON_CODE;
 
     /// @notice Mapping from leaf hash to claimed status.
     mapping(bytes32 => bool) public claimed;
 
-    /// @notice Emitted when a new merkle root is set for an epoch.
-    /// @param epochId The epoch identifier for a specific claiming epoch.
-    /// @param merkleRoot The merkle root for this epoch.
-    /// @param totalAmount The total amount available for claiming.
+    /// @notice The size of the pool.
+    uint256 public poolSize;
+
+    /// @notice The amount claimed from the pool.
+    uint256 public amountClaimed = 0;
+
+    /// @notice The nonce for the pool.
+    uint256 public nonce = 0;
+
+    /// @notice The merkle root for the pool.
+    bytes32 public root;
+
+    /// @notice The start time for the pool.
+    uint256 public startTime;
+
+    /// @notice The end time for the pool.
+    uint256 public endTime;
+
+    /// @notice Emitted when a new merkle root.
+    /// @param nonce The nonce for the pool.
+    /// @param merkleRoot The merkle root.
+    /// @param poolSize The pool size available for claiming.
     /// @param startTime The start time for claiming.
     /// @param endTime The end time for claiming.
-    event MerkleRootSet(bytes32 indexed epochId, bytes32 indexed merkleRoot, uint256 totalAmount, uint256 startTime, uint256 endTime);
+    event MerkleRootSet(uint256 indexed nonce, bytes32 indexed merkleRoot, uint256 poolSize, uint256 startTime, uint256 endTime);
 
     /// @notice Emitted when a points is claimed.
-    /// @param epochId The epoch identifier for a specific claiming epoch.
-    /// @param merkleRoot The merkle root for this epoch.
+    /// @param nonce The nonce for the pool.
+    /// @param merkleRoot The merkle root.
     /// @param recipient The recipient of the claim.
     /// @param amount The amount claimed.
     /// @param amountLeft The amount left in the pool after this claim.
-    event PointsClaimed(bytes32 indexed epochId, bytes32 indexed merkleRoot, address indexed recipient, uint256 amount, uint256 amountLeft);
+    event PointsClaimed(uint256 indexed nonce, bytes32 indexed merkleRoot, address indexed recipient, uint256 amount, uint256 amountLeft);
+
+    /// @notice Emitted when the pool size is updated.
+    /// @param oldPoolSize The old pool size.
+    /// @param newPoolSize The new pool size.
+    event PoolSizeUpdated(uint256 oldPoolSize, uint256 newPoolSize);
 
     /// @notice Constructor for limited OC points merkle claim.
     /// @param pointsContractAddress The address of the points contract.
+    /// @param poolSize_ The initial pool size.
+    /// @param pointsDepositReasonCode The reason code for points deposits.
     /// @param forwarderRegistry The address of the forwarder registry.
     /// @dev Reverts with {InvalidPointsContractAddress} if the points contract address is the zero address.
     constructor(
         address pointsContractAddress,
+        uint256 poolSize_,
+        bytes32 pointsDepositReasonCode,
         IForwarderRegistry forwarderRegistry
     ) ContractOwnership(msg.sender) ForwarderRegistryContext(forwarderRegistry) {
         if (pointsContractAddress == address(0)) {
             revert InvalidPointsContractAddress(pointsContractAddress);
         }
         POINTS_CONTRACT = IPoints(pointsContractAddress);
+        poolSize = poolSize_;
+        POINTS_DEPOSIT_REASON_CODE = pointsDepositReasonCode;
     }
 
-    /// @notice Sets a new merkle root for a epoch with a limited reward pool and time constraints.
-    /// @dev Reverts with {NotContractOwner} if the sender is not the contract owner.
-    /// @dev Reverts with {EpochIdAlreadyExists} if the epochId has already been set.
-    /// @dev Reverts with {InvalidClaimWindow} if the end time is not after the start time and the end time is in the past.
+    /// @notice Sets a new merkle root with a limited reward pool and time constraints.
+    /// @dev Reverts with {NotRoleHolder} if the sender is not the contract distributor.
+    /// @dev Reverts with {InvalidClaimWindow} if the claim window is invalid.
+    /// @dev Reverts with {MerkleRootCannotBeZero} if the merkle root is zero.
     /// @dev Emits a {MerkleRootSet} event.
-    /// @param epochId The epoch identifier for this epoch.
-    /// @param merkleRoot The merkle root for this epoch.
-    /// @param totalAmount The total amount available for claiming in this epoch.
-    /// @param startTime The start time for claiming.
-    /// @param endTime The end time for claiming.
+    /// @param merkleRoot The merkle root.
+    /// @param startTime_ The start time for claiming.
+    /// @param endTime_ The end time for claiming.
     function setMerkleRoot(
-        bytes32 epochId,
         bytes32 merkleRoot,
-        uint256 totalAmount,
-        uint256 startTime,
-        uint256 endTime
+        uint256 startTime_,
+        uint256 endTime_
     ) external {
-        ContractOwnershipStorage.layout().enforceIsContractOwner(_msgSender());
+        AccessControlStorage.layout().enforceHasRole(DISTRIBUTOR_ROLE, _msgSender());
         
-        if (claimEpochs[epochId].merkleRoot != bytes32(0)) {
-            revert EpochIdAlreadyExists(epochId);
-        }
-        
-        if (startTime >= endTime || endTime <= block.timestamp) {
-            revert InvalidClaimWindow(startTime, endTime);
+        if (startTime_ >= endTime_ || endTime_ <= block.timestamp) {
+            revert InvalidClaimWindow(startTime_, endTime_);
         }
 
-        claimEpochs[epochId] = ClaimEpoch({
-            merkleRoot: merkleRoot,
-            totalAmount: totalAmount,
-            amountLeft: totalAmount,
-            startTime: startTime,
-            endTime: endTime
-        });
+        if (merkleRoot == bytes32(0)) {
+            revert MerkleRootCannotBeZero();
+        }
 
-        emit MerkleRootSet(epochId, merkleRoot, totalAmount, startTime, endTime);
+        root = merkleRoot;
+        startTime = startTime_;
+        endTime = endTime_;
+
+        unchecked {
+            nonce++;
+        }
+
+        emit MerkleRootSet(nonce, merkleRoot, poolSize - amountClaimed, startTime_, endTime_);
     }
 
-    /// @notice Claims points for a specific epoch and given recipient address.
-    /// @dev Reverts with {ClaimEpochNotFound} if the epoch doesn't exist.
-    /// @dev Reverts with {ClaimingEpochNotActive} if the current time is outside the claiming epoch.
-    /// @dev Reverts with {AlreadyClaimed} if the user has already claimed for this epoch.
+    /// @notice Claims points for a given recipient address.
+    /// @dev Reverts with {ClaimNotActive} if the current time is outside the claiming window.
+    /// @dev Reverts with {AlreadyClaimed} if the user has already claimed.
     /// @dev Reverts with {InvalidProof} if the merkle proof verification fails.
-    /// @dev Reverts with {InsufficientPoolAmount} if the pool doesn't have enough tokens.
+    /// @dev Reverts with {InsufficientPoolAmount} if the pool doesn't have enough points.
     /// @dev Emits a {PointsClaimed} event.
-    /// @param epochId The epoch identifier for a specific claiming epoch.
-    /// @param recipient The recipient for the points.
+    /// @param recipient The recipient of the claim.
     /// @param amount The amount of points to be claimed.
-    /// @param reasonCode The reason code for the deposit.
     /// @param proof The merkle proof for verification.
     function claim(
-        bytes32 epochId,
         address recipient,
         uint256 amount,
-        bytes32 reasonCode,
         bytes32[] calldata proof
     ) external {
-        ClaimEpoch storage epoch = claimEpochs[epochId];
-        
-        if (epoch.merkleRoot == bytes32(0)) {
-            revert ClaimEpochNotFound(epochId);
+        if (root == bytes32(0)) {
+            revert MerkleRootNotSet();
         }
 
         uint256 currentTime = block.timestamp;
-        if (currentTime < epoch.startTime || currentTime > epoch.endTime) {
-            revert ClaimingEpochNotActive(currentTime, epoch.startTime, epoch.endTime);
+        if (currentTime < startTime || currentTime > endTime) {
+            revert ClaimNotActive(currentTime, startTime, endTime);
         }
 
-        bytes32 leaf = keccak256(abi.encodePacked(recipient, amount, reasonCode, epochId));
+        uint256 amountLeft = poolSize - amountClaimed;
+        if (amountLeft < amount) {
+            revert InsufficientPoolAmount(amount, amountLeft);
+        }
+
+        bytes32 leaf = keccak256(abi.encodePacked(nonce, recipient, amount, POINTS_DEPOSIT_REASON_CODE));
         
         if (claimed[leaf]) {
-            revert AlreadyClaimed(recipient, amount, reasonCode, epochId);
+            revert AlreadyClaimed(nonce, recipient, amount, POINTS_DEPOSIT_REASON_CODE);
         }
 
-        if (epoch.amountLeft < amount) {
-            revert InsufficientPoolAmount(amount, epoch.amountLeft);
-        }
-
-        if (!proof.verifyCalldata(epoch.merkleRoot, leaf)) {
-            revert InvalidProof(recipient, amount, reasonCode, epochId);
+        if (!proof.verifyCalldata(root, leaf)) {
+            revert InvalidProof(nonce, recipient, amount, POINTS_DEPOSIT_REASON_CODE);
         }
 
         claimed[leaf] = true;
-        epoch.amountLeft -= amount;
+        amountClaimed += amount;
 
-        POINTS_CONTRACT.deposit(recipient, amount, reasonCode);
+        POINTS_CONTRACT.deposit(recipient, amount, POINTS_DEPOSIT_REASON_CODE);
 
-        emit PointsClaimed(epochId, epoch.merkleRoot, recipient, amount, epoch.amountLeft);
+        emit PointsClaimed(nonce, root, recipient, amount, amountLeft - amount);
     }
 
-    /// @notice Checks if a user can claim rewards for a given epoch.
-    /// @dev Returns ClaimError.ClaimEpochNotFound if the epoch doesn't exist.
-    /// @dev Returns ClaimError.ClaimingEpochNotActive if the current time is outside the claiming epoch.
-    /// @dev Returns ClaimError.AlreadyClaimed if the user has already claimed for this epoch.
-    /// @dev Returns ClaimError.InsufficientPoolAmount if the pool doesn't have enough tokens.
+    /// @notice Checks if a user can claim rewards.
+    /// @dev Returns ClaimError.MerkleRootNotSet if the merkle root is not set.
+    /// @dev Returns ClaimError.ClaimNotActive if the current time is outside the claiming window.
+    /// @dev Returns ClaimError.AlreadyClaimed if the user has already claimed.
+    /// @dev Returns ClaimError.InvalidProof if the merkle proof verification fails.
+    /// @dev Returns ClaimError.InsufficientPoolAmount if the pool doesn't have enough points.
     /// @dev Returns ClaimError.NoError if basic validation passes.
-    /// @param epochId The epoch identifier for a specific claiming epoch.
     /// @param recipient The recipient address.
     /// @param amount The amount to be claimed.
-    /// @param reasonCode The reason code for the deposit.
+    /// @param proof The merkle proof for verification.
     /// @return error The claim validation result.
     function canClaim(
-        bytes32 epochId,
         address recipient,
         uint256 amount,
-        bytes32 reasonCode
+        bytes32[] calldata proof
     ) external view returns (ClaimError) {
-        ClaimEpoch storage epoch = claimEpochs[epochId];
-        
-        if (epoch.merkleRoot == bytes32(0)) {
-            return ClaimError.ClaimEpochNotFound;
+        if (root == bytes32(0)) {
+            return ClaimError.MerkleRootNotSet;
         }
 
         uint256 currentTime = block.timestamp;
-        if (currentTime < epoch.startTime || currentTime > epoch.endTime) {
-            return ClaimError.ClaimingEpochNotActive;
+        if (currentTime < startTime || currentTime > endTime) {
+            return ClaimError.ClaimNotActive;
         }
 
-        bytes32 leaf = keccak256(abi.encodePacked(recipient, amount, reasonCode, epochId));
+        bytes32 leaf = keccak256(abi.encodePacked(nonce, recipient, amount, POINTS_DEPOSIT_REASON_CODE));
         
+        if (poolSize - amountClaimed < amount) {
+            return ClaimError.InsufficientPoolAmount;
+        }
+
         if (claimed[leaf]) {
             return ClaimError.AlreadyClaimed;
         }
 
-        if (epoch.amountLeft < amount) {
-            return ClaimError.InsufficientPoolAmount;
+        if (!proof.verifyCalldata(root, leaf)) {
+            return ClaimError.InvalidProof;
         }
 
         return ClaimError.NoError;
+    }
+
+    /// @notice Increases the pool size by adding the specified amount.
+    /// @dev Reverts with {NotRoleHolder} if the sender is not the contract admin.
+    /// @dev Reverts with {InvalidPoolSize} if incremental amount is zero.
+    /// @dev Emits a {PoolSizeUpdated} event.
+    /// @param amount The amount to add to the current pool size.
+    function increasePoolSize(uint256 amount) external {
+        AccessControlStorage.layout().enforceHasRole(ADMIN_ROLE, _msgSender());
+                
+        if (amount == 0) {
+            revert InvalidPoolSize(amount);
+        }
+        
+        uint256 oldPoolSize = poolSize;
+        poolSize += amount;
+
+        emit PoolSizeUpdated(oldPoolSize, poolSize);
     }
 
     /// @inheritdoc ForwarderRegistryContextBase
