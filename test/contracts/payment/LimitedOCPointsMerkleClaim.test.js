@@ -61,13 +61,7 @@ describe('LimitedOCPointsMerkleClaim', function () {
   describe('constructor', function () {
     it('reverts with {InvalidPointsContractAddress} if the points contract address is the zero address', async function () {
       await expect(
-        deployContract(
-          'LimitedOCPointsMerkleClaim',
-          ethers.ZeroAddress,
-          1000n,
-          ethers.encodeBytes32String('TEST_REASON'),
-          await getForwarderRegistryAddress()
-        )
+        deployContract('LimitedOCPointsMerkleClaim', ethers.ZeroAddress, this.initialPoolSize, this.reasonCode, await getForwarderRegistryAddress())
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidPointsContractAddress');
     });
 
@@ -102,7 +96,7 @@ describe('LimitedOCPointsMerkleClaim', function () {
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'NotRoleHolder');
     });
 
-    it('reverts with {InvalidClaimWindow} if startTime is not before endTime', async function () {
+    it('reverts with {InvalidClaimWindow} if endTime is before startTime', async function () {
       await expect(
         this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.endTime, this.startTime)
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidClaimWindow');
@@ -138,17 +132,17 @@ describe('LimitedOCPointsMerkleClaim', function () {
       });
 
       it('increments the nonce', async function () {
-        const nonceBefore = await this.LimitedOCPointsMerkleClaim.nonce();
         await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
         const nonceAfter = await this.LimitedOCPointsMerkleClaim.nonce();
 
-        expect(nonceAfter).to.be.equal(nonceBefore + 1n);
+        expect(nonceAfter).to.be.equal(this.expectedNonce);
       });
 
       it('emits a {MerkleRootSet} event', async function () {
         const poolSize = await this.LimitedOCPointsMerkleClaim.poolSize();
         const amountClaimed = await this.LimitedOCPointsMerkleClaim.amountClaimed();
         const amountClaimable = poolSize - amountClaimed;
+
         await expect(this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime))
           .to.emit(this.LimitedOCPointsMerkleClaim, 'MerkleRootSet')
           .withArgs(this.expectedNonce, this.root, amountClaimable, this.startTime, this.endTime);
@@ -158,8 +152,6 @@ describe('LimitedOCPointsMerkleClaim', function () {
 
   describe('claim(address,uint256,bytes32[])', function () {
     it('reverts with {MerkleRootNotSet} if no merkle root is set', async function () {
-      await helpers.time.increase(100);
-
       const claimData = this.payouts[0];
       const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
@@ -195,32 +187,6 @@ describe('LimitedOCPointsMerkleClaim', function () {
       );
     });
 
-    it('reverts with {AlreadyClaimed} if the user has already claimed', async function () {
-      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
-      await helpers.time.increase(100);
-
-      const claimData = this.payouts[0];
-      const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
-
-      await this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof);
-
-      await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof))
-        .to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'AlreadyClaimed')
-        .withArgs(this.expectedNonce, claimData.recipient, claimData.amount, this.reasonCode);
-    });
-
-    it('reverts with {InvalidProof} if the merkle proof verification fails', async function () {
-      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
-      await helpers.time.increase(100);
-
-      const claimData = this.payouts[0];
-      const invalidProof = this.tree.getHexProof(ethers.keccak256(this.leaves[1])); // Wrong proof
-
-      await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, invalidProof))
-        .to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidProof')
-        .withArgs(this.expectedNonce, claimData.recipient, claimData.amount, this.reasonCode);
-    });
-
     it('reverts with {InsufficientPoolAmount} if the pool does not have enough tokens', async function () {
       const claimData = this.payouts[0];
       const poolSize = await this.LimitedOCPointsMerkleClaim.poolSize();
@@ -247,6 +213,32 @@ describe('LimitedOCPointsMerkleClaim', function () {
       );
     });
 
+    it('reverts with {AlreadyClaimed} if the user has already claimed', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
+      await helpers.time.increase(100);
+
+      const claimData = this.payouts[0];
+      const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
+
+      await this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof);
+
+      await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof))
+        .to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'AlreadyClaimed')
+        .withArgs(this.expectedNonce, claimData.recipient, claimData.amount, this.reasonCode);
+    });
+
+    it('reverts with {InvalidProof} if the merkle proof verification fails', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
+      await helpers.time.increase(100);
+
+      const claimData = this.payouts[0];
+      const invalidProof = this.tree.getHexProof(ethers.keccak256(this.leaves[1])); // Wrong proof
+
+      await expect(this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, invalidProof))
+        .to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'InvalidProof')
+        .withArgs(this.expectedNonce, claimData.recipient, claimData.amount, this.reasonCode);
+    });
+
     context('when successful', function () {
       beforeEach(async function () {
         await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
@@ -265,16 +257,11 @@ describe('LimitedOCPointsMerkleClaim', function () {
       it('marks the claim as completed', async function () {
         const claimData = this.payouts[0];
         const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
-        const leaf = ethers.keccak256(
-          ethers.solidityPacked(
-            ['uint256', 'address', 'uint256', 'bytes32'],
-            [this.expectedNonce, claimData.recipient, claimData.amount, this.reasonCode]
-          )
-        );
+        const leafHash = ethers.keccak256(this.leaves[0]);
 
-        expect(await this.LimitedOCPointsMerkleClaim.claimed(leaf)).to.be.false;
+        expect(await this.LimitedOCPointsMerkleClaim.claimed(leafHash)).to.be.false;
         await this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof);
-        expect(await this.LimitedOCPointsMerkleClaim.claimed(leaf)).to.be.true;
+        expect(await this.LimitedOCPointsMerkleClaim.claimed(leafHash)).to.be.true;
       });
 
       it('increases the amount claimed in the contract', async function () {
@@ -282,9 +269,7 @@ describe('LimitedOCPointsMerkleClaim', function () {
         const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
 
         const amountClaimedBefore = await this.LimitedOCPointsMerkleClaim.amountClaimed();
-
         await this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof);
-
         const amountClaimedAfter = await this.LimitedOCPointsMerkleClaim.amountClaimed();
 
         expect(amountClaimedAfter).to.be.equal(amountClaimedBefore + claimData.amount);
@@ -303,7 +288,7 @@ describe('LimitedOCPointsMerkleClaim', function () {
           .withArgs(this.expectedNonce, this.root, claimData.recipient, claimData.amount, expectedAmountLeft);
       });
 
-      it('allows multiple users to claim from the same epoch', async function () {
+      it('allows multiple users to claim from the pool', async function () {
         const claimData1 = this.payouts[0];
         const claimData2 = this.payouts[1];
         const proof1 = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
@@ -367,6 +352,39 @@ describe('LimitedOCPointsMerkleClaim', function () {
       expect(await this.LimitedOCPointsMerkleClaim.canClaim(claimData.recipient, claimData.amount, proof)).to.be.equal(2n);
     });
 
+    it('returns InsufficientPoolAmount when pool does not have enough tokens', async function () {
+      const claimData = this.payouts[0];
+      const poolSize = await this.LimitedOCPointsMerkleClaim.poolSize();
+      const amountClaimed = await this.LimitedOCPointsMerkleClaim.amountClaimed();
+      const excessiveAmount = poolSize - amountClaimed + 1n;
+
+      // Create a leaf for the excessive amount
+      const excessiveLeaf = ethers.solidityPacked(
+        ['uint256', 'address', 'uint256', 'bytes32'],
+        [this.expectedNonce, claimData.recipient, excessiveAmount, this.reasonCode]
+      );
+      const singleLeafTree = new MerkleTree([excessiveLeaf], ethers.keccak256, {hashLeaves: true, sortPairs: true});
+      const excessiveRoot = singleLeafTree.getHexRoot();
+
+      // Set new merkle root with excessive amount
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(excessiveRoot, this.startTime, this.endTime);
+      await helpers.time.increase(100);
+
+      const proof = singleLeafTree.getHexProof(ethers.keccak256(excessiveLeaf));
+
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(claimData.recipient, excessiveAmount, proof)).to.be.equal(5n);
+    });
+
+    it('returns InvalidProof when merkle proof verification fails', async function () {
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
+      await helpers.time.increase(100);
+
+      const claimData = this.payouts[0];
+      const invalidProof = this.tree.getHexProof(ethers.keccak256(this.leaves[1])); // Wrong proof
+
+      expect(await this.LimitedOCPointsMerkleClaim.canClaim(claimData.recipient, claimData.amount, invalidProof)).to.be.equal(4n);
+    });
+
     it('returns AlreadyClaimed for users who have already claimed', async function () {
       await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
       await helpers.time.increase(100);
@@ -377,19 +395,6 @@ describe('LimitedOCPointsMerkleClaim', function () {
       await this.LimitedOCPointsMerkleClaim.claim(claimData.recipient, claimData.amount, proof);
 
       expect(await this.LimitedOCPointsMerkleClaim.canClaim(claimData.recipient, claimData.amount, proof)).to.be.equal(3n);
-    });
-
-    it('returns InsufficientPoolAmount when pool does not have enough tokens', async function () {
-      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
-      await helpers.time.increase(100);
-
-      const poolSize = await this.LimitedOCPointsMerkleClaim.poolSize();
-      const amountClaimed = await this.LimitedOCPointsMerkleClaim.amountClaimed();
-      const excessiveAmount = poolSize - amountClaimed + 1n;
-      const claimData = this.payouts[0];
-      const proof = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
-
-      expect(await this.LimitedOCPointsMerkleClaim.canClaim(claimData.recipient, excessiveAmount, proof)).to.be.equal(5n);
     });
 
     it('returns NoError for valid claim attempts', async function () {

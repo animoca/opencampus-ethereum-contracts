@@ -17,6 +17,73 @@ import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access
 /// @notice Each epoch has a fixed total amount that gets depleted as users claim their allocations.
 /// @notice Claims are based on merkle proofs and are subject to time constraints and pool availability.
 contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryContext {
+    using AccessControlStorage for AccessControlStorage.Layout;
+    using MerkleProof for bytes32[];
+
+    /// @notice The role identifier for the distributor role.
+    bytes32 public constant DISTRIBUTOR_ROLE = keccak256("DISTRIBUTOR_ROLE");
+
+    /// @notice The role identifier for the admin role.
+    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+
+    /// @notice A reference to the points contract.
+    IPoints public immutable POINTS_CONTRACT;
+
+    /// @notice The reason code for the points deposit.
+    bytes32 public immutable POINTS_DEPOSIT_REASON_CODE;
+
+    /// @notice Mapping from leaf hash to claimed status.
+    mapping(bytes32 => bool) public claimed;
+
+    /// @notice The size of the pool.
+    uint256 public poolSize;
+
+    /// @notice The amount claimed from the pool.
+    uint256 public amountClaimed = 0;
+
+    /// @notice The nonce for the pool.
+    uint256 public nonce = 0;
+
+    /// @notice The merkle root for the pool.
+    bytes32 public root;
+
+    /// @notice The start time for the pool.
+    uint256 public startTime;
+
+    /// @notice The end time for the pool.
+    uint256 public endTime;
+
+    /// @notice Enum representing different claim validation errors.
+    enum ClaimError {
+        NoError,
+        MerkleRootNotSet,
+        ClaimNotActive,
+        AlreadyClaimed,
+        InvalidProof,
+        InsufficientPoolAmount
+    }
+
+    /// @notice Emitted when a new merkle root.
+    /// @param nonce The nonce for the pool.
+    /// @param merkleRoot The merkle root.
+    /// @param poolSize The pool size available for claiming.
+    /// @param startTime The start time for claiming.
+    /// @param endTime The end time for claiming.
+    event MerkleRootSet(uint256 indexed nonce, bytes32 indexed merkleRoot, uint256 poolSize, uint256 startTime, uint256 endTime);
+
+    /// @notice Emitted when a points is claimed.
+    /// @param nonce The nonce for the pool.
+    /// @param merkleRoot The merkle root.
+    /// @param recipient The recipient of the claim.
+    /// @param amount The amount claimed.
+    /// @param amountLeft The amount left in the pool after this claim.
+    event PointsClaimed(uint256 indexed nonce, bytes32 indexed merkleRoot, address indexed recipient, uint256 amount, uint256 amountLeft);
+
+    /// @notice Emitted when the pool size is updated.
+    /// @param oldPoolSize The old pool size.
+    /// @param newPoolSize The new pool size.
+    event PoolSizeUpdated(uint256 oldPoolSize, uint256 newPoolSize);
+
     /// @notice Thrown when the reward contract address is invalid.
     /// @param InvalidPointsContractAddress The address of the invalid points contract.
     error InvalidPointsContractAddress(address InvalidPointsContractAddress);
@@ -60,73 +127,6 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
     /// @notice Thrown when incremental amount to the pool is invalid.
     /// @param amount The amount to be added to the pool.
     error InvalidPoolSize(uint256 amount);
-
-    /// @notice Enum representing different claim validation errors.
-    enum ClaimError {
-        NoError,
-        MerkleRootNotSet,
-        ClaimNotActive,
-        AlreadyClaimed,
-        InvalidProof,
-        InsufficientPoolAmount
-    }
-
-    using AccessControlStorage for AccessControlStorage.Layout;
-    using MerkleProof for bytes32[];
-
-    /// @notice The role identifier for the distributor role.
-    bytes32 public constant DISTRIBUTOR_ROLE = keccak256("DISTRIBUTOR_ROLE");
-
-    /// @notice The role identifier for the admin role.
-    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-
-    /// @notice A reference to the points contract.
-    IPoints public immutable POINTS_CONTRACT;
-
-    /// @notice The reason code for the points deposit.
-    bytes32 public immutable POINTS_DEPOSIT_REASON_CODE;
-
-    /// @notice Mapping from leaf hash to claimed status.
-    mapping(bytes32 => bool) public claimed;
-
-    /// @notice The size of the pool.
-    uint256 public poolSize;
-
-    /// @notice The amount claimed from the pool.
-    uint256 public amountClaimed = 0;
-
-    /// @notice The nonce for the pool.
-    uint256 public nonce = 0;
-
-    /// @notice The merkle root for the pool.
-    bytes32 public root;
-
-    /// @notice The start time for the pool.
-    uint256 public startTime;
-
-    /// @notice The end time for the pool.
-    uint256 public endTime;
-
-    /// @notice Emitted when a new merkle root.
-    /// @param nonce The nonce for the pool.
-    /// @param merkleRoot The merkle root.
-    /// @param poolSize The pool size available for claiming.
-    /// @param startTime The start time for claiming.
-    /// @param endTime The end time for claiming.
-    event MerkleRootSet(uint256 indexed nonce, bytes32 indexed merkleRoot, uint256 poolSize, uint256 startTime, uint256 endTime);
-
-    /// @notice Emitted when a points is claimed.
-    /// @param nonce The nonce for the pool.
-    /// @param merkleRoot The merkle root.
-    /// @param recipient The recipient of the claim.
-    /// @param amount The amount claimed.
-    /// @param amountLeft The amount left in the pool after this claim.
-    event PointsClaimed(uint256 indexed nonce, bytes32 indexed merkleRoot, address indexed recipient, uint256 amount, uint256 amountLeft);
-
-    /// @notice Emitted when the pool size is updated.
-    /// @param oldPoolSize The old pool size.
-    /// @param newPoolSize The new pool size.
-    event PoolSizeUpdated(uint256 oldPoolSize, uint256 newPoolSize);
 
     /// @notice Constructor for limited OC points merkle claim.
     /// @param pointsContractAddress The address of the points contract.
@@ -253,11 +253,11 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
             return ClaimError.ClaimNotActive;
         }
 
-        bytes32 leaf = keccak256(abi.encodePacked(nonce, recipient, amount, POINTS_DEPOSIT_REASON_CODE));
-        
         if (poolSize - amountClaimed < amount) {
             return ClaimError.InsufficientPoolAmount;
         }
+
+        bytes32 leaf = keccak256(abi.encodePacked(nonce, recipient, amount, POINTS_DEPOSIT_REASON_CODE));
 
         if (claimed[leaf]) {
             return ClaimError.AlreadyClaimed;
