@@ -255,6 +255,11 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
     }
 
     /// @notice Internal function to validate claim conditions.
+    /// @dev Returns ClaimError.MerkleRootNotSet if the merkle root is not set.
+    /// @dev Returns ClaimError.ClaimNotActive if the current time is outside the claiming window.
+    /// @dev Returns ClaimError.InsufficientAllocation if the allocation doesn't have enough points.
+    /// @dev Returns ClaimError.AlreadyClaimed if the user has already claimed.
+    /// @dev Returns ClaimError.NoError if basic validation passes.
     /// @param distributorAddress The distributor address whose allocation to check.
     /// @param recipient The recipient address.
     /// @param amount The amount to be claimed.

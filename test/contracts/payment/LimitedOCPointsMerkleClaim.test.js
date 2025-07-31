@@ -92,6 +92,37 @@ describe('LimitedOCPointsMerkleClaim', function () {
       ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'NoAllocation');
     });
 
+    it('reverts with {NoAllocation} if distributor has consumed entire allocation', async function () {
+      const smallAllocation = 600n;
+      await this.LimitedOCPointsMerkleClaim.connect(admin).increaseAllocation(distributor.address, smallAllocation);
+
+      await this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, this.startTime, this.endTime);
+      await helpers.time.increase(100);
+
+      const claimData1 = this.payouts[0]; // 100
+      const claimData2 = this.payouts[1]; // 200
+      const claimData3 = this.payouts[2]; // 300
+
+      const proof1 = this.tree.getHexProof(ethers.keccak256(this.leaves[0]));
+      const proof2 = this.tree.getHexProof(ethers.keccak256(this.leaves[1]));
+      const proof3 = this.tree.getHexProof(ethers.keccak256(this.leaves[2]));
+
+      await this.LimitedOCPointsMerkleClaim.claim(distributor.address, claimData1.recipient, claimData1.amount, proof1);
+      await this.LimitedOCPointsMerkleClaim.claim(distributor.address, claimData2.recipient, claimData2.amount, proof2);
+      await this.LimitedOCPointsMerkleClaim.claim(distributor.address, claimData3.recipient, claimData3.amount, proof3);
+
+      const allocation = await this.LimitedOCPointsMerkleClaim.allocations(distributor.address);
+      const consumed = await this.LimitedOCPointsMerkleClaim.consumed(distributor.address);
+      expect(allocation - consumed).to.be.equal(0n);
+
+      const newStartTime = (await helpers.time.latest()) + 100;
+      const newEndTime = newStartTime + 3600;
+
+      await expect(
+        this.LimitedOCPointsMerkleClaim.connect(distributor).setMerkleRoot(this.root, newStartTime, newEndTime)
+      ).to.be.revertedWithCustomError(this.LimitedOCPointsMerkleClaim, 'NoAllocation');
+    });
+
     context('when distributor has allocation', function () {
       beforeEach(async function () {
         await this.LimitedOCPointsMerkleClaim.connect(admin).increaseAllocation(distributor.address, this.initialAllocation);
