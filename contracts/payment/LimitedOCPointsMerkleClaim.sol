@@ -13,10 +13,10 @@ import {AccessControl} from "@animoca/ethereum-contracts/contracts/access/Access
 import {AccessControlStorage} from "@animoca/ethereum-contracts/contracts/access/libraries/AccessControlStorage.sol";
 
 /// @title LimitedOCPointsMerkleClaim
-/// @notice This contract is designed for claiming reward tokens from a limited pool within fixed time epochs.
+/// @notice This contract is designed for claiming reward tokens from a limited allocation within fixed time epochs.
 /// @notice Each epoch has a fixed total amount that gets depleted as users claim their allocations.
-/// @notice Claims are based on merkle proofs and are subject to time constraints and pool availability.
-/// @notice Each distributor can manage their own pool.
+/// @notice Claims are based on merkle proofs and are subject to time constraints and allocation availability.
+/// @notice Each distributor can manage their own allocation.
 contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRegistryContext {
     using AccessControlStorage for AccessControlStorage.Layout;
     using MerkleProof for bytes32[];
@@ -54,13 +54,13 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
         ClaimNotActive,
         AlreadyClaimed,
         InvalidProof,
-        InsufficientPoolAmount
+        InsufficientAllocation
     }
 
     /// @notice Emitted when a new merkle root.
     /// @param distributorAddress The distributor address that set the root.
     /// @param merkleRoot The merkle root.
-    /// @param nonce The nonce for the pool.
+    /// @param nonce The nonce for the epoch.
     /// @param claimablePoints The allocation available for claiming.
     /// @param startTime The start time for claiming.
     /// @param endTime The end time for claiming.
@@ -70,9 +70,9 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
     /// @param distributorAddress The distributor address whose allocation was claimed from.
     /// @param merkleRoot The merkle root.
     /// @param recipient The recipient of the claim.
-    /// @param nonce The nonce for the pool.
+    /// @param nonce The nonce for the epoch.
     /// @param amount The amount claimed.
-    /// @param amountLeft The amount left in the pool after this claim.
+    /// @param amountLeft The amount left in the allocation after this claim.
     event PointsClaimed(address indexed distributorAddress, bytes32 indexed merkleRoot, address indexed recipient, uint256 nonce, uint256 amount, uint256 amountLeft);
 
     /// @notice Emitted when the allocation size is updated.
@@ -93,7 +93,7 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
 
     /// @notice Thrown when trying to claim the same allocation more than once.
     /// @param distributorAddress The distributor address.
-    /// @param nonce The nonce for the pool.
+    /// @param nonce The nonce for the epoch.
     /// @param recipient The recipient of the claim.
     /// @param amount The amount being claimed.
     /// @param reasonCode The reason code for the deposit.
@@ -101,16 +101,16 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
 
     /// @notice Thrown when a proof cannot be verified.
     /// @param distributorAddress The distributor address.
-    /// @param nonce The nonce for the pool.
+    /// @param nonce The nonce for the epoch.
     /// @param recipient The recipient of the claim.
     /// @param amount The amount being claimed.
     /// @param reasonCode The reason code for the deposit.
     error InvalidProof(address distributorAddress, uint256 nonce, address recipient, uint256 amount, bytes32 reasonCode);
 
-    /// @notice Thrown when the pool doesn't have enough points for the claim.
+    /// @notice Thrown when the allocation doesn't have enough points for the claim.
     /// @param claimAmount The amount requested to claim.
-    /// @param poolAmount The amount available in the pool.
-    error InsufficientPoolAmount(uint256 claimAmount, uint256 poolAmount);
+    /// @param allocationAmount The amount available in the allocation.
+    error InsufficientAllocation(uint256 claimAmount, uint256 allocationAmount);
 
     /// @notice Thrown when trying to claim before a merkle root is set.
     /// @param distributorAddress The distributor address.
@@ -146,7 +146,7 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
         POINTS_CONTRACT = IPoints(pointsContractAddress);
     }
 
-    /// @notice Sets a new merkle root with a limited reward pool and time constraints for a distributor.
+    /// @notice Sets a new merkle root with a limited reward allocation and time constraints for a distributor.
     /// @dev Reverts with {NoAllocation} if the distributor has no allocation.
     /// @dev Reverts with {InvalidClaimWindow} if the claim window is invalid.
     /// @dev Reverts with {MerkleRootCannotBeZero} if the merkle root is zero.
@@ -192,7 +192,7 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
     /// @dev Reverts with {ClaimNotActive} if the current time is outside the claiming window.
     /// @dev Reverts with {AlreadyClaimed} if the user has already claimed.
     /// @dev Reverts with {InvalidProof} if the merkle proof verification fails.
-    /// @dev Reverts with {InsufficientPoolAmount} if the allocation doesn't have enough points.
+    /// @dev Reverts with {InsufficientAllocation} if the allocation doesn't have enough points.
     /// @dev Emits a {PointsClaimed} event.
     /// @param distributorAddress The distributor address whose allocation to claim from.
     /// @param recipient The recipient of the claim.
@@ -212,10 +212,10 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
             revert MerkleRootNotSet(distributorAddress);
         } else if (error == ClaimError.ClaimNotActive) {
             revert ClaimNotActive(block.timestamp, epochData.startTime, epochData.endTime);
-        } else if (error == ClaimError.InsufficientPoolAmount) {
+        } else if (error == ClaimError.InsufficientAllocation) {
             uint256 allocation = allocations[distributorAddress];
             uint256 amountConsumed = consumed[distributorAddress];
-            revert InsufficientPoolAmount(amount, allocation - amountConsumed);
+            revert InsufficientAllocation(amount, allocation - amountConsumed);
         } else if (error == ClaimError.AlreadyClaimed) {
             revert AlreadyClaimed(distributorAddress, epochData.nonce, recipient, amount, reasonCode);
         }
@@ -232,13 +232,13 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
 
         POINTS_CONTRACT.deposit(recipient, amount, reasonCode);
 
-        emit PointsClaimed(distributorAddress, epochData.root, recipient, epochData.nonce, amount, amountLeft - amount);
+        emit PointsClaimed(distributorAddress, epochData.root, recipient, epochData.nonce, amount, amountLeft);
     }
 
     /// @notice Checks if a user can claim rewards from a specific distributor's allocation.
     /// @dev Returns ClaimError.MerkleRootNotSet if the merkle root is not set.
     /// @dev Returns ClaimError.ClaimNotActive if the current time is outside the claiming window.
-    /// @dev Returns ClaimError.InsufficientPoolAmount if the allocation doesn't have enough points.
+    /// @dev Returns ClaimError.InsufficientAllocation if the allocation doesn't have enough points.
     /// @dev Returns ClaimError.AlreadyClaimed if the user has already claimed.
     /// @dev Returns ClaimError.NoError if basic validation passes.
     /// @param distributorAddress The distributor address whose allocation to check.
@@ -278,7 +278,7 @@ contract LimitedOCPointsMerkleClaim is AccessControl, TokenRecovery, ForwarderRe
         uint256 allocation = allocations[distributorAddress];
         uint256 amountConsumed = consumed[distributorAddress];
         if (allocation - amountConsumed < amount) {
-            return ClaimError.InsufficientPoolAmount;
+            return ClaimError.InsufficientAllocation;
         }
 
         bytes32 reasonCode = keccak256(abi.encodePacked("LIMITED_POINTS_CLAIM_", distributorAddress));
